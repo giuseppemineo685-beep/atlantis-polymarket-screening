@@ -1,0 +1,16 @@
+[project]
+name = "atlantis"
+version = "0.1.0"
+description = "ATLANTIS Polymarket trader analysis and copy-trading signals."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+atlantis = "atlantis.cli:main"
+
+[build-system]
+requires = ["setuptools>=69.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["atlantis*"]
