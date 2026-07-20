@@ -80,8 +80,8 @@ def format_watchlist_evaluation(evaluations: list[tuple[WatchlistRow, WalletEval
     if not evaluations:
         return "No wallets matched the selected statuses."
     lines = [
-        "label       status    verdict           sports_trades  sports_volume  recent  active_value  max/hr  bot  wallet",
-        "----------  --------  ----------------  -------------  -------------  ------  ------------  ------  ---  ------------------------------------------",
+        "label       status    verdict           sports_trades  sports_volume  recent  active_value  bot_score  bot_verdict                  wallet",
+        "----------  --------  ----------------  -------------  -------------  ------  ------------  ---------  ---------------------------  ------------------------------------------",
     ]
     for row, evaluation in evaluations:
         lines.append(
@@ -92,8 +92,8 @@ def format_watchlist_evaluation(evaluations: list[tuple[WatchlistRow, WalletEval
             f"{evaluation.sports_volume:>13,.0f}  "
             f"{evaluation.recent_sports_14d:>6}  "
             f"{evaluation.active_sports_value:>12,.0f}  "
-            f"{evaluation.max_trades_per_hour:>6}  "
-            f"{'YES' if evaluation.likely_bot else 'no':<3}  "
+            f"{evaluation.bot_score:>9.0f}  "
+            f"{evaluation.bot_verdict:<27}  "
             f"{evaluation.wallet_address}"
         )
     return "\n".join(lines)
@@ -126,8 +126,9 @@ def write_watchlist_evaluation_csv(
         "active_sports_value",
         "buy_count",
         "sell_count",
-        "max_trades_per_hour",
         "hit_trade_cap",
+        "bot_score",
+        "bot_verdict",
         "likely_bot",
         "system_notes",
     ]
@@ -158,8 +159,9 @@ def write_watchlist_evaluation_csv(
                     "active_sports_value": evaluation.active_sports_value,
                     "buy_count": evaluation.buy_count,
                     "sell_count": evaluation.sell_count,
-                    "max_trades_per_hour": evaluation.max_trades_per_hour,
                     "hit_trade_cap": evaluation.hit_trade_cap,
+                    "bot_score": evaluation.bot_score,
+                    "bot_verdict": evaluation.bot_verdict,
                     "likely_bot": evaluation.likely_bot,
                     "system_notes": "; ".join(evaluation.notes),
                 }

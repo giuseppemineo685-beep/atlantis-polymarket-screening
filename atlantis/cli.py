@@ -8,6 +8,11 @@ from pathlib import Path
 
 from atlantis.config import load_settings
 from atlantis.services.bot_detection import detect_bot_wallet, format_bot_detection
+from atlantis.services.consensus_backtest import (
+    format_consensus_backtest,
+    run_consensus_backtest,
+    write_consensus_backtest_csv,
+)
 from atlantis.services.active_portfolio import (
     build_active_portfolio,
     format_active_portfolio,
@@ -71,6 +76,19 @@ def main(argv: list[str] | None = None) -> int:
     watchlist.add_argument("--max-positions", type=int, default=500)
     watchlist.add_argument("--since-days", type=int, default=None)
     watchlist.add_argument("--csv", default="")
+
+    backtest = subparsers.add_parser(
+        "consensus-backtest",
+        help="Backtest: would copying majority-agreement bets have been profitable?",
+    )
+    backtest.add_argument("--wallets-csv", default="inputs/approved_wallets.csv")
+    backtest.add_argument("--statuses", default="approved")
+    backtest.add_argument("--since-days", type=int, default=30)
+    backtest.add_argument("--min-supporting-wallets", type=int, default=2)
+    backtest.add_argument("--stake-per-signal", type=Decimal, default=Decimal("100"))
+    backtest.add_argument("--exclude-wallets", default="")
+    backtest.add_argument("--max-closed-positions-per-wallet", type=int, default=5000)
+    backtest.add_argument("--csv", default="")
 
     portfolio = subparsers.add_parser(
         "active-portfolio",
@@ -141,10 +159,28 @@ def main(argv: list[str] | None = None) -> int:
             statuses={status.strip() for status in args.statuses.split(",") if status.strip()},
             max_trades=args.max_trades,
             max_positions=args.max_positions,
+            since_days=args.since_days,
         )
         print(format_watchlist_evaluation(evaluations))
         if args.csv:
             write_watchlist_evaluation_csv(Path(args.csv), evaluations)
+            print(f"\nCSV written: {args.csv}")
+        return 0
+
+    if args.command == "consensus-backtest":
+        signals = run_consensus_backtest(
+            settings=settings,
+            wallets_csv=Path(args.wallets_csv),
+            statuses={status.strip() for status in args.statuses.split(",") if status.strip()},
+            since_days=args.since_days,
+            min_supporting_wallets=args.min_supporting_wallets,
+            stake_per_signal=args.stake_per_signal,
+            exclude_wallets={w.strip().lower() for w in args.exclude_wallets.split(",") if w.strip()},
+            max_closed_positions_per_wallet=args.max_closed_positions_per_wallet,
+        )
+        print(format_consensus_backtest(signals, stake_per_signal=args.stake_per_signal))
+        if args.csv:
+            write_consensus_backtest_csv(Path(args.csv), signals)
             print(f"\nCSV written: {args.csv}")
         return 0
 

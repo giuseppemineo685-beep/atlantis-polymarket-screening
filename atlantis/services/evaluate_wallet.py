@@ -29,15 +29,13 @@ class WalletEvaluation:
     active_sports_value: Decimal
     buy_count: int
     sell_count: int
-    max_trades_per_hour: int
     hit_trade_cap: bool
+    bot_score: Decimal
+    bot_verdict: str
     likely_bot: bool
     verdict: str
     notes: list[str]
     active_sports: list[dict[str, Any]]
-
-
-BOT_TRADES_PER_HOUR_THRESHOLD = 20
 
 
 def evaluate_wallet(
@@ -48,6 +46,10 @@ def evaluate_wallet(
     max_positions: int,
     since_days: int | None = None,
 ) -> WalletEvaluation:
+    # Deferred import: atlantis.services.bot_detection imports `notional` from
+    # this module, so importing it at module load time would be circular.
+    from atlantis.services.bot_detection import detect_bot_wallet
+
     wallet = wallet_address.lower()
     client = build_client(settings)
     start = None
@@ -55,6 +57,7 @@ def evaluate_wallet(
         start = int(time.time()) - since_days * 24 * 60 * 60
     trades = list(client.iter_user_trades(wallet_address=wallet, max_rows=max_trades, start=start))
     positions = client.get_user_positions(wallet_address=wallet, limit=max_positions)
+    bot_result = detect_bot_wallet(settings=settings, wallet_address=wallet, max_trades=max_trades)
 
     sports_trades = [trade for trade in trades if is_sports_trade(trade)]
     total_volume = sum(notional(trade) for trade in trades)
@@ -76,9 +79,13 @@ def evaluate_wallet(
         as_decimal(position.get("currentValue")) or Decimal("0") for position in active_sports
     )
 
-    max_trades_per_hour = max_rolling_count_per_hour(trades)
     hit_trade_cap = len(trades) >= max_trades
-    likely_bot = max_trades_per_hour >= BOT_TRADES_PER_HOUR_THRESHOLD
+    # POSSIBLE_BOT alone is too weak to auto-reject: high trade frequency by
+    # itself also matches legitimate high-volume active sports bettors who
+    # cover many distinct markets and do sell sometimes (see Trader05 spot
+    # check). Only auto-reject on LIKELY_BOT, which requires stronger
+    # combined signals (buy-only + low market diversity + fast-market share).
+    likely_bot = bot_result.verdict == "LIKELY_BOT"
 
     notes = build_notes(
         trades=trades,
@@ -88,7 +95,7 @@ def evaluate_wallet(
         recent_sports_14d=recent_sports_14d,
         active_sports=active_sports,
         side_counts=side_counts,
-        max_trades_per_hour=max_trades_per_hour,
+        bot_result=bot_result,
         hit_trade_cap=hit_trade_cap,
     )
     verdict = wallet_verdict(notes, likely_bot=likely_bot)
@@ -110,8 +117,9 @@ def evaluate_wallet(
         active_sports_value=active_sports_value,
         buy_count=side_counts["BUY"],
         sell_count=side_counts["SELL"],
-        max_trades_per_hour=max_trades_per_hour,
         hit_trade_cap=hit_trade_cap,
+        bot_score=bot_result.bot_score,
+        bot_verdict=bot_result.verdict,
         likely_bot=likely_bot,
         verdict=verdict,
         notes=notes,
@@ -123,19 +131,6 @@ def evaluate_wallet(
     )
 
 
-def max_rolling_count_per_hour(trades: list[dict[str, Any]]) -> int:
-    timestamps = sorted(as_int(trade.get("timestamp")) or 0 for trade in trades)
-    if not timestamps:
-        return 0
-    best = 0
-    left = 0
-    for right, ts in enumerate(timestamps):
-        while ts - timestamps[left] > 3600:
-            left += 1
-        best = max(best, right - left + 1)
-    return best
-
-
 def build_notes(
     *,
     trades: list[dict[str, Any]],
@@ -145,7 +140,7 @@ def build_notes(
     recent_sports_14d: int,
     active_sports: list[dict[str, Any]],
     side_counts: Counter,
-    max_trades_per_hour: int,
+    bot_result: Any,
     hit_trade_cap: bool,
 ) -> list[str]:
     notes = []
@@ -169,8 +164,11 @@ def build_notes(
         notes.append("contains resolved/near-zero losing sports positions")
     if len(trades) >= 500:
         notes.append("large overall sample")
-    if max_trades_per_hour >= BOT_TRADES_PER_HOUR_THRESHOLD:
-        notes.append(f"likely bot: {max_trades_per_hour} trades within a single 1h window")
+    if bot_result.verdict != "LIKELY_HUMAN_OR_LOW_SIGNAL":
+        notes.append(
+            f"bot_detection={bot_result.verdict} (score {bot_result.bot_score:.0f}): "
+            + ", ".join(bot_result.reasons)
+        )
     if hit_trade_cap:
         notes.append("hit trade download cap; true history is longer than sampled")
     return notes
