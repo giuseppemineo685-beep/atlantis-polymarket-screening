@@ -67,6 +67,7 @@ def render_signal_row(row: dict) -> str:
 
 def render_log_row(row: dict) -> str:
     status = row.get("status", "OPEN")
+    consensus_active = row.get("consensus_active", "yes") == "yes"
     pct_return = row.get("pct_return", "")
     return_class = ""
     if pct_return not in (None, ""):
@@ -74,9 +75,15 @@ def render_log_row(row: dict) -> str:
             return_class = "num-pos" if float(pct_return) >= 0 else "num-neg"
         except ValueError:
             return_class = ""
+
+    if status == "OPEN" and not consensus_active:
+        status_badge = '<span class="pill pill-warn">SIN CONSENSO</span>'
+    else:
+        status_badge = f'<span class="pill pill-{status.lower()}">{esc(status)}</span>'
+
     return f"""
     <tr>
-      <td><span class="pill pill-{status.lower()}">{esc(status)}</span></td>
+      <td>{status_badge}</td>
       <td class="title-cell">{esc(row.get('title'))}</td>
       <td>{esc(row.get('outcome'))}</td>
       <td class="num">{fmt_price(row.get('entry_price'))}</td>
@@ -309,6 +316,7 @@ tbody tr:hover {{ background: var(--surface-2); }}
 .pill-open, .pill-wait {{ background: rgba(90,169,250,0.12); color: var(--open); border-color: rgba(90,169,250,0.35); }}
 .pill-conflict {{ background: rgba(232,163,61,0.14); color: var(--accent); border-color: rgba(232,163,61,0.4); }}
 .pill-ignore {{ background: rgba(107,118,144,0.14); color: var(--wait); border-color: rgba(107,118,144,0.35); }}
+.pill-warn {{ background: rgba(232,163,61,0.14); color: var(--accent); border-color: rgba(232,163,61,0.4); }}
 
 .empty {{ padding: 28px; text-align: center; color: var(--text-dim); font-size: 13px; }}
 

@@ -13,6 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 STATE_PATH = ROOT / "state" / "notified_signals.json"
+EXIT_STATE_PATH = ROOT / "state" / "exit_alerts_sent.json"
 TRADE_LOG_PATH = ROOT / "outputs" / "trade_log.csv"
 TRADE_LOG_FIELDS = [
     "condition_id",
@@ -24,6 +25,7 @@ TRADE_LOG_FIELDS = [
     "date_first_seen",
     "entry_price",
     "current_price",
+    "consensus_active",
     "status",
     "exit_price",
     "pct_return",
@@ -79,15 +81,23 @@ def convert_to_portfolio_format() -> None:
         writer.writerows(out_rows)
 
 
-def load_state() -> set[str]:
-    if not STATE_PATH.exists():
+def load_state_path(path: Path) -> set[str]:
+    if not path.exists():
         return set()
-    return set(json.loads(STATE_PATH.read_text()))
+    return set(json.loads(path.read_text()))
+
+
+def save_state_path(path: Path, keys: set[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(sorted(keys), indent=2))
+
+
+def load_state() -> set[str]:
+    return load_state_path(STATE_PATH)
 
 
 def save_state(keys: set[str]) -> None:
-    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    STATE_PATH.write_text(json.dumps(sorted(keys), indent=2))
+    save_state_path(STATE_PATH, keys)
 
 
 def signal_key(row: dict) -> str:
@@ -116,9 +126,14 @@ def save_trade_log(log: dict[str, dict]) -> None:
         writer.writerows(rows)
 
 
-def get_market_resolution(condition_id: str, asset: str) -> Decimal | None:
-    """Return the final settlement price (0 or 1) for `asset` if its market
-    has closed, else None if still open/unresolved."""
+def get_market_price_info(condition_id: str, asset: str) -> tuple[Decimal | None, bool]:
+    """Return (current_price, is_closed) for `asset` in this market.
+
+    current_price reflects the live market price whether the market is open
+    or closed (Polymarket keeps `outcomePrices` current either way) - this
+    lets us keep a trade's displayed price fresh even after it drops out of
+    consensus, instead of freezing on the last price we happened to see.
+    """
     url = f"https://gamma-api.polymarket.com/markets?condition_ids={condition_id}"
     req = urllib.request.Request(
         url, headers={"Accept": "application/json", "User-Agent": "atlantis-screening/0.1"}
@@ -127,33 +142,38 @@ def get_market_resolution(condition_id: str, asset: str) -> Decimal | None:
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read())
     except Exception as exc:
-        print(f"  aviso: no se pudo consultar resolucion de {condition_id}: {exc}", file=sys.stderr)
-        return None
+        print(f"  aviso: no se pudo consultar {condition_id}: {exc}", file=sys.stderr)
+        return None, False
 
     if not data:
-        return None
+        return None, False
     market = data[0]
-    if not market.get("closed"):
-        return None
+    closed = bool(market.get("closed"))
 
     try:
         clob_token_ids = json.loads(market.get("clobTokenIds", "[]"))
         outcome_prices = json.loads(market.get("outcomePrices", "[]"))
     except (json.JSONDecodeError, TypeError):
-        return None
+        return None, closed
 
     if asset not in clob_token_ids:
-        return None
+        return None, closed
     idx = clob_token_ids.index(asset)
     try:
-        return Decimal(outcome_prices[idx])
+        return Decimal(outcome_prices[idx]), closed
     except (IndexError, InvalidOperation):
-        return None
+        return None, closed
 
 
-def update_trade_log(log: dict[str, dict], copy_signals: list[dict]) -> dict[str, dict]:
+def update_trade_log(log: dict[str, dict], copy_signals: list[dict]) -> tuple[dict[str, dict], list[dict]]:
+    """Update the persistent trade log. Returns (log, exit_alerts) where
+    exit_alerts are rows that just lost consensus support (still open on the
+    market, but the traders backing them are no longer aligned) - these are
+    candidates for a "consider exiting" Telegram alert, decided by the caller
+    so it can dedupe against previously-sent alerts."""
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     current_keys = set()
+    exit_alerts = []
 
     for signal in copy_signals:
         key = signal_key(signal)
@@ -169,6 +189,7 @@ def update_trade_log(log: dict[str, dict], copy_signals: list[dict]) -> dict[str
                 "date_first_seen": now,
                 "entry_price": signal["avg_entry_price"],
                 "current_price": signal["current_price"],
+                "consensus_active": "yes",
                 "status": "OPEN",
                 "exit_price": "",
                 "pct_return": "",
@@ -179,24 +200,42 @@ def update_trade_log(log: dict[str, dict], copy_signals: list[dict]) -> dict[str
             row = log[key]
             if row["status"] == "OPEN":
                 row["current_price"] = signal["current_price"]
+                row["supporting_traders"] = signal["supporting_traders"]
+                row["consensus_active"] = "yes"
                 row["last_updated"] = now
 
-    # Anything OPEN but no longer in the active COPY list may have resolved.
+    # Anything OPEN but no longer backed by consensus: check if the market
+    # actually resolved (finalize WIN/LOSS), or just refresh its live price
+    # and flag that the traders are no longer aligned on it.
     for key, row in log.items():
         if row["status"] != "OPEN" or key in current_keys:
             continue
-        final_price = get_market_resolution(row["condition_id"], row["asset"])
-        if final_price is None:
-            continue  # still unresolved (or just fell out of consensus); leave OPEN
-        entry_price = Decimal(row["entry_price"])
-        pct_return = ((final_price / entry_price) - 1) * Decimal("100") if entry_price > 0 else Decimal("0")
-        row["status"] = "WIN" if final_price == Decimal("1") else "LOSS"
-        row["exit_price"] = str(final_price)
-        row["pct_return"] = f"{pct_return:.2f}"
-        row["last_updated"] = now
-        print(f"  = resuelto: {row['title']} -> {row['status']} ({pct_return:.2f}%)")
 
-    return log
+        was_active = row.get("consensus_active", "yes") == "yes"
+        price, closed = get_market_price_info(row["condition_id"], row["asset"])
+
+        if closed and price is not None and price in (Decimal("0"), Decimal("1")):
+            entry_price = Decimal(row["entry_price"])
+            pct_return = ((price / entry_price) - 1) * Decimal("100") if entry_price > 0 else Decimal("0")
+            row["status"] = "WIN" if price == Decimal("1") else "LOSS"
+            row["exit_price"] = str(price)
+            row["current_price"] = str(price)
+            row["pct_return"] = f"{pct_return:.2f}"
+            row["consensus_active"] = "no"
+            row["last_updated"] = now
+            print(f"  = resuelto: {row['title']} -> {row['status']} ({pct_return:.2f}%)")
+            continue
+
+        # Still unresolved: keep the price fresh even though it dropped out.
+        if price is not None:
+            row["current_price"] = str(price)
+        row["consensus_active"] = "no"
+        row["last_updated"] = now
+        if was_active:
+            exit_alerts.append(row)
+            print(f"  ! consenso roto: {row['title']} -> {row['outcome']} (precio actual {row['current_price']})")
+
+    return log, exit_alerts
 
 
 def send_telegram(token: str, chat_id: str, text: str) -> None:
@@ -205,6 +244,24 @@ def send_telegram(token: str, chat_id: str, text: str) -> None:
     req = urllib.request.Request(url, data=data)
     with urllib.request.urlopen(req, timeout=15) as resp:
         resp.read()
+
+
+def format_exit_message(row: dict) -> str:
+    entry = row.get("entry_price", "")
+    current = row.get("current_price", "")
+    try:
+        pct = (float(current) / float(entry) - 1) * 100 if entry and float(entry) > 0 else 0.0
+        pct_txt = f"{pct:+.1f}%"
+    except (ValueError, ZeroDivisionError):
+        pct_txt = "—"
+    return (
+        f"🟡 <b>CONSENSO ROTO — considerá salir</b>\n"
+        f"{row['title']}\n"
+        f"Resultado: <b>{row['outcome']}</b>\n"
+        f"Entrada: {entry}  |  Precio actual: {current} ({pct_txt})\n"
+        f"Los traders que respaldaban esta posición ya no coinciden. El mercado sigue abierto (no resolvió), "
+        f"pero perdió la señal que la sostenía."
+    )
 
 
 def format_signal_message(row: dict) -> str:
@@ -283,7 +340,18 @@ def main() -> int:
     save_state(seen | all_current_keys)
 
     trade_log = load_trade_log()
-    trade_log = update_trade_log(trade_log, copy_signals)
+    trade_log, exit_alerts = update_trade_log(trade_log, copy_signals)
+
+    exit_seen = load_state_path(EXIT_STATE_PATH)
+    new_exit_alerts = [row for row in exit_alerts if signal_key(row) not in exit_seen]
+    print(f"Alertas de salida (consenso roto): {len(exit_alerts)}  |  Nuevas: {len(new_exit_alerts)}")
+    for row in new_exit_alerts:
+        try:
+            send_telegram(token, chat_id, format_exit_message(row))
+        except Exception as exc:
+            print(f"Error enviando alerta de salida: {exc}", file=sys.stderr)
+    save_state_path(EXIT_STATE_PATH, exit_seen | {signal_key(row) for row in exit_alerts})
+
     save_trade_log(trade_log)
 
     return 0
