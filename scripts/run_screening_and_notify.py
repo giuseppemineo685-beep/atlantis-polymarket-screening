@@ -18,6 +18,7 @@ from atlantis.polymarket.client import build_client  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 STATE_PATH = ROOT / "state" / "notified_signals.json"
 EXIT_STATE_PATH = ROOT / "state" / "exit_alerts_sent.json"
+PARTIAL_STATE_PATH = ROOT / "state" / "partial_alerts_sent.json"
 TRADE_LOG_PATH = ROOT / "outputs" / "trade_log.csv"
 TRADE_LOG_FIELDS = [
     "condition_id",
@@ -200,17 +201,26 @@ def count_traders_still_holding(condition_id: str, asset: str, trader_labels: li
     return held
 
 
+MIN_CONSENSUS = 2
+
+
 def update_trade_log(
     log: dict[str, dict], copy_signals: list[dict], label_to_wallet: dict[str, str], client
-) -> tuple[dict[str, dict], list[dict]]:
-    """Update the persistent trade log. Returns (log, exit_alerts) where
-    exit_alerts are rows that just lost consensus support (still open on the
-    market, but the traders backing them are no longer aligned) - these are
-    candidates for a "consider exiting" Telegram alert, decided by the caller
-    so it can dedupe against previously-sent alerts."""
+) -> tuple[dict[str, dict], list[dict], list[dict]]:
+    """Update the persistent trade log. Returns (log, exit_alerts, partial_alerts).
+
+    exit_alerts: consensus fully broken (fewer than MIN_CONSENSUS traders
+    still hold the position) - "consider exiting" tier.
+
+    partial_alerts: at least one originally-supporting trader left, but
+    enough remain to still count as a valid signal - "conviction reduced,
+    still watching" tier. Without this, losing 1 of 3 traders was silently
+    invisible as long as 2 remained.
+    """
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     current_keys = set()
     exit_alerts = []
+    partial_alerts = []
 
     for signal in copy_signals:
         key = signal_key(signal)
@@ -236,10 +246,17 @@ def update_trade_log(
         else:
             row = log[key]
             if row["status"] == "OPEN":
+                previous_supporting = int(row.get("supporting_traders") or 0)
+                new_supporting = int(signal["supporting_traders"])
                 row["current_price"] = signal["current_price"]
                 row["supporting_traders"] = signal["supporting_traders"]
                 row["consensus_active"] = "yes"
                 row["last_updated"] = now
+                if new_supporting < previous_supporting:
+                    partial_alerts.append({**row, "previous_supporting": previous_supporting})
+                    print(
+                        f"  ~ salida parcial: {row['title']} -> {previous_supporting} a {new_supporting} traders"
+                    )
 
     # Anything OPEN but no longer backed by consensus: check if the market
     # actually resolved (finalize WIN/LOSS), or just refresh its live price
@@ -271,18 +288,23 @@ def update_trade_log(
             row["current_price"] = str(price)
 
         trader_labels = [t.strip() for t in row["traders"].split(",") if t.strip()]
-        original_count = int(row.get("supporting_traders") or len(trader_labels))
+        previous_supporting = int(row.get("supporting_traders") or len(trader_labels))
         still_holding = count_traders_still_holding(row["condition_id"], row["asset"], trader_labels, label_to_wallet, client)
 
-        if still_holding >= min(2, original_count):
+        if still_holding >= MIN_CONSENSUS:
             # Still consensus-backed in reality; just outside our price filter
             # (e.g. price near 0 or 1, about to resolve). Not an exit.
             row["consensus_active"] = "yes"
+            row["supporting_traders"] = still_holding
             row["last_updated"] = now
             print(f"  ~ fuera del filtro de precio pero {still_holding}/{len(trader_labels)} siguen dentro: {row['title']}")
+            if still_holding < previous_supporting:
+                partial_alerts.append({**row, "previous_supporting": previous_supporting})
+                print(f"    (y ademas bajo de {previous_supporting} a {still_holding})")
             continue
 
         row["consensus_active"] = "no"
+        row["supporting_traders"] = still_holding
         row["last_updated"] = now
         if was_active:
             exit_alerts.append(row)
@@ -291,7 +313,7 @@ def update_trade_log(
                 f"(solo {still_holding}/{len(trader_labels)} siguen con la posicion, precio actual {row['current_price']})"
             )
 
-    return log, exit_alerts
+    return log, exit_alerts, partial_alerts
 
 
 def send_telegram(token: str, chat_id: str, text: str) -> None:
@@ -300,6 +322,18 @@ def send_telegram(token: str, chat_id: str, text: str) -> None:
     req = urllib.request.Request(url, data=data)
     with urllib.request.urlopen(req, timeout=15) as resp:
         resp.read()
+
+
+def format_partial_exit_message(row: dict) -> str:
+    prev = row.get("previous_supporting", "?")
+    now_count = row.get("supporting_traders", "?")
+    return (
+        f"🔵 <b>UN TRADER SALIÓ — sigue habiendo consenso</b>\n"
+        f"{row['title']}\n"
+        f"Resultado: <b>{row['outcome']}</b>\n"
+        f"Apoyo: bajó de {prev} a {now_count} traders  |  Precio actual: {row['current_price']}\n"
+        f"Todavía hay consenso mínimo, pero la convicción bajó — no es una recomendación de salida, solo aviso."
+    )
 
 
 def format_exit_message(row: dict) -> str:
@@ -400,7 +434,7 @@ def main() -> int:
     label_to_wallet = load_label_to_wallet()
 
     trade_log = load_trade_log()
-    trade_log, exit_alerts = update_trade_log(trade_log, copy_signals, label_to_wallet, client)
+    trade_log, exit_alerts, partial_alerts = update_trade_log(trade_log, copy_signals, label_to_wallet, client)
 
     exit_seen = load_state_path(EXIT_STATE_PATH)
     new_exit_alerts = [row for row in exit_alerts if signal_key(row) not in exit_seen]
@@ -411,6 +445,19 @@ def main() -> int:
         except Exception as exc:
             print(f"Error enviando alerta de salida: {exc}", file=sys.stderr)
     save_state_path(EXIT_STATE_PATH, exit_seen | {signal_key(row) for row in exit_alerts})
+
+    # Dedup partial alerts per (signal, new count) so a further step down
+    # (e.g. 3 -> 2, later 2 -> 1) still notifies again at each level.
+    partial_seen = load_state_path(PARTIAL_STATE_PATH)
+    partial_keys = {f"{signal_key(row)}|{row['supporting_traders']}": row for row in partial_alerts}
+    new_partial_alerts = [row for k, row in partial_keys.items() if k not in partial_seen]
+    print(f"Alertas de salida parcial: {len(partial_alerts)}  |  Nuevas: {len(new_partial_alerts)}")
+    for row in new_partial_alerts:
+        try:
+            send_telegram(token, chat_id, format_partial_exit_message(row))
+        except Exception as exc:
+            print(f"Error enviando alerta parcial: {exc}", file=sys.stderr)
+    save_state_path(PARTIAL_STATE_PATH, partial_seen | set(partial_keys.keys()))
 
     save_trade_log(trade_log)
 
