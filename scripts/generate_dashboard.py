@@ -13,7 +13,7 @@ SIGNALS = ROOT / "outputs" / "active_portfolio_signals.csv"
 OUT_PATH = ROOT / "docs" / "index.html"
 
 ACTION_ORDER = {"COPY": 0, "WAIT": 1, "CONFLICT": 2, "IGNORE": 3}
-STATUS_ORDER = {"OPEN": 0, "WIN": 1, "LOSS": 2}
+STATUS_ORDER = {"OPEN": 0, "CLOSED": 1, "WIN": 2, "LOSS": 3}
 
 
 def font_b64(name: str) -> str:
@@ -78,6 +78,8 @@ def render_log_row(row: dict) -> str:
 
     if status == "OPEN" and not consensus_active:
         status_badge = '<span class="pill pill-warn">SIN CONSENSO</span>'
+    elif status == "CLOSED":
+        status_badge = '<span class="pill pill-closed">CERRADO (salida temprana)</span>'
     else:
         status_badge = f'<span class="pill pill-{status.lower()}">{esc(status)}</span>'
 
@@ -101,8 +103,8 @@ def main() -> None:
     log_rows.sort(key=lambda r: (STATUS_ORDER.get(r.get("status", "OPEN"), 9), r.get("last_updated", "")), reverse=False)
     signal_rows.sort(key=lambda r: ACTION_ORDER.get(r.get("action", "IGNORE"), 9))
 
-    resolved = [r for r in log_rows if r.get("status") in ("WIN", "LOSS")]
-    wins = [r for r in resolved if r["status"] == "WIN"]
+    resolved = [r for r in log_rows if r.get("status") in ("WIN", "LOSS", "CLOSED")]
+    wins = [r for r in resolved if r["status"] in ("WIN", "CLOSED")]
     open_trades = [r for r in log_rows if r.get("status") == "OPEN"]
     win_rate = (len(wins) / len(resolved) * 100) if resolved else 0.0
     avg_return = 0.0
@@ -167,6 +169,7 @@ def main() -> None:
   --loss: #FB7185;
   --open: #5AA9FA;
   --wait: #6B7690;
+  --closed: #2DD4BF;
 }}
 * {{ box-sizing: border-box; }}
 html, body {{ margin: 0; padding: 0; background: var(--bg); overflow-x: hidden; }}
@@ -317,6 +320,7 @@ tbody tr:hover {{ background: var(--surface-2); }}
 .pill-conflict {{ background: rgba(232,163,61,0.14); color: var(--accent); border-color: rgba(232,163,61,0.4); }}
 .pill-ignore {{ background: rgba(107,118,144,0.14); color: var(--wait); border-color: rgba(107,118,144,0.35); }}
 .pill-warn {{ background: rgba(232,163,61,0.14); color: var(--accent); border-color: rgba(232,163,61,0.4); }}
+.pill-closed {{ background: rgba(45,212,191,0.14); color: var(--closed); border-color: rgba(45,212,191,0.4); }}
 
 .empty {{ padding: 28px; text-align: center; color: var(--text-dim); font-size: 13px; }}
 

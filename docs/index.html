@@ -48,6 +48,7 @@
   --loss: #FB7185;
   --open: #5AA9FA;
   --wait: #6B7690;
+  --closed: #2DD4BF;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; background: var(--bg); overflow-x: hidden; }
@@ -198,6 +199,7 @@ tbody tr:hover { background: var(--surface-2); }
 .pill-conflict { background: rgba(232,163,61,0.14); color: var(--accent); border-color: rgba(232,163,61,0.4); }
 .pill-ignore { background: rgba(107,118,144,0.14); color: var(--wait); border-color: rgba(107,118,144,0.35); }
 .pill-warn { background: rgba(232,163,61,0.14); color: var(--accent); border-color: rgba(232,163,61,0.4); }
+.pill-closed { background: rgba(45,212,191,0.14); color: var(--closed); border-color: rgba(45,212,191,0.4); }
 
 .empty { padding: 28px; text-align: center; color: var(--text-dim); font-size: 13px; }
 
@@ -229,7 +231,7 @@ footer a:hover { text-decoration: underline; }
       <h1>ATLANTIS <span>SCREENING</span></h1>
       <div class="subtitle">Señales de consenso · Polymarket sports · 14 traders verificados</div>
     </div>
-    <div class="updated">Última corrida<br><b>2026-07-22 21:32 UTC</b></div>
+    <div class="updated">Última corrida<br><b>2026-07-22 21:55 UTC</b></div>
   </header>
 
   <div class="scoreboard">
@@ -239,22 +241,22 @@ footer a:hover { text-decoration: underline; }
     </div>
     <div class="stat">
       <div class="stat-label">Win rate (resueltos)</div>
-      <div class="stat-value accent">0.0%</div>
+      <div class="stat-value accent">100.0%</div>
     </div>
     <div class="stat">
       <div class="stat-label">Retorno promedio</div>
-      <div class="stat-value pos">+0.0%</div>
+      <div class="stat-value pos">+27.8%</div>
     </div>
     <div class="stat">
       <div class="stat-label">Posiciones abiertas</div>
-      <div class="stat-value">12</div>
+      <div class="stat-value">11</div>
     </div>
   </div>
 
   <section>
     <div class="section-head">
       <h2>Señales activas ahora</h2>
-      <span class="section-note">9 COPY · actualiza cada 30 min</span>
+      <span class="section-note">8 COPY · actualiza cada 30 min</span>
     </div>
     <div class="table-scroll">
       <table>
@@ -270,19 +272,10 @@ footer a:hover { text-decoration: underline; }
       <td><span class="pill pill-copy">COPY</span></td>
       <td class="title-cell">Washington Nationals vs. Colorado Rockies: O/U 11.5</td>
       <td>Over</td>
-      <td class="num">0.280</td>
+      <td class="num">0.105</td>
       <td class="num">3</td>
-      <td class="num">100</td>
+      <td class="num">99.988745</td>
       <td class="num">$3.75</td>
-    </tr>
-    <tr>
-      <td><span class="pill pill-copy">COPY</span></td>
-      <td class="title-cell">San Diego Padres vs. Atlanta Braves</td>
-      <td>Atlanta Braves</td>
-      <td class="num">0.505</td>
-      <td class="num">3</td>
-      <td class="num">95.87</td>
-      <td class="num">$3.60</td>
     </tr>
     <tr>
       <td><span class="pill pill-copy">COPY</span></td>
@@ -290,7 +283,16 @@ footer a:hover { text-decoration: underline; }
       <td>Tampa Bay Rays</td>
       <td class="num">0.485</td>
       <td class="num">3</td>
-      <td class="num">95.87</td>
+      <td class="num">95.97</td>
+      <td class="num">$3.60</td>
+    </tr>
+    <tr>
+      <td><span class="pill pill-copy">COPY</span></td>
+      <td class="title-cell">San Diego Padres vs. Atlanta Braves</td>
+      <td>Atlanta Braves</td>
+      <td class="num">0.505</td>
+      <td class="num">3</td>
+      <td class="num">95.97</td>
       <td class="num">$3.60</td>
     </tr>
     <tr>
@@ -299,7 +301,7 @@ footer a:hover { text-decoration: underline; }
       <td>Chicago Sky</td>
       <td class="num">0.245</td>
       <td class="num">2</td>
-      <td class="num">80.31781045060291939919610747</td>
+      <td class="num">80.43459784673844205193160228</td>
       <td class="num">$1.55</td>
     </tr>
     <tr>
@@ -308,35 +310,17 @@ footer a:hover { text-decoration: underline; }
       <td>Miami Marlins</td>
       <td class="num">0.475</td>
       <td class="num">3</td>
-      <td class="num">79.25017449824310642606158060</td>
-      <td class="num">$2.37</td>
+      <td class="num">79.36905321929199334758850083</td>
+      <td class="num">$2.38</td>
     </tr>
     <tr>
       <td><span class="pill pill-copy">COPY</span></td>
       <td class="title-cell">St. Louis Cardinals vs. Los Angeles Angels</td>
       <td>St. Louis Cardinals</td>
-      <td class="num">0.445</td>
+      <td class="num">0.665</td>
       <td class="num">3</td>
-      <td class="num">76.300824</td>
-      <td class="num">$2.86</td>
-    </tr>
-    <tr>
-      <td><span class="pill pill-copy">COPY</span></td>
-      <td class="title-cell">Cincinnati Reds vs. Seattle Mariners</td>
-      <td>Seattle Mariners</td>
-      <td class="num">0.205</td>
-      <td class="num">2</td>
-      <td class="num">72.61263090388362370656224581</td>
-      <td class="num">$1.38</td>
-    </tr>
-    <tr>
-      <td><span class="pill pill-copy">COPY</span></td>
-      <td class="title-cell">Spread: New York Liberty (-8.5)</td>
-      <td>Chicago Sky</td>
-      <td class="num">0.535</td>
-      <td class="num">3</td>
-      <td class="num">69.69241995811818703384968445</td>
-      <td class="num">$1.72</td>
+      <td class="num">79.085726</td>
+      <td class="num">$2.97</td>
     </tr>
     <tr>
       <td><span class="pill pill-copy">COPY</span></td>
@@ -344,8 +328,8 @@ footer a:hover { text-decoration: underline; }
       <td>New York Liberty</td>
       <td class="num">0.425</td>
       <td class="num">2</td>
-      <td class="num">69.22288</td>
-      <td class="num">$1.73</td>
+      <td class="num">71.03666666666666666666666667</td>
+      <td class="num">$1.78</td>
     </tr>
     <tr>
       <td><span class="pill pill-copy">COPY</span></td>
@@ -353,8 +337,17 @@ footer a:hover { text-decoration: underline; }
       <td>Chicago White Sox</td>
       <td class="num">0.535</td>
       <td class="num">2</td>
-      <td class="num">65.67666666666666666666666667</td>
+      <td class="num">65.77666666666666666666666667</td>
       <td class="num">$1.64</td>
+    </tr>
+    <tr>
+      <td><span class="pill pill-wait">WAIT</span></td>
+      <td class="title-cell">Los Angeles Dodgers vs. Philadelphia Phillies</td>
+      <td>Los Angeles Dodgers</td>
+      <td class="num">0.535</td>
+      <td class="num">2</td>
+      <td class="num">67.98352603110209601081812035</td>
+      <td class="num">$0</td>
     </tr>
     <tr>
       <td><span class="pill pill-wait">WAIT</span></td>
@@ -363,6 +356,15 @@ footer a:hover { text-decoration: underline; }
       <td class="num">0.495</td>
       <td class="num">1</td>
       <td class="num">66.33333333333333333333333333</td>
+      <td class="num">$0</td>
+    </tr>
+    <tr>
+      <td><span class="pill pill-wait">WAIT</span></td>
+      <td class="title-cell">Cincinnati Reds vs. Seattle Mariners</td>
+      <td>Cincinnati Reds</td>
+      <td class="num">0.885</td>
+      <td class="num">2</td>
+      <td class="num">63.74119133065934839209063402</td>
       <td class="num">$0</td>
     </tr>
     <tr>
@@ -378,9 +380,18 @@ footer a:hover { text-decoration: underline; }
       <td><span class="pill pill-wait">WAIT</span></td>
       <td class="title-cell">Will LeBron James play for the Golden State Warriors in 2026-27?</td>
       <td>No</td>
-      <td class="num">0.878</td>
+      <td class="num">0.868</td>
       <td class="num">1</td>
       <td class="num">58.40333333333333333333333333</td>
+      <td class="num">$0</td>
+    </tr>
+    <tr>
+      <td><span class="pill pill-wait">WAIT</span></td>
+      <td class="title-cell">Spread: New York Liberty (-8.5)</td>
+      <td>Chicago Sky</td>
+      <td class="num">0.535</td>
+      <td class="num">3</td>
+      <td class="num">56.01128298294231450448241097</td>
       <td class="num">$0</td>
     </tr>
     <tr>
@@ -389,7 +400,7 @@ footer a:hover { text-decoration: underline; }
       <td>Indiana Fever</td>
       <td class="num">0.805</td>
       <td class="num">2</td>
-      <td class="num">55.075411</td>
+      <td class="num">54.76887766666666666666666667</td>
       <td class="num">$0</td>
     </tr>
     <tr>
@@ -398,7 +409,7 @@ footer a:hover { text-decoration: underline; }
       <td>PortlandFire</td>
       <td class="num">0.305</td>
       <td class="num">2</td>
-      <td class="num">54.63252812117162267513086090</td>
+      <td class="num">54.68054636925239522065623497</td>
       <td class="num">$0</td>
     </tr>
     <tr>
@@ -407,7 +418,7 @@ footer a:hover { text-decoration: underline; }
       <td>Mike Davis</td>
       <td class="num">0.335</td>
       <td class="num">2</td>
-      <td class="num">53.27969933333333333333333333</td>
+      <td class="num">53.37969933333333333333333333</td>
       <td class="num">$0</td>
     </tr>
     <tr>
@@ -416,7 +427,7 @@ footer a:hover { text-decoration: underline; }
       <td>Dallas Wings</td>
       <td class="num">0.495</td>
       <td class="num">2</td>
-      <td class="num">52.86462</td>
+      <td class="num">52.97128666666666666666666667</td>
       <td class="num">$0</td>
     </tr>
     <tr>
@@ -425,7 +436,7 @@ footer a:hover { text-decoration: underline; }
       <td>New York Yankees</td>
       <td class="num">0.625</td>
       <td class="num">1</td>
-      <td class="num">51.69983333333333333333333333</td>
+      <td class="num">51.59483333333333333333333333</td>
       <td class="num">$0</td>
     </tr>
     <tr>
@@ -434,7 +445,16 @@ footer a:hover { text-decoration: underline; }
       <td>Under</td>
       <td class="num">0.525</td>
       <td class="num">2</td>
-      <td class="num">48.080557</td>
+      <td class="num">48.18722366666666666666666667</td>
+      <td class="num">$0</td>
+    </tr>
+    <tr>
+      <td><span class="pill pill-wait">WAIT</span></td>
+      <td class="title-cell">Cincinnati Reds vs. Seattle Mariners: O/U 8.5</td>
+      <td>Under</td>
+      <td class="num">0.455</td>
+      <td class="num">2</td>
+      <td class="num">47.51066666666666666666666667</td>
       <td class="num">$0</td>
     </tr>
     <tr>
@@ -443,25 +463,16 @@ footer a:hover { text-decoration: underline; }
       <td>Washington Mystics</td>
       <td class="num">0.305</td>
       <td class="num">1</td>
-      <td class="num">46.93666666666666666666666667</td>
+      <td class="num">47.03666666666666666666666667</td>
       <td class="num">$0</td>
     </tr>
     <tr>
       <td><span class="pill pill-wait">WAIT</span></td>
       <td class="title-cell">Minnesota Twins vs. Cleveland Guardians</td>
       <td>Minnesota Twins</td>
-      <td class="num">0.435</td>
+      <td class="num">0.425</td>
       <td class="num">1</td>
-      <td class="num">46.93666666666666666666666667</td>
-      <td class="num">$0</td>
-    </tr>
-    <tr>
-      <td><span class="pill pill-wait">WAIT</span></td>
-      <td class="title-cell">Athletics vs. Arizona Diamondbacks</td>
-      <td>Athletics</td>
-      <td class="num">0.085</td>
-      <td class="num">2</td>
-      <td class="num">46.53268266666666666666666667</td>
+      <td class="num">47.03666666666666666666666667</td>
       <td class="num">$0</td>
     </tr>
     <tr>
@@ -470,16 +481,7 @@ footer a:hover { text-decoration: underline; }
       <td>Magomed Zaynukov</td>
       <td class="num">0.735</td>
       <td class="num">1</td>
-      <td class="num">45.80771766666666666666666667</td>
-      <td class="num">$0</td>
-    </tr>
-    <tr>
-      <td><span class="pill pill-wait">WAIT</span></td>
-      <td class="title-cell">Cincinnati Reds vs. Seattle Mariners: O/U 8.5</td>
-      <td>Under</td>
-      <td class="num">0.215</td>
-      <td class="num">2</td>
-      <td class="num">43.85866666666666666666666667</td>
+      <td class="num">45.90771766666666666666666667</td>
       <td class="num">$0</td>
     </tr>
     <tr>
@@ -488,7 +490,7 @@ footer a:hover { text-decoration: underline; }
       <td>Ramazan Temirov</td>
       <td class="num">0.505</td>
       <td class="num">2</td>
-      <td class="num">43.42163333333333333333333333</td>
+      <td class="num">43.52163333333333333333333333</td>
       <td class="num">$0</td>
     </tr>
     <tr>
@@ -506,7 +508,7 @@ footer a:hover { text-decoration: underline; }
       <td>Over</td>
       <td class="num">0.445</td>
       <td class="num">1</td>
-      <td class="num">40.42283333333333333333333333</td>
+      <td class="num">40.31783333333333333333333333</td>
       <td class="num">$0</td>
     </tr>
     <tr>
@@ -515,43 +517,7 @@ footer a:hover { text-decoration: underline; }
       <td>Under</td>
       <td class="num">0.555</td>
       <td class="num">2</td>
-      <td class="num">8.43021117902652077986401909</td>
-      <td class="num">$0</td>
-    </tr>
-    <tr>
-      <td><span class="pill pill-conflict">CONFLICT</span></td>
-      <td class="title-cell">Cincinnati Reds vs. Seattle Mariners</td>
-      <td>Cincinnati Reds</td>
-      <td class="num">0.795</td>
-      <td class="num">1</td>
-      <td class="num">0</td>
-      <td class="num">$0</td>
-    </tr>
-    <tr>
-      <td><span class="pill pill-conflict">CONFLICT</span></td>
-      <td class="title-cell">Pittsburgh Pirates vs. New York Yankees</td>
-      <td>Pittsburgh Pirates</td>
-      <td class="num">0.375</td>
-      <td class="num">1</td>
-      <td class="num">0</td>
-      <td class="num">$0</td>
-    </tr>
-    <tr>
-      <td><span class="pill pill-conflict">CONFLICT</span></td>
-      <td class="title-cell">Dallas Wings vs. PortlandFire</td>
-      <td>Dallas Wings</td>
-      <td class="num">0.695</td>
-      <td class="num">1</td>
-      <td class="num">0</td>
-      <td class="num">$0</td>
-    </tr>
-    <tr>
-      <td><span class="pill pill-conflict">CONFLICT</span></td>
-      <td class="title-cell">Miami Marlins vs. Houston Astros</td>
-      <td>Houston Astros</td>
-      <td class="num">0.525</td>
-      <td class="num">1</td>
-      <td class="num">0</td>
+      <td class="num">8.72102833423023453966545585</td>
       <td class="num">$0</td>
     </tr>
         </tbody>
@@ -562,7 +528,7 @@ footer a:hover { text-decoration: underline; }
   <section>
     <div class="section-head">
       <h2>Historial de trades</h2>
-      <span class="section-note">Los cerrados quedan siempre visibles — 0 resueltos, 12 abiertos</span>
+      <span class="section-note">Los cerrados quedan siempre visibles — 1 resueltos, 11 abiertos</span>
     </div>
     <div class="table-scroll">
       <table>
@@ -579,27 +545,17 @@ footer a:hover { text-decoration: underline; }
       <td class="title-cell">Washington Nationals vs. Colorado Rockies: O/U 11.5</td>
       <td>Over</td>
       <td class="num">0.487</td>
-      <td class="num">0.280</td>
+      <td class="num">0.105</td>
       <td class="num ">—</td>
       <td class="dim">2026-07-22 20:42 UTC</td>
       <td class="dim">Trader03, Trader10, Trader14</td>
     </tr>
     <tr>
       <td><span class="pill pill-open">OPEN</span></td>
-      <td class="title-cell">Minnesota Lynx vs. Seattle Storm</td>
-      <td>Minnesota Lynx</td>
-      <td class="num">0.782</td>
-      <td class="num">1.000</td>
-      <td class="num ">—</td>
-      <td class="dim">2026-07-22 20:42 UTC</td>
-      <td class="dim">Trader05, Trader10, Trader15</td>
-    </tr>
-    <tr>
-      <td><span class="pill pill-open">OPEN</span></td>
       <td class="title-cell">St. Louis Cardinals vs. Los Angeles Angels</td>
       <td>St. Louis Cardinals</td>
       <td class="num">0.447</td>
-      <td class="num">0.445</td>
+      <td class="num">0.665</td>
       <td class="num ">—</td>
       <td class="dim">2026-07-22 20:42 UTC</td>
       <td class="dim">Trader05, Trader06, Trader09</td>
@@ -649,7 +605,7 @@ footer a:hover { text-decoration: underline; }
       <td class="title-cell">Cincinnati Reds vs. Seattle Mariners</td>
       <td>Seattle Mariners</td>
       <td class="num">0.499</td>
-      <td class="num">0.205</td>
+      <td class="num">0.155</td>
       <td class="num ">—</td>
       <td class="dim">2026-07-22 21:08 UTC</td>
       <td class="dim">Trader03, Trader09, Trader10</td>
@@ -693,6 +649,16 @@ footer a:hover { text-decoration: underline; }
       <td class="num ">—</td>
       <td class="dim">2026-07-22 21:31 UTC</td>
       <td class="dim">Trader05, Trader10, Trader14</td>
+    </tr>
+    <tr>
+      <td><span class="pill pill-closed">CERRADO (salida temprana)</span></td>
+      <td class="title-cell">Minnesota Lynx vs. Seattle Storm</td>
+      <td>Minnesota Lynx</td>
+      <td class="num">0.782</td>
+      <td class="num">1.000</td>
+      <td class="num num-pos">+27.8%</td>
+      <td class="dim">2026-07-22 20:42 UTC</td>
+      <td class="dim">Trader05, Trader10, Trader15</td>
     </tr>
         </tbody>
       </table>
