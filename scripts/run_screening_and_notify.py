@@ -11,6 +11,10 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from atlantis.config import load_settings  # noqa: E402
+from atlantis.polymarket.client import build_client  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
 STATE_PATH = ROOT / "state" / "notified_signals.json"
 EXIT_STATE_PATH = ROOT / "state" / "exit_alerts_sent.json"
@@ -165,7 +169,40 @@ def get_market_price_info(condition_id: str, asset: str) -> tuple[Decimal | None
         return None, closed
 
 
-def update_trade_log(log: dict[str, dict], copy_signals: list[dict]) -> tuple[dict[str, dict], list[dict]]:
+def load_label_to_wallet() -> dict[str, str]:
+    with open(ROOT / "outputs" / "portfolio_traders.csv", newline="") as f:
+        rows = list(csv.DictReader(f))
+    return {r["username"]: r["wallet_address"] for r in rows}
+
+
+def count_traders_still_holding(condition_id: str, asset: str, trader_labels: list[str], label_to_wallet: dict[str, str], client) -> int:
+    """How many of the originally-supporting traders still hold this exact
+    position right now, checked directly against /positions - independent of
+    whatever price-band filter active-portfolio applies. This is what tells
+    a real exit (trader sold) apart from a signal merely aging out of our
+    0.05-0.90 price window as a market nears resolution."""
+    held = 0
+    for label in trader_labels:
+        wallet = label_to_wallet.get(label)
+        if not wallet:
+            continue
+        try:
+            positions = client.get_user_positions(wallet_address=wallet, limit=500)
+        except Exception as exc:
+            print(f"    aviso: no se pudo chequear posicion de {label}: {exc}", file=sys.stderr)
+            continue
+        match = next(
+            (p for p in positions if p.get("conditionId") == condition_id and p.get("asset") == asset),
+            None,
+        )
+        if match and float(match.get("size") or 0) > 0:
+            held += 1
+    return held
+
+
+def update_trade_log(
+    log: dict[str, dict], copy_signals: list[dict], label_to_wallet: dict[str, str], client
+) -> tuple[dict[str, dict], list[dict]]:
     """Update the persistent trade log. Returns (log, exit_alerts) where
     exit_alerts are rows that just lost consensus support (still open on the
     market, but the traders backing them are no longer aligned) - these are
@@ -226,14 +263,33 @@ def update_trade_log(log: dict[str, dict], copy_signals: list[dict]) -> tuple[di
             print(f"  = resuelto: {row['title']} -> {row['status']} ({pct_return:.2f}%)")
             continue
 
-        # Still unresolved: keep the price fresh even though it dropped out.
+        # Still unresolved. It dropped out of the active-portfolio COPY list,
+        # but that also happens when a price walks outside our 0.05-0.90
+        # filter band as a market nears resolution - that is NOT the same as
+        # traders selling. Check their actual positions to tell those apart.
         if price is not None:
             row["current_price"] = str(price)
+
+        trader_labels = [t.strip() for t in row["traders"].split(",") if t.strip()]
+        original_count = int(row.get("supporting_traders") or len(trader_labels))
+        still_holding = count_traders_still_holding(row["condition_id"], row["asset"], trader_labels, label_to_wallet, client)
+
+        if still_holding >= min(2, original_count):
+            # Still consensus-backed in reality; just outside our price filter
+            # (e.g. price near 0 or 1, about to resolve). Not an exit.
+            row["consensus_active"] = "yes"
+            row["last_updated"] = now
+            print(f"  ~ fuera del filtro de precio pero {still_holding}/{len(trader_labels)} siguen dentro: {row['title']}")
+            continue
+
         row["consensus_active"] = "no"
         row["last_updated"] = now
         if was_active:
             exit_alerts.append(row)
-            print(f"  ! consenso roto: {row['title']} -> {row['outcome']} (precio actual {row['current_price']})")
+            print(
+                f"  ! salida real: {row['title']} -> {row['outcome']} "
+                f"(solo {still_holding}/{len(trader_labels)} siguen con la posicion, precio actual {row['current_price']})"
+            )
 
     return log, exit_alerts
 
@@ -339,8 +395,12 @@ def main() -> int:
     all_current_keys = {signal_key(s) for s in copy_signals}
     save_state(seen | all_current_keys)
 
+    settings = load_settings()
+    client = build_client(settings)
+    label_to_wallet = load_label_to_wallet()
+
     trade_log = load_trade_log()
-    trade_log, exit_alerts = update_trade_log(trade_log, copy_signals)
+    trade_log, exit_alerts = update_trade_log(trade_log, copy_signals, label_to_wallet, client)
 
     exit_seen = load_state_path(EXIT_STATE_PATH)
     new_exit_alerts = [row for row in exit_alerts if signal_key(row) not in exit_seen]
