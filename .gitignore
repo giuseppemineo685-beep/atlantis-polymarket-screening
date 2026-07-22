@@ -5,7 +5,10 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .DS_Store
-outputs/
+outputs/*
+!outputs/watchlist_evaluation.csv
+!outputs/portfolio_traders.csv
+!outputs/active_portfolio_signals.csv
 .venv/
 venv/
 .claude/
