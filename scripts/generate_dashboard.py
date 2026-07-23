@@ -16,7 +16,7 @@ TRADERS = ROOT / "outputs" / "traders.csv"
 OUT_PATH = ROOT / "docs" / "index.html"
 
 PROFILE_URL = "https://polymarket.com/profile/{wallet}"
-MARKET_URL = "https://polymarket.com/event/{slug}"
+MARKET_URL = "https://polymarket.com/market/{slug}"
 
 ACTION_ORDER = {"COPY": 0, "WAIT": 1, "CONFLICT": 2, "IGNORE": 3}
 STATUS_ORDER = {"OPEN": 0, "CLOSED": 1, "WIN": 2, "LOSS": 3}
