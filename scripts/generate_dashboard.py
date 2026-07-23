@@ -3,8 +3,10 @@ from __future__ import annotations
 import base64
 import csv
 import html
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
 FONTS = Path(__file__).resolve().parent / "fonts"
@@ -14,6 +16,24 @@ OUT_PATH = ROOT / "docs" / "index.html"
 
 ACTION_ORDER = {"COPY": 0, "WAIT": 1, "CONFLICT": 2, "IGNORE": 3}
 STATUS_ORDER = {"OPEN": 0, "CLOSED": 1, "WIN": 2, "LOSS": 3}
+ZURICH = ZoneInfo("Europe/Zurich")
+
+
+def parse_utc(date_str: str) -> datetime | None:
+    """Parse our "YYYY-MM-DD HH:MM UTC" timestamps into an aware datetime."""
+    if not date_str:
+        return None
+    try:
+        return datetime.strptime(date_str.replace(" UTC", ""), "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def zurich_day(date_str: str) -> str:
+    dt = parse_utc(date_str)
+    if dt is None:
+        return "?"
+    return dt.astimezone(ZURICH).strftime("%Y-%m-%d")
 
 
 def font_b64(name: str) -> str:
@@ -134,7 +154,52 @@ def main() -> None:
     copy_signals = [r for r in signal_rows if r.get("action") == "COPY"]
     other_signals = [r for r in signal_rows if r.get("action") != "COPY"][:20]
 
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now_utc = datetime.now(timezone.utc)
+    now = now_utc.strftime("%Y-%m-%d %H:%M UTC")
+    now_zurich = now_utc.astimezone(ZURICH).strftime("%Y-%m-%d %H:%M")
+
+    # --- Retorno realizado (trades cerrados) vs no realizado (abiertos) ---
+    realized_pct = [float(r["pct_return"]) for r in resolved if r.get("pct_return") not in (None, "")]
+    realized_sum = sum(realized_pct)
+    realized_avg = realized_sum / len(realized_pct) if realized_pct else 0.0
+
+    unrealized_pct = []
+    for r in open_trades:
+        try:
+            entry = float(r.get("entry_price") or 0)
+            current = float(r.get("current_price") or 0)
+            if entry > 0:
+                unrealized_pct.append((current / entry - 1) * 100)
+        except ValueError:
+            continue
+    unrealized_sum = sum(unrealized_pct)
+    unrealized_avg = unrealized_sum / len(unrealized_pct) if unrealized_pct else 0.0
+
+    # Por dia (hora Zurich): realizado = dia en que cerro (last_updated),
+    # no realizado = dia en que se detecto la posicion (date_first_seen)
+    realized_by_day: dict[str, list[float]] = defaultdict(list)
+    for r in resolved:
+        if r.get("pct_return") not in (None, ""):
+            realized_by_day[zurich_day(r.get("last_updated", ""))].append(float(r["pct_return"]))
+
+    unrealized_by_day: dict[str, list[float]] = defaultdict(list)
+    for r, pct in zip(
+        [r for r in open_trades if r.get("entry_price") and r.get("current_price")], unrealized_pct
+    ):
+        unrealized_by_day[zurich_day(r.get("date_first_seen", ""))].append(pct)
+
+    def day_rows(by_day: dict[str, list[float]]) -> str:
+        rows = []
+        for day in sorted(by_day.keys(), reverse=True):
+            vals = by_day[day]
+            total = sum(vals)
+            avg = total / len(vals)
+            cls = "num-pos" if total >= 0 else "num-neg"
+            rows.append(
+                f'<tr><td class="dim">{esc(day)}</td><td class="num">{len(vals)}</td>'
+                f'<td class="num {cls}">{total:+.1f}%</td><td class="num {cls}">{avg:+.1f}%</td></tr>'
+            )
+        return "".join(rows) or '<tr><td colspan="4" class="empty">Sin datos</td></tr>'
 
     fonts_css = f"""
     @font-face {{
@@ -360,6 +425,7 @@ footer a:hover {{ text-decoration: underline; }}
 @media (max-width: 720px) {{
   .scoreboard {{ grid-template-columns: repeat(2, 1fr); }}
   h1 {{ font-size: 32px; }}
+  div[style*="grid-template-columns: 1fr 1fr"] {{ grid-template-columns: 1fr !important; }}
 }}
 </style>
 </head>
@@ -371,7 +437,7 @@ footer a:hover {{ text-decoration: underline; }}
       <h1>ATLANTIS <span>SCREENING</span></h1>
       <div class="subtitle">Señales de consenso · Polymarket sports · 14 traders verificados</div>
     </div>
-    <div class="updated">Última corrida<br><b>{esc(now)}</b></div>
+    <div class="updated">Última corrida (UTC)<br><b>{esc(now)}</b><br>Hora Zúrich<br><b>{esc(now_zurich)}</b></div>
   </header>
 
   <div class="scoreboard">
@@ -395,8 +461,41 @@ footer a:hover {{ text-decoration: underline; }}
 
   <section>
     <div class="section-head">
+      <h2>Rendimiento</h2>
+      <span class="section-note">Realizado = trades cerrados · No realizado = abiertos, marca en vivo</span>
+    </div>
+    <div class="scoreboard" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 20px;">
+      <div class="stat">
+        <div class="stat-label">Retorno realizado (total / promedio)</div>
+        <div class="stat-value {'pos' if realized_sum >= 0 else 'neg'}">{realized_sum:+.1f}%</div>
+        <div class="section-note">promedio {realized_avg:+.1f}% · {len(realized_pct)} trades</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Retorno no realizado (total / promedio)</div>
+        <div class="stat-value {'pos' if unrealized_sum >= 0 else 'neg'}">{unrealized_sum:+.1f}%</div>
+        <div class="section-note">promedio {unrealized_avg:+.1f}% · {len(unrealized_pct)} trades</div>
+      </div>
+    </div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Día (Zúrich)</th><th>Trades</th><th>Suma %</th><th>Promedio %</th></tr></thead>
+          <tbody>{day_rows(realized_by_day)}</tbody>
+        </table>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Día detectado (Zúrich)</th><th>Trades</th><th>Suma %</th><th>Promedio %</th></tr></thead>
+          <tbody>{day_rows(unrealized_by_day)}</tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
       <h2>Señales activas ahora</h2>
-      <span class="section-note">{len(copy_signals)} COPY · actualiza cada 30 min</span>
+      <span class="section-note">{len(copy_signals)} COPY · actualiza cada 2 min</span>
     </div>
     <div class="table-scroll">
       <table>
@@ -434,7 +533,7 @@ footer a:hover {{ text-decoration: underline; }}
   </section>
 
   <footer>
-    <span>Generado automáticamente por GitHub Actions cada 30 min.</span>
+    <span>Generado automáticamente por un cron en VPS cada 2 min.</span>
     <a href="https://github.com/giuseppemineo685-beep/atlantis-polymarket-screening" target="_blank">Ver repositorio</a>
   </footer>
 

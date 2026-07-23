@@ -220,6 +220,7 @@ footer a:hover { text-decoration: underline; }
 @media (max-width: 720px) {
   .scoreboard { grid-template-columns: repeat(2, 1fr); }
   h1 { font-size: 32px; }
+  div[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
 }
 </style>
 </head>
@@ -231,7 +232,7 @@ footer a:hover { text-decoration: underline; }
       <h1>ATLANTIS <span>SCREENING</span></h1>
       <div class="subtitle">Señales de consenso · Polymarket sports · 14 traders verificados</div>
     </div>
-    <div class="updated">Última corrida<br><b>2026-07-23 18:42 UTC</b></div>
+    <div class="updated">Última corrida (UTC)<br><b>2026-07-23 18:42 UTC</b><br>Hora Zúrich<br><b>2026-07-23 20:42</b></div>
   </header>
 
   <div class="scoreboard">
@@ -255,8 +256,41 @@ footer a:hover { text-decoration: underline; }
 
   <section>
     <div class="section-head">
+      <h2>Rendimiento</h2>
+      <span class="section-note">Realizado = trades cerrados · No realizado = abiertos, marca en vivo</span>
+    </div>
+    <div class="scoreboard" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 20px;">
+      <div class="stat">
+        <div class="stat-label">Retorno realizado (total / promedio)</div>
+        <div class="stat-value neg">-40.8%</div>
+        <div class="section-note">promedio -2.9% · 14 trades</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Retorno no realizado (total / promedio)</div>
+        <div class="stat-value neg">-4.7%</div>
+        <div class="section-note">promedio -0.7% · 7 trades</div>
+      </div>
+    </div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Día (Zúrich)</th><th>Trades</th><th>Suma %</th><th>Promedio %</th></tr></thead>
+          <tbody><tr><td class="dim">2026-07-23</td><td class="num">13</td><td class="num num-neg">-68.6%</td><td class="num num-neg">-5.3%</td></tr><tr><td class="dim">2026-07-22</td><td class="num">1</td><td class="num num-pos">+27.8%</td><td class="num num-pos">+27.8%</td></tr></tbody>
+        </table>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Día detectado (Zúrich)</th><th>Trades</th><th>Suma %</th><th>Promedio %</th></tr></thead>
+          <tbody><tr><td class="dim">2026-07-23</td><td class="num">7</td><td class="num num-neg">-4.7%</td><td class="num num-neg">-0.7%</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
       <h2>Señales activas ahora</h2>
-      <span class="section-note">5 COPY · actualiza cada 30 min</span>
+      <span class="section-note">5 COPY · actualiza cada 2 min</span>
     </div>
     <div class="table-scroll">
       <table>
@@ -729,7 +763,7 @@ footer a:hover { text-decoration: underline; }
   </section>
 
   <footer>
-    <span>Generado automáticamente por GitHub Actions cada 30 min.</span>
+    <span>Generado automáticamente por un cron en VPS cada 2 min.</span>
     <a href="https://github.com/giuseppemineo685-beep/atlantis-polymarket-screening" target="_blank">Ver repositorio</a>
   </footer>
 
