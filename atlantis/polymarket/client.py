@@ -182,6 +182,9 @@ class PolymarketClient:
     def _get_gamma(self, path: str, params: dict[str, Any]) -> Any:
         return self._get(f"{self.gamma_api_base}{path}", params)
 
+    RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
+    MAX_RETRIES = 4
+
     def _get(self, url: str, params: dict[str, Any]) -> Any:
         query = urllib.parse.urlencode(
             {key: value for key, value in params.items() if value is not None},
@@ -195,18 +198,30 @@ class PolymarketClient:
                 "User-Agent": "atlantis-polymarket-collector/0.1",
             },
         )
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
-                body = response.read().decode("utf-8")
-        except urllib.error.HTTPError as exc:
-            details = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"Polymarket API error {exc.code} for {full_url}: {details}") from exc
-        except urllib.error.URLError as exc:
-            raise RuntimeError(f"Network error for {full_url}: {exc}") from exc
-        finally:
-            if self.request_sleep_seconds > 0:
-                time.sleep(self.request_sleep_seconds)
-        return json.loads(body)
+
+        last_error: Exception | None = None
+        for attempt in range(self.MAX_RETRIES + 1):
+            try:
+                with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+                    body = response.read().decode("utf-8")
+                return json.loads(body)
+            except urllib.error.HTTPError as exc:
+                details = exc.read().decode("utf-8", errors="replace")
+                last_error = RuntimeError(f"Polymarket API error {exc.code} for {full_url}: {details}")
+                if exc.code not in self.RETRYABLE_STATUS_CODES or attempt == self.MAX_RETRIES:
+                    raise last_error from exc
+            except urllib.error.URLError as exc:
+                last_error = RuntimeError(f"Network error for {full_url}: {exc}")
+                if attempt == self.MAX_RETRIES:
+                    raise last_error from exc
+            finally:
+                if self.request_sleep_seconds > 0:
+                    time.sleep(self.request_sleep_seconds)
+
+            backoff = (2**attempt) * 1.0
+            time.sleep(backoff)
+
+        raise last_error  # unreachable, keeps type checkers happy
 
 
 def build_client(settings: Settings) -> PolymarketClient:

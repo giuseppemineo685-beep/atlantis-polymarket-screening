@@ -417,6 +417,23 @@ def main() -> int:
         print("Faltan TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID en el entorno", file=sys.stderr)
         return 1
 
+    try:
+        return run_pipeline(token, chat_id)
+    except Exception as exc:
+        print(f"Error fatal en el pipeline: {exc}", file=sys.stderr)
+        try:
+            send_telegram(
+                token,
+                chat_id,
+                f"🔴 <b>El screening falló esta corrida</b>\n{type(exc).__name__}: {exc}\n"
+                f"La próxima corrida programada lo va a reintentar solo.",
+            )
+        except Exception as notify_exc:
+            print(f"Ademas fallo el aviso por Telegram: {notify_exc}", file=sys.stderr)
+        return 1
+
+
+def run_pipeline(token: str, chat_id: str) -> int:
     run(
         [
             sys.executable,
