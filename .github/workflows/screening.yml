@@ -39,6 +39,6 @@ jobs:
         run: |
           git config user.name "atlantis-bot"
           git config user.email "atlantis-bot@users.noreply.github.com"
-          git add state/ outputs/watchlist_evaluation.csv outputs/portfolio_traders.csv outputs/active_portfolio_signals.csv outputs/trade_log.csv docs/index.html
+          git add state/ outputs/watchlist_evaluation.csv outputs/portfolio_traders.csv outputs/active_portfolio_signals.csv outputs/trade_log.csv outputs/traders.csv docs/index.html
           git diff --cached --quiet || git commit -m "Screening run: $(date -u +'%Y-%m-%d %H:%M UTC')"
           git push

@@ -22,6 +22,7 @@ TRADE_LOG_FIELDS = [
     "condition_id",
     "asset",
     "title",
+    "slug",
     "outcome",
     "traders",
     "entry_supporting_traders",
@@ -85,6 +86,41 @@ def convert_to_portfolio_format() -> None:
         writer.writerows(out_rows)
 
 
+def fetch_and_save_traders_info(client) -> None:
+    """Look up each wallet's real Polymarket username (not our internal
+    TraderXX label) so the dashboard can link straight to their profile.
+    One extra request per wallet - only worth doing on the slow cycle."""
+    with open(ROOT / "outputs" / "watchlist_evaluation.csv") as f:
+        rows = list(csv.DictReader(f))
+
+    out_rows = []
+    for r in rows:
+        username = ""
+        try:
+            sample = client.get_user_trades(wallet_address=r["wallet"], limit=1, offset=0)
+            if sample:
+                username = sample[0].get("name") or sample[0].get("pseudonym") or ""
+        except Exception as exc:
+            print(f"  aviso: no se pudo obtener username de {r['label']}: {exc}", file=sys.stderr)
+        out_rows.append(
+            {
+                "label": r["label"],
+                "wallet": r["wallet"],
+                "username": username,
+                "status": r["status"],
+                "verdict": r["verdict"],
+                "notes": r.get("input_notes", ""),
+            }
+        )
+
+    out_path = ROOT / "outputs" / "traders.csv"
+    with out_path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["label", "wallet", "username", "status", "verdict", "notes"])
+        writer.writeheader()
+        writer.writerows(out_rows)
+    print(f"  traders.csv actualizado ({len(out_rows)} wallets)")
+
+
 def load_state_path(path: Path) -> set[str]:
     if not path.exists():
         return set()
@@ -113,6 +149,11 @@ def load_trade_log() -> dict[str, dict]:
         return {}
     with TRADE_LOG_PATH.open(newline="") as f:
         rows = list(csv.DictReader(f))
+    # Backfill any fields added to the schema after older rows were written,
+    # so csv.DictWriter (which needs every fieldname present) doesn't KeyError.
+    for r in rows:
+        for field in TRADE_LOG_FIELDS:
+            r.setdefault(field, "")
     return {f"{r['condition_id']}|{r['asset']}": r for r in rows}
 
 
@@ -254,6 +295,7 @@ def update_trade_log(
                 "condition_id": signal["condition_id"],
                 "asset": signal["asset"],
                 "title": signal["title"],
+                "slug": signal.get("slug", ""),
                 "outcome": signal["outcome"],
                 "traders": signal["traders"],
                 "entry_supporting_traders": signal["supporting_traders"],
@@ -397,6 +439,7 @@ def run_pipeline(token: str, chat_id: str, skip_evaluate: bool = False) -> int:
         )
 
         convert_to_portfolio_format()
+        fetch_and_save_traders_info(build_client(load_settings()))
 
     run(
         [

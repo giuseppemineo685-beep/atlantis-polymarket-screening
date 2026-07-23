@@ -12,7 +12,11 @@ ROOT = Path(__file__).resolve().parent.parent
 FONTS = Path(__file__).resolve().parent / "fonts"
 TRADE_LOG = ROOT / "outputs" / "trade_log.csv"
 SIGNALS = ROOT / "outputs" / "active_portfolio_signals.csv"
+TRADERS = ROOT / "outputs" / "traders.csv"
 OUT_PATH = ROOT / "docs" / "index.html"
+
+PROFILE_URL = "https://polymarket.com/profile/{wallet}"
+MARKET_URL = "https://polymarket.com/event/{slug}"
 
 ACTION_ORDER = {"COPY": 0, "WAIT": 1, "CONFLICT": 2, "IGNORE": 3}
 STATUS_ORDER = {"OPEN": 0, "CLOSED": 1, "WIN": 2, "LOSS": 3}
@@ -71,13 +75,21 @@ def fmt_price(value: str) -> str:
         return "—"
 
 
+def market_link(title: str, slug: str) -> str:
+    title_html = esc(title)
+    if not slug:
+        return title_html
+    url = esc(MARKET_URL.format(slug=slug))
+    return f'<a href="{url}" target="_blank" rel="noopener">{title_html}</a>'
+
+
 def render_signal_row(row: dict) -> str:
     action = row.get("action", "IGNORE")
     return f"""
     <tr>
       <td><span class="pill pill-{action.lower()}">{esc(action)}</span></td>
-      <td class="title-cell">{esc(row.get('title'))}</td>
-      <td>{esc(row.get('outcome'))}</td>
+      <td class="title-cell">{market_link(row.get('title'), row.get('slug'))}</td>
+      <td><b>{esc(row.get('outcome'))}</b></td>
       <td class="num">{fmt_price(row.get('current_price'))}</td>
       <td class="num">{esc(row.get('supporting_traders'))}</td>
       <td class="num">{esc(row.get('conviction'))}</td>
@@ -125,8 +137,8 @@ def render_log_row(row: dict) -> str:
     return f"""
     <tr>
       <td>{status_badge}</td>
-      <td class="title-cell">{esc(row.get('title'))}</td>
-      <td>{esc(row.get('outcome'))}</td>
+      <td class="title-cell">{market_link(row.get('title'), row.get('slug'))}</td>
+      <td><b>{esc(row.get('outcome'))}</b></td>
       <td class="num">{fmt_price(row.get('entry_price'))}</td>
       <td class="num">{fmt_price(row.get('exit_price') or row.get('current_price'))}</td>
       <td class="num {return_class}">{fmt_pct(pct_return)}{return_suffix}</td>
@@ -135,12 +147,39 @@ def render_log_row(row: dict) -> str:
     </tr>"""
 
 
+VERDICT_PILL = {
+    "WATCHLIST_STRONG": "win",
+    "WATCHLIST": "open",
+    "PAPER_ONLY": "wait",
+    "REJECT": "loss",
+}
+
+
+def render_trader_row(row: dict) -> str:
+    wallet = row.get("wallet", "")
+    username = row.get("username") or "(sin username)"
+    profile = esc(PROFILE_URL.format(wallet=wallet))
+    verdict = row.get("verdict", "")
+    pill_class = VERDICT_PILL.get(verdict, "ignore")
+    short_wallet = f"{wallet[:6]}…{wallet[-4:]}" if len(wallet) > 12 else wallet
+    return f"""
+    <tr>
+      <td><b>{esc(row.get('label'))}</b></td>
+      <td><a href="{profile}" target="_blank" rel="noopener">{esc(username)}</a></td>
+      <td class="dim">{esc(short_wallet)}</td>
+      <td><span class="pill pill-{pill_class}">{esc(verdict)}</span></td>
+      <td class="dim">{esc(row.get('status'))}</td>
+    </tr>"""
+
+
 def main() -> None:
     log_rows = read_csv(TRADE_LOG)
     signal_rows = read_csv(SIGNALS)
+    trader_rows = read_csv(TRADERS)
 
     log_rows.sort(key=lambda r: (STATUS_ORDER.get(r.get("status", "OPEN"), 9), r.get("last_updated", "")), reverse=False)
     signal_rows.sort(key=lambda r: ACTION_ORDER.get(r.get("action", "IGNORE"), 9))
+    trader_rows.sort(key=lambda r: r.get("label", ""))
 
     resolved = [r for r in log_rows if r.get("status") in ("WIN", "LOSS", "CLOSED")]
     wins = [r for r in resolved if r["status"] in ("WIN", "CLOSED")]
@@ -501,7 +540,7 @@ footer a:hover {{ text-decoration: underline; }}
       <table>
         <thead>
           <tr>
-            <th>Acción</th><th>Mercado</th><th>Resultado</th><th>Precio</th>
+            <th>Acción</th><th>Mercado (clic para abrir)</th><th>Apuesta</th><th>Precio</th>
             <th>Traders</th><th>Convicción</th><th>Stake</th>
           </tr>
         </thead>
@@ -521,12 +560,31 @@ footer a:hover {{ text-decoration: underline; }}
       <table>
         <thead>
           <tr>
-            <th>Estado</th><th>Mercado</th><th>Resultado</th><th>Entrada</th>
+            <th>Estado</th><th>Mercado (clic para abrir)</th><th>Apuesta</th><th>Entrada</th>
             <th>Salida</th><th>Retorno</th><th>Detectado</th><th>Traders</th>
           </tr>
         </thead>
         <tbody>
           {"".join(render_log_row(r) for r in log_rows) or '<tr><td colspan="8" class="empty">Todavía no hay trades registrados</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Traders</h2>
+      <span class="section-note">{len(trader_rows)} wallets · clic en el usuario para ver su perfil en Polymarket</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Label</th><th>Usuario</th><th>Wallet</th><th>Verdict</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {"".join(render_trader_row(r) for r in trader_rows) or '<tr><td colspan="5" class="empty">Sin datos de traders todavia</td></tr>'}
         </tbody>
       </table>
     </div>
