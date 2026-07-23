@@ -417,8 +417,10 @@ def main() -> int:
         print("Faltan TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID en el entorno", file=sys.stderr)
         return 1
 
+    skip_evaluate = "--skip-evaluate" in sys.argv
+
     try:
-        return run_pipeline(token, chat_id)
+        return run_pipeline(token, chat_id, skip_evaluate=skip_evaluate)
     except Exception as exc:
         print(f"Error fatal en el pipeline: {exc}", file=sys.stderr)
         try:
@@ -433,26 +435,29 @@ def main() -> int:
         return 1
 
 
-def run_pipeline(token: str, chat_id: str) -> int:
-    run(
-        [
-            sys.executable,
-            "-B",
-            "-m",
-            "atlantis.cli",
-            "evaluate-watchlist",
-            "--wallets-csv",
-            "inputs/approved_wallets.csv",
-            "--statuses",
-            "approved,paper_only",
-            "--since-days",
-            "30",
-            "--csv",
-            "outputs/watchlist_evaluation.csv",
-        ]
-    )
+def run_pipeline(token: str, chat_id: str, skip_evaluate: bool = False) -> int:
+    if skip_evaluate:
+        print("(ciclo rapido: usando outputs/portfolio_traders.csv ya existente, sin re-evaluar wallets)")
+    else:
+        run(
+            [
+                sys.executable,
+                "-B",
+                "-m",
+                "atlantis.cli",
+                "evaluate-watchlist",
+                "--wallets-csv",
+                "inputs/approved_wallets.csv",
+                "--statuses",
+                "approved,paper_only",
+                "--since-days",
+                "30",
+                "--csv",
+                "outputs/watchlist_evaluation.csv",
+            ]
+        )
 
-    convert_to_portfolio_format()
+        convert_to_portfolio_format()
 
     run(
         [
