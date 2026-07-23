@@ -291,6 +291,14 @@ def update_trade_log(
         key = signal_key(signal)
         current_keys.add(key)
         if key not in log:
+            if int(signal["supporting_traders"]) < MIN_CONSENSUS:
+                # Defensive guard: active-portfolio should never classify
+                # something as COPY below MIN_CONSENSUS, but a bot that
+                # later gets excluded (e.g. RN1_possible_bot) can leave a
+                # stale "2 traders" count where one of them was never
+                # legitimate. Don't let that slip into the trade log.
+                print(f"  (omitido, {signal['supporting_traders']} < minimo de consenso: {signal['title']})")
+                continue
             log[key] = {
                 "condition_id": signal["condition_id"],
                 "asset": signal["asset"],
