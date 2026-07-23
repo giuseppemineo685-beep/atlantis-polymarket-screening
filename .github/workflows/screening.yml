@@ -1,8 +1,9 @@
 name: Atlantis Screening
 
 on:
-  schedule:
-    - cron: "*/30 * * * *"
+  # Scheduling moved to the VPS crontab (exact 30-min timing - GitHub's
+  # own `schedule` trigger is best-effort and can lag hours under load).
+  # Kept as workflow_dispatch only, for manual runs/testing.
   workflow_dispatch: {}
 
 permissions:
