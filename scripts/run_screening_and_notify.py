@@ -213,7 +213,16 @@ def apply_trader_change(row: dict, live_supporting: int, live_price: Decimal | N
     live price - whether that locks in a gain or a loss. The traders
     leaving is the signal we're acting on, not our own unrealized P&L.
     """
-    entry_supporting = int(row.get("entry_supporting_traders") or row.get("supporting_traders") or live_supporting)
+    # "traders" is only ever set once, at creation - unlike supporting_traders
+    # (mutated every run to the live count), it's a reliable fallback for the
+    # true entry baseline on legacy rows that predate the
+    # entry_supporting_traders field. Falling back to supporting_traders
+    # itself was a bug: once that field had already been overwritten to a
+    # reduced live count in an earlier run, it became the new "baseline"
+    # each time, so a further decrease (e.g. down to 0) was never detected.
+    trader_count = len([t for t in row["traders"].split(",") if t.strip()])
+    entry_supporting = int(row.get("entry_supporting_traders") or trader_count or live_supporting)
+    row["entry_supporting_traders"] = entry_supporting  # backfill/persist for legacy rows
 
     if live_price is not None:
         row["current_price"] = str(live_price)
