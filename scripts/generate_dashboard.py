@@ -69,6 +69,23 @@ def render_log_row(row: dict) -> str:
     status = row.get("status", "OPEN")
     consensus_active = row.get("consensus_active", "yes") == "yes"
     pct_return = row.get("pct_return", "")
+
+    # For OPEN trades, pct_return in the CSV is only set once the trade
+    # closes/resolves - it's blank the whole time it's open, which hid
+    # unrealized losses entirely from this table (they only showed up in
+    # the live Telegram alert text). Compute a live mark-to-market % here
+    # too, so an open position that's currently underwater shows red.
+    is_live_estimate = False
+    if pct_return in (None, ""):
+        try:
+            entry = float(row.get("entry_price") or 0)
+            current = float(row.get("current_price") or 0)
+            if entry > 0:
+                pct_return = f"{(current / entry - 1) * 100:.2f}"
+                is_live_estimate = True
+        except ValueError:
+            pct_return = ""
+
     return_class = ""
     if pct_return not in (None, ""):
         try:
@@ -83,6 +100,8 @@ def render_log_row(row: dict) -> str:
     else:
         status_badge = f'<span class="pill pill-{status.lower()}">{esc(status)}</span>'
 
+    return_suffix = "*" if is_live_estimate else ""
+
     return f"""
     <tr>
       <td>{status_badge}</td>
@@ -90,7 +109,7 @@ def render_log_row(row: dict) -> str:
       <td>{esc(row.get('outcome'))}</td>
       <td class="num">{fmt_price(row.get('entry_price'))}</td>
       <td class="num">{fmt_price(row.get('exit_price') or row.get('current_price'))}</td>
-      <td class="num {return_class}">{fmt_pct(pct_return)}</td>
+      <td class="num {return_class}">{fmt_pct(pct_return)}{return_suffix}</td>
       <td class="dim">{esc(row.get('date_first_seen'))}</td>
       <td class="dim">{esc(row.get('traders'))}</td>
     </tr>"""
@@ -397,7 +416,7 @@ footer a:hover {{ text-decoration: underline; }}
   <section>
     <div class="section-head">
       <h2>Historial de trades</h2>
-      <span class="section-note">Los cerrados quedan siempre visibles — {len(resolved)} resueltos, {len(open_trades)} abiertos</span>
+      <span class="section-note">Los cerrados quedan siempre visibles — {len(resolved)} resueltos, {len(open_trades)} abiertos · * = retorno no realizado, mercado sigue abierto</span>
     </div>
     <div class="table-scroll">
       <table>
