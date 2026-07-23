@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import csv
 import json
-import math
 import os
 import subprocess
 import sys
@@ -18,8 +17,6 @@ from atlantis.polymarket.client import build_client  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 STATE_PATH = ROOT / "state" / "notified_signals.json"
-EXIT_STATE_PATH = ROOT / "state" / "exit_alerts_sent.json"
-PARTIAL_STATE_PATH = ROOT / "state" / "partial_alerts_sent.json"
 TRADE_LOG_PATH = ROOT / "outputs" / "trade_log.csv"
 TRADE_LOG_FIELDS = [
     "condition_id",
@@ -209,45 +206,28 @@ MIN_CONSENSUS = 2
 def apply_trader_change(row: dict, live_supporting: int, live_price: Decimal | None, now: str) -> str | None:
     """Update `row` in place given the current live count of supporting
     traders and live price. Returns the alert tier to raise for this run:
-    None, "partial", "exit", or "closed" (closed also finalizes the trade).
+    None, or "closed" (finalizes the trade, win or loss).
 
-    Rules:
-    - If a MAJORITY of the traders present when we first logged this trade
-      have since exited (e.g. 1 of 2, or 2 of 3), and the position is
-      currently in profit, we close it right there and lock in the gain -
-      waiting for the market to fully resolve risks giving that gain back
-      once the smart money has already left.
-    - Same majority exit but NOT in profit: don't force a loss - flag it as
-      a strong "consider exiting yourself" alert but leave it open.
-    - Any exit below majority: a softer "conviction reduced" notice.
+    Rule: as soon as ANY one of the traders present when we first logged
+    this trade has exited, follow them out immediately and close at the
+    live price - whether that locks in a gain or a loss. The traders
+    leaving is the signal we're acting on, not our own unrealized P&L.
     """
     entry_supporting = int(row.get("entry_supporting_traders") or row.get("supporting_traders") or live_supporting)
-    previous_supporting = int(row.get("supporting_traders") or entry_supporting)
 
     if live_price is not None:
         row["current_price"] = str(live_price)
     row["supporting_traders"] = live_supporting
     row["last_updated"] = now
 
-    exited_from_entry = entry_supporting - live_supporting
-    majority_needed = math.ceil(entry_supporting / 2)
-
-    if exited_from_entry >= majority_needed and live_supporting < entry_supporting:
+    if live_supporting < entry_supporting and live_price is not None:
         entry_price = Decimal(row["entry_price"])
-        in_profit = live_price is not None and live_price > entry_price
-        if in_profit:
-            pct_return = ((live_price / entry_price) - 1) * Decimal("100") if entry_price > 0 else Decimal("0")
-            row["status"] = "CLOSED"
-            row["exit_price"] = str(live_price)
-            row["pct_return"] = f"{pct_return:.2f}"
-            row["consensus_active"] = "no"
-            return "closed"
+        pct_return = ((live_price / entry_price) - 1) * Decimal("100") if entry_price > 0 else Decimal("0")
+        row["status"] = "CLOSED"
+        row["exit_price"] = str(live_price)
+        row["pct_return"] = f"{pct_return:.2f}"
         row["consensus_active"] = "no"
-        return "exit"
-
-    if live_supporting < previous_supporting:
-        row["consensus_active"] = "yes" if live_supporting >= MIN_CONSENSUS else "no"
-        return "partial"
+        return "closed"
 
     row["consensus_active"] = "yes" if live_supporting >= MIN_CONSENSUS else row.get("consensus_active", "yes")
     return None
@@ -255,14 +235,11 @@ def apply_trader_change(row: dict, live_supporting: int, live_price: Decimal | N
 
 def update_trade_log(
     log: dict[str, dict], copy_signals: list[dict], label_to_wallet: dict[str, str], client
-) -> tuple[dict[str, dict], list[dict], list[dict], list[dict]]:
-    """Update the persistent trade log. Returns (log, exit_alerts,
-    partial_alerts, closed_alerts) - see apply_trader_change for the rules
-    behind each tier."""
+) -> tuple[dict[str, dict], list[dict]]:
+    """Update the persistent trade log. Returns (log, closed_alerts) - see
+    apply_trader_change for the closing rule."""
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     current_keys = set()
-    exit_alerts = []
-    partial_alerts = []
     closed_alerts = []
 
     for signal in copy_signals:
@@ -290,21 +267,14 @@ def update_trade_log(
         else:
             row = log[key]
             if row["status"] == "OPEN":
-                previous_supporting = int(row.get("supporting_traders") or 0)
                 tier = apply_trader_change(row, int(signal["supporting_traders"]), Decimal(signal["current_price"]), now)
                 if tier == "closed":
                     closed_alerts.append(row)
-                    print(f"  = cerrado en ganancia: {row['title']} ({row['pct_return']}%)")
-                elif tier == "exit":
-                    exit_alerts.append(row)
-                    print(f"  ! mayoria salio, sin ganancia: {row['title']}")
-                elif tier == "partial":
-                    partial_alerts.append({**row, "previous_supporting": previous_supporting})
-                    print(f"  ~ salida parcial: {row['title']} -> {previous_supporting} a {row['supporting_traders']} traders")
+                    print(f"  = cerrado (un trader salio): {row['title']} ({row['pct_return']}%)")
 
     # Anything OPEN but no longer backed by consensus: check if the market
     # actually resolved (finalize WIN/LOSS), or just refresh its live price
-    # and flag that the traders are no longer aligned on it.
+    # and re-check whether any of the original traders have left.
     for key, row in log.items():
         if row["status"] != "OPEN" or key in current_keys:
             continue
@@ -328,26 +298,16 @@ def update_trade_log(
         # filter band as a market nears resolution - that is NOT the same as
         # traders selling. Check their actual positions to tell those apart.
         trader_labels = [t.strip() for t in row["traders"].split(",") if t.strip()]
-        previous_supporting = int(row.get("supporting_traders") or len(trader_labels))
         still_holding = count_traders_still_holding(row["condition_id"], row["asset"], trader_labels, label_to_wallet, client)
 
         tier = apply_trader_change(row, still_holding, price, now)
         if tier == "closed":
             closed_alerts.append(row)
-            print(f"  = cerrado en ganancia: {row['title']} ({row['pct_return']}%)")
-        elif tier == "exit":
-            exit_alerts.append(row)
-            print(
-                f"  ! salida real: {row['title']} -> {row['outcome']} "
-                f"(solo {still_holding} traders siguen, precio actual {row['current_price']})"
-            )
-        elif tier == "partial":
-            partial_alerts.append({**row, "previous_supporting": previous_supporting})
-            print(f"  ~ salida parcial: {row['title']} -> {previous_supporting} a {still_holding} traders")
+            print(f"  = cerrado (un trader salio): {row['title']} ({row['pct_return']}%)")
         else:
             print(f"  ~ fuera del filtro de precio pero {still_holding}/{len(trader_labels)} siguen dentro: {row['title']}")
 
-    return log, exit_alerts, partial_alerts, closed_alerts
+    return log, closed_alerts
 
 
 def send_telegram(token: str, chat_id: str, text: str) -> None:
@@ -359,43 +319,18 @@ def send_telegram(token: str, chat_id: str, text: str) -> None:
 
 
 def format_closed_message(row: dict) -> str:
+    pct = float(row["pct_return"])
+    if pct >= 0:
+        emoji, headline = "✅", "CERRADO — ganancia asegurada"
+    else:
+        emoji, headline = "🔻", "CERRADO — salimos con pérdida"
     return (
-        f"✅ <b>CERRADO — ganancia asegurada</b>\n"
+        f"{emoji} <b>{headline}</b>\n"
         f"{row['title']}\n"
         f"Resultado: <b>{row['outcome']}</b>\n"
         f"Entrada: {row['entry_price']}  →  Salida: {row['exit_price']}  ({row['pct_return']}%)\n"
-        f"La mayoría de los traders que respaldaban esto ya salieron, así que cerramos con ganancia "
-        f"en vez de esperar a que resuelva el mercado."
-    )
-
-
-def format_partial_exit_message(row: dict) -> str:
-    prev = row.get("previous_supporting", "?")
-    now_count = row.get("supporting_traders", "?")
-    return (
-        f"🔵 <b>UN TRADER SALIÓ — sigue habiendo consenso</b>\n"
-        f"{row['title']}\n"
-        f"Resultado: <b>{row['outcome']}</b>\n"
-        f"Apoyo: bajó de {prev} a {now_count} traders  |  Precio actual: {row['current_price']}\n"
-        f"Todavía hay consenso mínimo, pero la convicción bajó — no es una recomendación de salida, solo aviso."
-    )
-
-
-def format_exit_message(row: dict) -> str:
-    entry = row.get("entry_price", "")
-    current = row.get("current_price", "")
-    try:
-        pct = (float(current) / float(entry) - 1) * 100 if entry and float(entry) > 0 else 0.0
-        pct_txt = f"{pct:+.1f}%"
-    except (ValueError, ZeroDivisionError):
-        pct_txt = "—"
-    return (
-        f"🟡 <b>CONSENSO ROTO — considerá salir</b>\n"
-        f"{row['title']}\n"
-        f"Resultado: <b>{row['outcome']}</b>\n"
-        f"Entrada: {entry}  |  Precio actual: {current} ({pct_txt})\n"
-        f"Los traders que respaldaban esta posición ya no coinciden. El mercado sigue abierto (no resolvió), "
-        f"pero perdió la señal que la sostenía."
+        f"Uno de los traders que respaldaba esto salió, así que seguimos su salida en vez de esperar "
+        f"a que resuelva el mercado."
     )
 
 
@@ -501,37 +436,14 @@ def run_pipeline(token: str, chat_id: str, skip_evaluate: bool = False) -> int:
     label_to_wallet = load_label_to_wallet()
 
     trade_log = load_trade_log()
-    trade_log, exit_alerts, partial_alerts, closed_alerts = update_trade_log(trade_log, copy_signals, label_to_wallet, client)
+    trade_log, closed_alerts = update_trade_log(trade_log, copy_signals, label_to_wallet, client)
 
-    print(f"Cierres por mayoria en ganancia: {len(closed_alerts)}")
+    print(f"Cierres por salida de trader: {len(closed_alerts)}")
     for row in closed_alerts:
         try:
             send_telegram(token, chat_id, format_closed_message(row))
         except Exception as exc:
             print(f"Error enviando alerta de cierre: {exc}", file=sys.stderr)
-
-    exit_seen = load_state_path(EXIT_STATE_PATH)
-    new_exit_alerts = [row for row in exit_alerts if signal_key(row) not in exit_seen]
-    print(f"Alertas de salida (consenso roto): {len(exit_alerts)}  |  Nuevas: {len(new_exit_alerts)}")
-    for row in new_exit_alerts:
-        try:
-            send_telegram(token, chat_id, format_exit_message(row))
-        except Exception as exc:
-            print(f"Error enviando alerta de salida: {exc}", file=sys.stderr)
-    save_state_path(EXIT_STATE_PATH, exit_seen | {signal_key(row) for row in exit_alerts})
-
-    # Dedup partial alerts per (signal, new count) so a further step down
-    # (e.g. 3 -> 2, later 2 -> 1) still notifies again at each level.
-    partial_seen = load_state_path(PARTIAL_STATE_PATH)
-    partial_keys = {f"{signal_key(row)}|{row['supporting_traders']}": row for row in partial_alerts}
-    new_partial_alerts = [row for k, row in partial_keys.items() if k not in partial_seen]
-    print(f"Alertas de salida parcial: {len(partial_alerts)}  |  Nuevas: {len(new_partial_alerts)}")
-    for row in new_partial_alerts:
-        try:
-            send_telegram(token, chat_id, format_partial_exit_message(row))
-        except Exception as exc:
-            print(f"Error enviando alerta parcial: {exc}", file=sys.stderr)
-    save_state_path(PARTIAL_STATE_PATH, partial_seen | set(partial_keys.keys()))
 
     save_trade_log(trade_log)
 
