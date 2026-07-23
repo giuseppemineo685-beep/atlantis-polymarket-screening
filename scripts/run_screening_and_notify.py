@@ -133,40 +133,35 @@ def save_trade_log(log: dict[str, dict]) -> None:
 def get_market_price_info(condition_id: str, asset: str) -> tuple[Decimal | None, bool]:
     """Return (current_price, is_closed) for `asset` in this market.
 
-    current_price reflects the live market price whether the market is open
-    or closed (Polymarket keeps `outcomePrices` current either way) - this
-    lets us keep a trade's displayed price fresh even after it drops out of
-    consensus, instead of freezing on the last price we happened to see.
+    Uses the CLOB API (clob.polymarket.com/markets/{condition_id}) rather
+    than gamma-api's /markets?condition_ids= - gamma-api silently returns an
+    empty result for markets it's archived (common for anything past a
+    couple days old), which made this look like "no data" for perfectly
+    real, resolved markets and left trades stuck open forever instead of
+    closing. CLOB keeps serving them and reports the settled price directly.
     """
-    url = f"https://gamma-api.polymarket.com/markets?condition_ids={condition_id}"
+    url = f"https://clob.polymarket.com/markets/{condition_id}"
     req = urllib.request.Request(
         url, headers={"Accept": "application/json", "User-Agent": "atlantis-screening/0.1"}
     )
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read())
+            market = json.loads(resp.read())
     except Exception as exc:
         print(f"  aviso: no se pudo consultar {condition_id}: {exc}", file=sys.stderr)
         return None, False
 
-    if not data:
+    if not market:
         return None, False
-    market = data[0]
     closed = bool(market.get("closed"))
 
-    try:
-        clob_token_ids = json.loads(market.get("clobTokenIds", "[]"))
-        outcome_prices = json.loads(market.get("outcomePrices", "[]"))
-    except (json.JSONDecodeError, TypeError):
-        return None, closed
-
-    if asset not in clob_token_ids:
-        return None, closed
-    idx = clob_token_ids.index(asset)
-    try:
-        return Decimal(outcome_prices[idx]), closed
-    except (IndexError, InvalidOperation):
-        return None, closed
+    for token in market.get("tokens", []):
+        if token.get("token_id") == asset:
+            try:
+                return Decimal(str(token.get("price"))), closed
+            except InvalidOperation:
+                return None, closed
+    return None, closed
 
 
 def load_label_to_wallet() -> dict[str, str]:
