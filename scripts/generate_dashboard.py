@@ -13,6 +13,7 @@ FONTS = Path(__file__).resolve().parent / "fonts"
 TRADE_LOG = ROOT / "outputs" / "trade_log.csv"
 SIGNALS = ROOT / "outputs" / "active_portfolio_signals.csv"
 TRADERS = ROOT / "outputs" / "traders.csv"
+PERFORMANCE = ROOT / "outputs" / "trader_performance.csv"
 OUT_PATH = ROOT / "docs" / "index.html"
 
 PROFILE_URL = "https://polymarket.com/profile/{wallet}"
@@ -172,14 +173,52 @@ def render_trader_row(row: dict) -> str:
     </tr>"""
 
 
+FLAG_PILL = {
+    "DECLINING": "loss",
+    "LOW_SAMPLE": "wait",
+    "OK": "win",
+}
+
+
+def fmt_money(value: str | None) -> str:
+    try:
+        num = float(value or 0)
+    except ValueError:
+        return "—"
+    sign = "+" if num > 0 else ""
+    return f"{sign}{num:,.0f}"
+
+
+def render_performance_row(row: dict) -> str:
+    flag = row.get("flag", "")
+    pill_class = FLAG_PILL.get(flag, "wait")
+    pnl_7d = row.get("pnl_7d")
+    pnl_class = "num-pos" if (pnl_7d and float(pnl_7d) >= 0) else "num-neg"
+    pnl_30d = row.get("pnl_30d")
+    pnl_30d_class = "num-pos" if (pnl_30d and float(pnl_30d) >= 0) else "num-neg"
+    return f"""
+    <tr>
+      <td><b>{esc(row.get('label'))}</b></td>
+      <td><span class="pill pill-{pill_class}">{esc(flag)}</span></td>
+      <td class="num {pnl_class}">{fmt_money(pnl_7d)}</td>
+      <td class="num">{fmt_pct(row.get('win_rate_7d'))}</td>
+      <td class="num dim">{esc(row.get('resolved_7d'))}</td>
+      <td class="num {pnl_30d_class}">{fmt_money(pnl_30d)}</td>
+      <td class="num">{fmt_pct(row.get('win_rate_30d'))}</td>
+      <td class="num dim">{esc(row.get('resolved_30d'))}</td>
+    </tr>"""
+
+
 def main() -> None:
     log_rows = read_csv(TRADE_LOG)
     signal_rows = read_csv(SIGNALS)
     trader_rows = read_csv(TRADERS)
+    performance_rows = read_csv(PERFORMANCE)
 
     log_rows.sort(key=lambda r: (STATUS_ORDER.get(r.get("status", "OPEN"), 9), r.get("last_updated", "")), reverse=False)
     signal_rows.sort(key=lambda r: ACTION_ORDER.get(r.get("action", "IGNORE"), 9))
     trader_rows.sort(key=lambda r: r.get("label", ""))
+    performance_rows.sort(key=lambda r: float(r.get("pnl_7d") or 0))
 
     resolved = [r for r in log_rows if r.get("status") in ("WIN", "LOSS", "CLOSED")]
     wins = [r for r in resolved if r["status"] in ("WIN", "CLOSED")]
@@ -566,6 +605,27 @@ footer a:hover {{ text-decoration: underline; }}
         </thead>
         <tbody>
           {"".join(render_log_row(r) for r in log_rows) or '<tr><td colspan="8" class="empty">Todavía no hay trades registrados</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Rendimiento por trader</h2>
+      <span class="section-note">PnL realizado y win rate en ventanas móviles de 7 y 30 días · ordenado peor a mejor (7d) · se actualiza cada ~2h</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Label</th><th>Flag</th>
+            <th>PnL 7d</th><th>WR 7d</th><th>N 7d</th>
+            <th>PnL 30d</th><th>WR 30d</th><th>N 30d</th>
+          </tr>
+        </thead>
+        <tbody>
+          {"".join(render_performance_row(r) for r in performance_rows) or '<tr><td colspan="8" class="empty">Sin datos de rendimiento todavia</td></tr>'}
         </tbody>
       </table>
     </div>
