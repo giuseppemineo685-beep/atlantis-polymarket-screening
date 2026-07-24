@@ -214,6 +214,14 @@ class PolymarketClient:
                 last_error = RuntimeError(f"Network error for {full_url}: {exc}")
                 if attempt == self.MAX_RETRIES:
                     raise last_error from exc
+            except (TimeoutError, ConnectionError, OSError) as exc:
+                # A read timeout mid-response (e.g. the socket stalls after the
+                # connection is already open) raises a raw TimeoutError/OSError,
+                # not urllib.error.URLError - without this branch it escaped
+                # retry entirely and crashed the whole pipeline.
+                last_error = RuntimeError(f"Network error for {full_url}: {exc}")
+                if attempt == self.MAX_RETRIES:
+                    raise last_error from exc
             finally:
                 if self.request_sleep_seconds > 0:
                     time.sleep(self.request_sleep_seconds)
