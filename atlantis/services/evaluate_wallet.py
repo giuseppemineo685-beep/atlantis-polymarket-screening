@@ -11,6 +11,18 @@ from atlantis.polymarket.client import build_client
 from atlantis.services.sports_traders import as_decimal, as_int, is_sports_trade
 
 
+# Wallets manually confirmed as bots through direct investigation (see
+# outputs/watchlist_evaluation.md notes). The automated bot_score is noisy
+# run-to-run (it samples recent trades, so a wallet can drift from
+# LIKELY_BOT to POSSIBLE_BOT between cycles) - that flip once let
+# RN1_possible_bot back into a live consensus signal. A manual confirmation
+# overrides the score permanently instead of relying on it staying above
+# the auto-reject threshold on every single run.
+CONFIRMED_BOT_WALLETS = {
+    "0x2005d16a84ceefa912d4e380cd32e7ff827875ea",  # RN1_possible_bot
+}
+
+
 @dataclass(frozen=True)
 class WalletEvaluation:
     wallet_address: str
@@ -85,7 +97,7 @@ def evaluate_wallet(
     # cover many distinct markets and do sell sometimes (see Trader05 spot
     # check). Only auto-reject on LIKELY_BOT, which requires stronger
     # combined signals (buy-only + low market diversity + fast-market share).
-    likely_bot = bot_result.verdict == "LIKELY_BOT"
+    likely_bot = bot_result.verdict == "LIKELY_BOT" or wallet in CONFIRMED_BOT_WALLETS
 
     notes = build_notes(
         trades=trades,
