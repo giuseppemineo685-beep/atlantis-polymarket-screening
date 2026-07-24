@@ -30,6 +30,11 @@ from atlantis.services.sports_traders import (
     write_sports_traders_csv,
 )
 from atlantis.services.top_traders import format_top_traders, get_top_traders
+from atlantis.services.trader_performance import (
+    compute_trader_performance,
+    format_trader_performance,
+    write_trader_performance_csv,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -104,6 +109,16 @@ def main(argv: list[str] | None = None) -> int:
     portfolio.add_argument("--max-price", type=Decimal, default=Decimal("0.90"))
     portfolio.add_argument("--limit", type=int, default=30)
     portfolio.add_argument("--csv", default="")
+
+    performance = subparsers.add_parser(
+        "trader-performance",
+        help="Rolling 7d/30d realized PnL and win rate per trader, to spot decliners.",
+    )
+    performance.add_argument("--wallets-csv", default="inputs/approved_wallets.csv")
+    performance.add_argument("--statuses", default="approved,paper_only")
+    performance.add_argument("--max-closed-positions-per-wallet", type=int, default=5000)
+    performance.add_argument("--min-sample-for-flag", type=int, default=5)
+    performance.add_argument("--csv", default="")
 
     args = parser.parse_args(argv)
 
@@ -199,6 +214,20 @@ def main(argv: list[str] | None = None) -> int:
         print(format_active_portfolio(signals, limit=args.limit))
         if args.csv:
             write_active_portfolio_csv(Path(args.csv), signals)
+            print(f"\nCSV written: {args.csv}")
+        return 0
+
+    if args.command == "trader-performance":
+        results = compute_trader_performance(
+            settings=settings,
+            wallets_csv=Path(args.wallets_csv),
+            statuses={status.strip() for status in args.statuses.split(",") if status.strip()},
+            max_closed_positions_per_wallet=args.max_closed_positions_per_wallet,
+            min_sample_for_flag=args.min_sample_for_flag,
+        )
+        print(format_trader_performance(results))
+        if args.csv:
+            write_trader_performance_csv(Path(args.csv), results)
             print(f"\nCSV written: {args.csv}")
         return 0
 
