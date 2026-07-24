@@ -134,11 +134,15 @@ class PolymarketClient:
             },
         )
 
+    # The API used to silently cap this at 50 regardless of the requested
+    # limit; it now hard-rejects any limit above 50 with a 400 error, so the
+    # default has to match the real ceiling instead of just the historical
+    # observed page size.
     def get_closed_positions(
         self,
         *,
         wallet_address: str,
-        limit: int = 500,
+        limit: int = 50,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
         return self._get_data(
@@ -156,14 +160,14 @@ class PolymarketClient:
         wallet_address: str,
         max_rows: int = 5000,
     ):
-        # This endpoint silently caps page size (observed: 50 rows per page
-        # regardless of the requested limit), so we must advance the offset
-        # by what was actually returned, not by the requested limit -
-        # advancing by the requested limit skips rows and undercounts.
+        # The API rejects any limit above 50 (400 Bad Request) and used to
+        # silently cap it at 50 too, so we must advance the offset by what
+        # was actually returned, not by the requested limit - advancing by
+        # a larger requested limit would skip rows and undercount.
         offset = 0
         rows_yielded = 0
         while rows_yielded < max_rows:
-            batch = self.get_closed_positions(wallet_address=wallet_address, limit=500, offset=offset)
+            batch = self.get_closed_positions(wallet_address=wallet_address, limit=50, offset=offset)
             if not batch:
                 break
             for row in batch:
