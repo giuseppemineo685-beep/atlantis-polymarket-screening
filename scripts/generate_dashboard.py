@@ -623,8 +623,8 @@ footer a:hover {{ text-decoration: underline; }}
         <thead>
           <tr>
             <th>Label</th><th>Flag</th>
-            <th>PnL 7d</th><th>WR 7d</th><th>N 7d</th>
-            <th>PnL 30d</th><th>WR 30d</th><th>N 30d</th>
+            <th>PnL 7d</th><th>WR 7d</th><th>Trades 7d</th>
+            <th>PnL 30d</th><th>WR 30d</th><th>Trades 30d</th>
           </tr>
         </thead>
         <tbody>
