@@ -224,10 +224,6 @@ def main() -> None:
     wins = [r for r in resolved if r["status"] in ("WIN", "CLOSED")]
     open_trades = [r for r in log_rows if r.get("status") == "OPEN"]
     win_rate = (len(wins) / len(resolved) * 100) if resolved else 0.0
-    avg_return = 0.0
-    if resolved:
-        returns = [float(r["pct_return"]) for r in resolved if r.get("pct_return") not in (None, "")]
-        avg_return = sum(returns) / len(returns) if returns else 0.0
 
     copy_signals = [r for r in signal_rows if r.get("action") == "COPY"]
     other_signals = [r for r in signal_rows if r.get("action") != "COPY"][:20]
@@ -237,9 +233,11 @@ def main() -> None:
     now_zurich = now_utc.astimezone(ZURICH).strftime("%Y-%m-%d %H:%M")
 
     # --- Retorno realizado (trades cerrados) vs no realizado (abiertos) ---
+    # Averages only - a sum of independent trades' % returns isn't a real
+    # portfolio metric (it inflates with trade count regardless of money
+    # actually made), so we don't compute or show it anymore.
     realized_pct = [float(r["pct_return"]) for r in resolved if r.get("pct_return") not in (None, "")]
-    realized_sum = sum(realized_pct)
-    realized_avg = realized_sum / len(realized_pct) if realized_pct else 0.0
+    realized_avg = sum(realized_pct) / len(realized_pct) if realized_pct else 0.0
 
     unrealized_pct = []
     for r in open_trades:
@@ -250,8 +248,14 @@ def main() -> None:
                 unrealized_pct.append((current / entry - 1) * 100)
         except ValueError:
             continue
-    unrealized_sum = sum(unrealized_pct)
-    unrealized_avg = unrealized_sum / len(unrealized_pct) if unrealized_pct else 0.0
+    unrealized_avg = sum(unrealized_pct) / len(unrealized_pct) if unrealized_pct else 0.0
+
+    # Headline "Retorno promedio" blends both pools (all trades, closed or
+    # not) so it moves with whichever side - realized or unrealized - is
+    # actually driving performance right now, instead of only reflecting
+    # closed trades.
+    all_pct = realized_pct + unrealized_pct
+    avg_return = sum(all_pct) / len(all_pct) if all_pct else 0.0
 
     # Por dia (hora Zurich): realizado = dia en que cerro (last_updated),
     # no realizado = dia en que se detecto la posicion (date_first_seen)
@@ -544,14 +548,14 @@ footer a:hover {{ text-decoration: underline; }}
     </div>
     <div class="scoreboard" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 20px;">
       <div class="stat">
-        <div class="stat-label">Retorno realizado (total / promedio)</div>
-        <div class="stat-value {'pos' if realized_sum >= 0 else 'neg'}">{realized_sum:+.1f}%</div>
-        <div class="section-note">promedio {realized_avg:+.1f}% · {len(realized_pct)} trades</div>
+        <div class="stat-label">Retorno realizado (promedio)</div>
+        <div class="stat-value {'pos' if realized_avg >= 0 else 'neg'}">{realized_avg:+.1f}%</div>
+        <div class="section-note">{len(realized_pct)} trades cerrados</div>
       </div>
       <div class="stat">
-        <div class="stat-label">Retorno no realizado (total / promedio)</div>
-        <div class="stat-value {'pos' if unrealized_sum >= 0 else 'neg'}">{unrealized_sum:+.1f}%</div>
-        <div class="section-note">promedio {unrealized_avg:+.1f}% · {len(unrealized_pct)} trades</div>
+        <div class="stat-label">Retorno no realizado (promedio)</div>
+        <div class="stat-value {'pos' if unrealized_avg >= 0 else 'neg'}">{unrealized_avg:+.1f}%</div>
+        <div class="section-note">{len(unrealized_pct)} trades abiertos</div>
       </div>
     </div>
     <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
