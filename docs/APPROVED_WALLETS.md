@@ -28,7 +28,7 @@ Una wallet aprobada **no significa copiar automaticamente**. Significa que entra
 | 11 | approved | Trader11 | `0xf10299cf1fff507cff45e1a906800e5b44bf1348` | sports | manual approved |
 | 12 | rejected | Trader12 | `0xa697d0b3fff7d285a0f92d6ee03a7f97809e59d5` | sports | confirmed bot: 30+ positions opened within 1h, no copy |
 | 13 | approved | Trader13 | `0x84ad9c5c547a82ec9a08547b94bd922446e5bfb7` | sports | manual approved |
-| 14 | approved | Trader14 | `0xa804390f80019699ab34a282c0df7528fba82a75` | sports | manual approved |
+| 14 | rejected | Trader14 | `0xa804390f80019699ab34a282c0df7528fba82a75` | sports | declining performance: -18,223 PnL / 33.3% WR over last 7d (57 resolved), rejected 2026-07-25 |
 | 15 | approved | Trader15 | `0x4df332e27f9ee3224f52ce30e3ce15c1075e788f` | sports | manual approved |
 | 16 | approved | Trader16 | `0x191f77486cb1c5af42e54734621804936a204a8d` | sports | manual approved |
 | 17 | approved | Trader17 | `0x10ff6cd4b1b5669d4ca87faebae0c869ad315088` | sports | manual approved |
