@@ -274,14 +274,13 @@ def main() -> None:
         rows = []
         for day in sorted(by_day.keys(), reverse=True):
             vals = by_day[day]
-            total = sum(vals)
-            avg = total / len(vals)
-            cls = "num-pos" if total >= 0 else "num-neg"
+            avg = sum(vals) / len(vals)
+            cls = "num-pos" if avg >= 0 else "num-neg"
             rows.append(
                 f'<tr><td class="dim">{esc(day)}</td><td class="num">{len(vals)}</td>'
-                f'<td class="num {cls}">{total:+.1f}%</td><td class="num {cls}">{avg:+.1f}%</td></tr>'
+                f'<td class="num {cls}">{avg:+.1f}%</td></tr>'
             )
-        return "".join(rows) or '<tr><td colspan="4" class="empty">Sin datos</td></tr>'
+        return "".join(rows) or '<tr><td colspan="3" class="empty">Sin datos</td></tr>'
 
     fonts_css = f"""
     @font-face {{
@@ -561,13 +560,13 @@ footer a:hover {{ text-decoration: underline; }}
     <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
       <div class="table-scroll">
         <table>
-          <thead><tr><th>Día (Zúrich)</th><th>Trades</th><th>Suma %</th><th>Promedio %</th></tr></thead>
+          <thead><tr><th>Día (Zúrich)</th><th>Trades</th><th>Promedio %</th></tr></thead>
           <tbody>{day_rows(realized_by_day)}</tbody>
         </table>
       </div>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>Día detectado (Zúrich)</th><th>Trades</th><th>Suma %</th><th>Promedio %</th></tr></thead>
+          <thead><tr><th>Día detectado (Zúrich)</th><th>Trades</th><th>Promedio %</th></tr></thead>
           <tbody>{day_rows(unrealized_by_day)}</tbody>
         </table>
       </div>
