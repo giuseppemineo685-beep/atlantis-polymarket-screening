@@ -131,6 +131,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Read-only: kill switch state, real PnL, open live positions.",
     )
 
+    test_order = subparsers.add_parser(
+        "place-test-order",
+        help="Manual-only: place a small real order to verify the execution path. Never invoked by cron.",
+    )
+    test_order.add_argument("--token-id", required=True)
+    test_order.add_argument("--side", required=True, choices=["BUY", "SELL"])
+    test_order.add_argument("--amount", type=Decimal, required=True, help="USDC for BUY, shares for SELL")
+    test_order.add_argument("--confirm", action="store_true", help="Required to actually place the order")
+
     args = parser.parse_args(argv)
 
     if args.command == "top-traders":
@@ -270,6 +279,33 @@ def main(argv: list[str] | None = None) -> int:
         summary = compute_live_status(live_settings)
         print(format_live_status(summary, live_settings))
         return 0
+
+    if args.command == "place-test-order":
+        from atlantis.live.config import load_live_settings
+        from atlantis.polymarket.clob_client import build_live_client
+
+        if not args.confirm:
+            print("Falta --confirm. Esta orden usa dinero real - pasa --confirm para ejecutarla de verdad.")
+            return 1
+
+        live_settings = load_live_settings()
+        client = build_live_client(live_settings)
+        print(f"Colocando orden real: {args.side} {args.amount} en token {args.token_id} ...")
+        if args.side == "BUY":
+            result = client.place_market_buy(args.token_id, args.amount)
+        else:
+            result = client.place_market_sell(args.token_id, args.amount)
+
+        print(f"success:         {result.success}")
+        print(f"order_id:        {result.order_id}")
+        print(f"status:          {result.status}")
+        print(f"filled_size:     {result.filled_size}")
+        print(f"avg_fill_price:  {result.avg_fill_price}")
+        print(f"error:           {result.error}")
+        print()
+        print("raw_response (guardar esto para ajustar el parser):")
+        print(result.raw_response)
+        return 0 if result.success else 1
 
     parser.print_help()
     return 1
