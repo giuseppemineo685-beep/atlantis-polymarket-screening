@@ -30,6 +30,7 @@ from atlantis.services.sports_traders import (
     write_sports_traders_csv,
 )
 from atlantis.services.top_traders import format_top_traders, get_top_traders
+from atlantis.services.live_status import compute_live_status, format_live_status
 from atlantis.services.trader_performance import (
     compute_trader_performance,
     format_trader_performance,
@@ -119,6 +120,16 @@ def main(argv: list[str] | None = None) -> int:
     performance.add_argument("--max-closed-positions-per-wallet", type=int, default=5000)
     performance.add_argument("--min-sample-for-flag", type=int, default=5)
     performance.add_argument("--csv", default="")
+
+    subparsers.add_parser(
+        "check-balance",
+        help="Read-only: confirm live-trading credentials work and show real USDC balance.",
+    )
+
+    subparsers.add_parser(
+        "live-status",
+        help="Read-only: kill switch state, real PnL, open live positions.",
+    )
 
     args = parser.parse_args(argv)
 
@@ -229,6 +240,35 @@ def main(argv: list[str] | None = None) -> int:
         if args.csv:
             write_trader_performance_csv(Path(args.csv), results)
             print(f"\nCSV written: {args.csv}")
+        return 0
+
+    if args.command == "check-balance":
+        from atlantis.live.config import load_live_settings
+        from atlantis.polymarket.clob_client import build_live_client
+
+        live_settings = load_live_settings()
+        try:
+            client = build_live_client(live_settings)
+        except FileNotFoundError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+        address = client.get_address()
+        balance = client.get_balance()
+        print(f"direccion derivada (EOA):  {address}")
+        print(f"funder configurado:        {live_settings.funder_address or '(no configurado)'}")
+        print(f"signature_type:            {live_settings.signature_type}")
+        print(f"balance/allowance crudo:   {balance}")
+        print()
+        print("Comparar el balance de arriba contra lo que se ve en polymarket.com")
+        print("antes de confiar en este cliente para cualquier orden real.")
+        return 0
+
+    if args.command == "live-status":
+        from atlantis.live.config import load_live_settings
+
+        live_settings = load_live_settings()
+        summary = compute_live_status(live_settings)
+        print(format_live_status(summary, live_settings))
         return 0
 
     parser.print_help()
