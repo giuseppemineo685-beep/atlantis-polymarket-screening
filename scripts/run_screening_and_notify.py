@@ -318,6 +318,12 @@ def update_trade_log(
                 "last_updated": now,
             }
             print(f"  + nuevo trade en log: {signal['title']} -> {signal['outcome']}")
+            try:
+                from atlantis.services.live_intents import enqueue_intent
+
+                enqueue_intent("BUY", log[key])
+            except Exception as exc:
+                print(f"  aviso: no se pudo encolar intent de compra: {exc}", file=sys.stderr)
         else:
             row = log[key]
             if row["status"] == "OPEN":
@@ -325,6 +331,12 @@ def update_trade_log(
                 if tier == "closed":
                     closed_alerts.append(row)
                     print(f"  = cerrado (un trader salio): {row['title']} ({row['pct_return']}%)")
+                    try:
+                        from atlantis.services.live_intents import enqueue_intent
+
+                        enqueue_intent("SELL", row)
+                    except Exception as exc:
+                        print(f"  aviso: no se pudo encolar intent de venta: {exc}", file=sys.stderr)
 
     # Anything OPEN but no longer backed by consensus: check if the market
     # actually resolved (finalize WIN/LOSS), or just refresh its live price
@@ -358,6 +370,12 @@ def update_trade_log(
         if tier == "closed":
             closed_alerts.append(row)
             print(f"  = cerrado (un trader salio): {row['title']} ({row['pct_return']}%)")
+            try:
+                from atlantis.services.live_intents import enqueue_intent
+
+                enqueue_intent("SELL", row)
+            except Exception as exc:
+                print(f"  aviso: no se pudo encolar intent de venta: {exc}", file=sys.stderr)
         else:
             print(f"  ~ fuera del filtro de precio pero {still_holding}/{len(trader_labels)} siguen dentro: {row['title']}")
 

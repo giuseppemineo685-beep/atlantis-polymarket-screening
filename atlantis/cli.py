@@ -140,6 +140,11 @@ def main(argv: list[str] | None = None) -> int:
     test_order.add_argument("--amount", type=Decimal, required=True, help="USDC for BUY, shares for SELL")
     test_order.add_argument("--confirm", action="store_true", help="Required to actually place the order")
 
+    subparsers.add_parser(
+        "process-live-intents",
+        help="Process the live-intents queue: dry-run unless state/live_trading_status.json has enabled=true.",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "top-traders":
@@ -306,6 +311,17 @@ def main(argv: list[str] | None = None) -> int:
         print("raw_response (guardar esto para ajustar el parser):")
         print(result.raw_response)
         return 0 if result.success else 1
+
+    if args.command == "process-live-intents":
+        from atlantis.live.config import load_live_settings
+        from atlantis.live.kill_switch import evaluate_and_maybe_trip
+        from atlantis.services.live_execution import format_execution_summary, process_pending_intents
+
+        live_settings = load_live_settings()
+        evaluate_and_maybe_trip(live_settings)
+        summary = process_pending_intents(settings=live_settings)
+        print(format_execution_summary(summary))
+        return 0
 
     parser.print_help()
     return 1
