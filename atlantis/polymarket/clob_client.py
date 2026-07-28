@@ -22,7 +22,7 @@ class LiveClobClient:
     """Thin wrapper around py-clob-client, mirroring how
     atlantis.polymarket.client.PolymarketClient wraps urllib: one place that
     owns the network/auth details, everything else in the codebase goes
-    through this. Deliberately the ONLY module that imports py_clob_client -
+    through this. Deliberately the ONLY module that imports py_clob_client_v2 -
     that import boundary is what keeps a bug here from ever being reachable
     from the free paper-screening pipeline.
     """
@@ -31,7 +31,7 @@ class LiveClobClient:
         # Deferred import: this class must be importable (e.g. for isinstance
         # checks or type hints elsewhere) even in environments where
         # py-clob-client isn't installed - only constructing one requires it.
-        from py_clob_client.client import ClobClient
+        from py_clob_client_v2.client import ClobClient
 
         self.settings = settings
         private_key = read_private_key(settings)
@@ -42,14 +42,14 @@ class LiveClobClient:
             signature_type=settings.signature_type,
             funder=settings.funder_address or None,
         )
-        creds = self._client.create_or_derive_api_creds()
+        creds = self._client.create_or_derive_api_key()
         self._client.set_api_creds(creds)
 
     def get_address(self) -> str:
         return self._client.get_address()
 
     def get_balance(self) -> dict[str, Any]:
-        from py_clob_client.clob_types import AssetType, BalanceAllowanceParams
+        from py_clob_client_v2.clob_types import AssetType, BalanceAllowanceParams
 
         params = BalanceAllowanceParams(asset_type=AssetType.COLLATERAL)
         return self._client.get_balance_allowance(params)
@@ -74,9 +74,9 @@ class LiveClobClient:
         except Exception:
             return None
 
-    def get_orders(self, **params: Any) -> list[dict[str, Any]]:
+    def get_open_orders(self, **params: Any) -> list[dict[str, Any]]:
         try:
-            return self._client.get_orders(**params) or []
+            return self._client.get_open_orders(**params) or []
         except Exception:
             return []
 
@@ -92,8 +92,8 @@ class LiveClobClient:
         """BUY side: amount is USDC notional to spend (per py-clob-client
         docs) - VERIFY against the real fill on the Phase 2 test order before
         trusting this for the full $20 sizing."""
-        from py_clob_client.clob_types import MarketOrderArgs
-        from py_clob_client.order_builder.constants import BUY
+        from py_clob_client_v2.clob_types import MarketOrderArgs
+        from py_clob_client_v2.order_builder.constants import BUY
 
         return self._place_market_order(token_id, usdc_amount, BUY, max_slippage_pct, MarketOrderArgs)
 
@@ -102,8 +102,8 @@ class LiveClobClient:
     ) -> OrderResult:
         """SELL side: amount is shares held (per py-clob-client docs) -
         VERIFY against the real fill on the Phase 2 test order."""
-        from py_clob_client.clob_types import MarketOrderArgs
-        from py_clob_client.order_builder.constants import SELL
+        from py_clob_client_v2.clob_types import MarketOrderArgs
+        from py_clob_client_v2.order_builder.constants import SELL
 
         return self._place_market_order(token_id, shares_amount, SELL, max_slippage_pct, MarketOrderArgs)
 
