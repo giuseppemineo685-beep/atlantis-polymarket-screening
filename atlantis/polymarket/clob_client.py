@@ -119,12 +119,24 @@ class LiveClobClient:
 
         try:
             current_price = self.get_price(token_id, side)
+            tick_size = self.get_tick_size(token_id) or Decimal("0.01")
             protective_price = None
             if current_price is not None:
                 if side == "BUY":
-                    protective_price = current_price * (1 + max_slippage_pct / 100)
+                    raw_price = current_price * (1 + max_slippage_pct / 100)
+                    # Round UP to the nearest valid tick - a BUY protective
+                    # price must never round down below what we actually
+                    # intend to tolerate.
+                    protective_price = (raw_price / tick_size).to_integral_value(
+                        rounding="ROUND_CEILING"
+                    ) * tick_size
                 else:
-                    protective_price = current_price * (1 - max_slippage_pct / 100)
+                    raw_price = current_price * (1 - max_slippage_pct / 100)
+                    # Round DOWN for SELL - never round up above the floor
+                    # we intend to accept.
+                    protective_price = (raw_price / tick_size).to_integral_value(
+                        rounding="ROUND_FLOOR"
+                    ) * tick_size
 
             order_args = market_order_args_cls(
                 token_id=token_id,
