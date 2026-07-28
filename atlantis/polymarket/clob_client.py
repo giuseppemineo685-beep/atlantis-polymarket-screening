@@ -186,7 +186,7 @@ class LiveClobClient:
             )
             signed_order = self._client.create_order(order_args)
             response = self._client.post_order(signed_order, order_type=OrderType.FOK)
-            return _parse_order_response(response)
+            return _parse_order_response(response, side)
         except (HTTPError, URLError, TimeoutError, ConnectionError, OSError) as exc:
             # Same broad exception discipline as PolymarketClient._get - a
             # raw TimeoutError escaping a narrower catch already crashed the
@@ -214,11 +214,13 @@ class LiveClobClient:
             )
 
 
-def _parse_order_response(response: Any) -> OrderResult:
-    # NOTE: written before ever seeing a real response payload. Phase 2's
-    # test order must capture the raw dict and this function must be
-    # revisited/corrected against that real shape before Phase 4 - treat
-    # this as a best-effort placeholder, not a verified parser.
+def _parse_order_response(response: Any, side: str) -> OrderResult:
+    # Verified against a real filled order (Fase 2 test, $2 BUY):
+    # {'errorMsg': '', 'orderID': '0x...', 'takingAmount': '3.566036',
+    #  'makingAmount': '1.889999', 'status': 'matched',
+    #  'transactionsHashes': ['0x...'], 'success': True}
+    # For a BUY: makingAmount = USDC paid, takingAmount = shares received.
+    # For a SELL: makingAmount = shares given up, takingAmount = USDC received.
     if not isinstance(response, dict):
         return OrderResult(
             success=False,
@@ -229,17 +231,27 @@ def _parse_order_response(response: Any) -> OrderResult:
             raw_response=response,
             error="Respuesta inesperada (no es un dict) - revisar manualmente",
         )
-    success = bool(response.get("success", response.get("orderID") or response.get("orderId")))
+    success = bool(response.get("success"))
     order_id = response.get("orderID") or response.get("orderId") or response.get("id")
     status = str(response.get("status", "UNKNOWN"))
-    filled = response.get("size_matched") or response.get("filledSize")
-    price = response.get("price") or response.get("avgPrice")
+
+    making = response.get("makingAmount")
+    taking = response.get("takingAmount")
+    if side == "BUY":
+        usdc_amount = Decimal(str(making)) if making is not None else None
+        shares_amount = Decimal(str(taking)) if taking is not None else None
+    else:
+        shares_amount = Decimal(str(making)) if making is not None else None
+        usdc_amount = Decimal(str(taking)) if taking is not None else None
+
+    avg_price = (usdc_amount / shares_amount) if (usdc_amount and shares_amount) else None
+
     return OrderResult(
         success=success,
         order_id=str(order_id) if order_id else None,
         status=status,
-        filled_size=Decimal(str(filled)) if filled is not None else None,
-        avg_fill_price=Decimal(str(price)) if price is not None else None,
+        filled_size=shares_amount,
+        avg_fill_price=avg_price,
         raw_response=response,
         error=None if success else str(response.get("errorMsg") or response.get("error") or "orden no confirmada"),
     )
