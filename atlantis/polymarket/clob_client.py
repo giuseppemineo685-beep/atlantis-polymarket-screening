@@ -157,7 +157,7 @@ class LiveClobClient:
                 side=clob_side,
             )
             signed_order = self._client.create_order(order_args)
-            response = self._client.post_order(signed_order, orderType=OrderType.FOK)
+            response = self._client.post_order(signed_order, order_type=OrderType.FOK)
             return _parse_order_response(response)
         except (HTTPError, URLError, TimeoutError, ConnectionError, OSError) as exc:
             # Same broad exception discipline as PolymarketClient._get - a
