@@ -64,6 +64,7 @@ class ExecutionSummary:
     skipped_duplicate: int
     kill_switch_blocked: int
     errors: list[str]
+    notifications: list[str]
 
 
 def _now() -> str:
@@ -83,6 +84,7 @@ def process_pending_intents(*, settings: LiveSettings, clob_client_factory=None)
 
     buys = sells = skipped = killed = 0
     errors: list[str] = []
+    notifications: list[str] = []
 
     client = None
     if live_enabled:
@@ -134,8 +136,17 @@ def process_pending_intents(*, settings: LiveSettings, clob_client_factory=None)
                     "date_closed": "",
                     "last_updated": _now(),
                 }
-                if not result.success:
+                if result.success:
+                    notifications.append(
+                        f"🟢 <b>COMPRA REAL ejecutada</b>\n{intent['title']} → {intent['outcome']}\n"
+                        f"${target_log[key]['stake_usd_actual']} a precio {result.avg_fill_price}\n"
+                        f"Traders: {intent.get('traders', '')}"
+                    )
+                else:
                     errors.append(f"BUY {intent.get('title')}: {result.error}")
+                    notifications.append(
+                        f"🔴 <b>COMPRA REAL fallida</b>\n{intent['title']} → {intent['outcome']}\n{result.error}"
+                    )
             else:
                 target_log[key] = {
                     "condition_id": intent["condition_id"],
@@ -193,8 +204,16 @@ def process_pending_intents(*, settings: LiveSettings, clob_client_factory=None)
                     row["realized_pnl_usd"] = str(pnl) if pnl is not None else ""
                     row["pct_return"] = str(pct) if pct is not None else ""
                     row["date_closed"] = _now()
+                    pnl_str = f"${pnl:+.2f}" if pnl is not None else "?"
+                    notifications.append(
+                        f"🟡 <b>VENTA REAL ejecutada</b>\n{row['title']} → {row['outcome']}\n"
+                        f"Precio: {row['fill_price_buy']} → {row['fill_price_sell']} | PnL: {pnl_str}"
+                    )
                 else:
                     errors.append(f"SELL {intent.get('title')}: {result.error}")
+                    notifications.append(
+                        f"🔴 <b>VENTA REAL fallida</b>\n{row['title']} → {row['outcome']}\n{result.error}"
+                    )
                 row["last_updated"] = _now()
             else:
                 row["status"] = "CLOSED"
@@ -214,6 +233,7 @@ def process_pending_intents(*, settings: LiveSettings, clob_client_factory=None)
         skipped_duplicate=skipped,
         kill_switch_blocked=killed,
         errors=errors,
+        notifications=notifications,
     )
 
 
