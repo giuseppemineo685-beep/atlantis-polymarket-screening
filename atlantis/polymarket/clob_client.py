@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from math import gcd
 from typing import Any
 
 from atlantis.live.config import LiveSettings, read_private_key
@@ -143,7 +144,34 @@ class LiveClobClient:
                 # Round UP - a BUY protective price must never round down
                 # below what we actually intend to tolerate.
                 limit_price = (raw_price / tick_size).to_integral_value(rounding="ROUND_CEILING") * tick_size
-                size = (amount / limit_price).quantize(Decimal("0.01"), rounding="ROUND_DOWN")
+                # The exchange rounds our submitted size to 2 decimals
+                # itself, then computes maker_amount (USDC spent) = size *
+                # price - and rejects a marketable BUY if that product has
+                # more than 2 decimal places (confirmed against a real
+                # rejection: "maker amount supports a max accuracy of 2
+                # decimals"). Two 2dp numbers only multiply to a 2dp-clean
+                # result when size is a multiple of 1/gcd(price_cents, 100)
+                # dollars-worth of shares - e.g. at price 0.54 (gcd=2), size
+                # must land on a multiple of 0.50, not just any cent. Solve
+                # for that step size directly instead of guessing.
+                price_cents = int((limit_price * 100).to_integral_value(rounding="ROUND_HALF_UP"))
+                step_cents = 100 // gcd(price_cents, 100)
+                raw_size_cents = int((amount / limit_price * 100).to_integral_value(rounding="ROUND_FLOOR"))
+                valid_size_cents = (raw_size_cents // step_cents) * step_cents
+                if valid_size_cents <= 0:
+                    return OrderResult(
+                        success=False,
+                        order_id=None,
+                        status="ERROR",
+                        filled_size=None,
+                        avg_fill_price=None,
+                        raw_response=None,
+                        error=(
+                            f"amount demasiado chico para este precio ({limit_price}): "
+                            f"el tamano minimo valido es {Decimal(step_cents) / 100} shares"
+                        ),
+                    )
+                size = Decimal(valid_size_cents) / 100
             else:
                 raw_price = current_price * (1 - max_slippage_pct / 100)
                 # Round DOWN - never round up above the floor we intend to accept.
