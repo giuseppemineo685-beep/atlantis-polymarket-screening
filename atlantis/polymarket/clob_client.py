@@ -89,63 +89,75 @@ class LiveClobClient:
     def place_market_buy(
         self, token_id: str, usdc_amount: Decimal, max_slippage_pct: Decimal = Decimal("3")
     ) -> OrderResult:
-        """BUY side: amount is USDC notional to spend (per py-clob-client
-        docs) - VERIFY against the real fill on the Phase 2 test order before
-        trusting this for the full $20 sizing."""
-        from py_clob_client_v2.clob_types import MarketOrderArgs
-        from py_clob_client_v2.order_builder.constants import BUY
-
-        return self._place_market_order(token_id, usdc_amount, BUY, max_slippage_pct, MarketOrderArgs)
+        """Spend up to usdc_amount USDC buying token_id, executed as an
+        aggressive FOK limit order (fills immediately at the protective price
+        or better, or cancels entirely - functionally a market order, but see
+        the note on _place_fok_order for why it isn't a literal MarketOrderArgs)."""
+        return self._place_fok_order(token_id, "BUY", usdc_amount, max_slippage_pct)
 
     def place_market_sell(
         self, token_id: str, shares_amount: Decimal, max_slippage_pct: Decimal = Decimal("3")
     ) -> OrderResult:
-        """SELL side: amount is shares held (per py-clob-client docs) -
-        VERIFY against the real fill on the Phase 2 test order."""
-        from py_clob_client_v2.clob_types import MarketOrderArgs
-        from py_clob_client_v2.order_builder.constants import SELL
+        """Sell shares_amount shares of token_id, same FOK-immediate-or-cancel
+        semantics as place_market_buy."""
+        return self._place_fok_order(token_id, "SELL", shares_amount, max_slippage_pct)
 
-        return self._place_market_order(token_id, shares_amount, SELL, max_slippage_pct, MarketOrderArgs)
-
-    def _place_market_order(
-        self,
-        token_id: str,
-        amount: Decimal,
-        side: str,
-        max_slippage_pct: Decimal,
-        market_order_args_cls: Any,
+    def _place_fok_order(
+        self, token_id: str, side: str, amount: Decimal, max_slippage_pct: Decimal
     ) -> OrderResult:
+        # A true MarketOrderArgs order lets the exchange derive maker/taker
+        # amounts from (dollar amount / price), and that division routinely
+        # produces an effective price with more decimal precision than the
+        # market's tick size allows - confirmed against a real order that was
+        # rejected with "price 0.5300259712725924 breaks minimum tick size
+        # rule 0.01" even though our quoted price (0.53) was itself clean.
+        # A limit order sidesteps this: WE round both price (to the tick)
+        # and size before asking the library to compute maker_amount =
+        # size * price, which stays clean because both inputs already are.
+        # OrderType.FOK gives the same "fill now or don't fill at all"
+        # behavior as a market order, so nothing about the trading semantics
+        # changes - only which library code path builds the order.
         from urllib.error import HTTPError, URLError
+
+        from py_clob_client_v2.clob_types import OrderArgs, OrderType
+        from py_clob_client_v2.order_builder.constants import BUY, SELL
+
+        clob_side = BUY if side == "BUY" else SELL
 
         try:
             current_price = self.get_price(token_id, side)
-            tick_size = self.get_tick_size(token_id) or Decimal("0.01")
-            protective_price = None
-            if current_price is not None:
-                if side == "BUY":
-                    raw_price = current_price * (1 + max_slippage_pct / 100)
-                    # Round UP to the nearest valid tick - a BUY protective
-                    # price must never round down below what we actually
-                    # intend to tolerate.
-                    protective_price = (raw_price / tick_size).to_integral_value(
-                        rounding="ROUND_CEILING"
-                    ) * tick_size
-                else:
-                    raw_price = current_price * (1 - max_slippage_pct / 100)
-                    # Round DOWN for SELL - never round up above the floor
-                    # we intend to accept.
-                    protective_price = (raw_price / tick_size).to_integral_value(
-                        rounding="ROUND_FLOOR"
-                    ) * tick_size
+            if current_price is None or current_price <= 0:
+                return OrderResult(
+                    success=False,
+                    order_id=None,
+                    status="ERROR",
+                    filled_size=None,
+                    avg_fill_price=None,
+                    raw_response=None,
+                    error=f"No se pudo obtener precio de mercado para {token_id}",
+                )
 
-            order_args = market_order_args_cls(
+            tick_size = self.get_tick_size(token_id) or Decimal("0.01")
+            if side == "BUY":
+                raw_price = current_price * (1 + max_slippage_pct / 100)
+                # Round UP - a BUY protective price must never round down
+                # below what we actually intend to tolerate.
+                limit_price = (raw_price / tick_size).to_integral_value(rounding="ROUND_CEILING") * tick_size
+                size = (amount / limit_price).quantize(Decimal("0.01"), rounding="ROUND_DOWN")
+            else:
+                raw_price = current_price * (1 - max_slippage_pct / 100)
+                # Round DOWN - never round up above the floor we intend to accept.
+                limit_price = (raw_price / tick_size).to_integral_value(rounding="ROUND_FLOOR") * tick_size
+                size = amount.quantize(Decimal("0.01"), rounding="ROUND_DOWN")
+
+            order_args = OrderArgs(
                 token_id=token_id,
-                amount=float(amount),
-                side=side,
-                price=float(protective_price) if protective_price is not None else None,
+                price=float(limit_price),
+                size=float(size),
+                side=clob_side,
             )
-            signed_order = self._client.create_market_order(order_args)
-            response = self._client.post_order(signed_order)
+            signed_order = self._client.create_order(order_args)
+            response = self._client.post_order(signed_order, orderType=OrderType.FOK)
             return _parse_order_response(response)
         except (HTTPError, URLError, TimeoutError, ConnectionError, OSError) as exc:
             # Same broad exception discipline as PolymarketClient._get - a
