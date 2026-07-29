@@ -2,14 +2,43 @@ from __future__ import annotations
 
 import csv
 import json
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from atlantis.live.config import LiveSettings
 from atlantis.services.live_intents import read_intents
 from atlantis.services.live_status import read_status_flag, write_status_flag
+
+
+def get_market_resolution(condition_id: str, asset: str) -> tuple[Decimal | None, bool]:
+    """Return (settled_price, is_closed). Once a market resolves, its CLOB
+    orderbook disappears entirely (place_market_sell then fails with
+    'No orderbook exists for the requested token id') - a SELL on a closed
+    market needs this check first instead of ever attempting a real order.
+    Mirrors scripts/run_screening_and_notify.py::get_market_price_info."""
+    url = f"https://clob.polymarket.com/markets/{condition_id}"
+    req = urllib.request.Request(
+        url, headers={"Accept": "application/json", "User-Agent": "atlantis-live-execution/0.1"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            market = json.loads(resp.read())
+    except Exception:
+        return None, False
+
+    if not market:
+        return None, False
+    closed = bool(market.get("closed"))
+    for token in market.get("tokens", []):
+        if token.get("token_id") == asset:
+            try:
+                return Decimal(str(token.get("price"))), closed
+            except InvalidOperation:
+                return None, closed
+    return None, closed
 
 LIVE_TRADE_LOG_FIELDS = [
     "condition_id",
@@ -184,6 +213,35 @@ def process_pending_intents(*, settings: LiveSettings, clob_client_factory=None)
                 if not shares:
                     errors.append(f"SELL {intent.get('title')}: sin shares_held registradas, no se puede vender")
                     continue
+
+                settled_price, is_closed = get_market_resolution(intent["condition_id"], intent["asset"])
+                if is_closed and settled_price is not None:
+                    # The market already resolved before our early-exit SELL
+                    # could fire - there's no orderbook left to sell into.
+                    # A WIN sits as a redeemable token (needs a separate
+                    # on-chain redeem the user does manually, out of scope
+                    # for v1 - see WON_UNREDEEMED). A LOSS is just gone.
+                    stake = Decimal(row.get("stake_usd_actual") or 0)
+                    if settled_price == 1:
+                        row["status"] = "WON_UNREDEEMED"
+                        row["realized_pnl_usd"] = ""
+                        row["pct_return"] = ""
+                        notifications.append(
+                            f"🟢 <b>GANADA - falta redimir</b>\n{row['title']} → {row['outcome']}\n"
+                            f"El mercado ya resolvió a tu favor pero el libro de ordenes ya no existe.\n"
+                            f"Andá a Polymarket y redimí manualmente ({shares} shares, ~${shares} USDC)."
+                        )
+                    else:
+                        pnl = -stake
+                        row["status"] = "LOST"
+                        row["realized_pnl_usd"] = str(pnl)
+                        row["pct_return"] = "-100"
+                    row["fill_price_sell"] = str(settled_price)
+                    row["date_closed"] = _now()
+                    row["last_updated"] = _now()
+                    sells += 1
+                    continue
+
                 try:
                     result = client.place_market_sell(intent["asset"], Decimal(shares))
                 except Exception as exc:
