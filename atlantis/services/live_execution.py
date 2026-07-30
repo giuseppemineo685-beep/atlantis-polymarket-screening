@@ -177,7 +177,11 @@ def process_pending_intents(*, settings: LiveSettings, clob_client_factory=None)
 
         if intent["intent_type"] == "BUY":
             target_log = real_log if live_enabled else dry_log
-            if key in target_log:
+            # ERROR here means the real order was never placed (e.g. a
+            # transient price-fetch failure) - only EXECUTED/DRY_RUN mean a
+            # position actually exists, so those are the only statuses that
+            # should block a retry on the next cron cycle.
+            if key in target_log and target_log[key].get("status") != "ERROR":
                 skipped += 1
                 continue
 
