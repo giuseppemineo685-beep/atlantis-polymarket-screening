@@ -18,16 +18,18 @@ def evaluate_and_maybe_trip(settings: LiveSettings) -> bool:
         return True
 
     threshold = Decimal(str(settings.initial_bankroll_usd)) * Decimal(str(settings.kill_switch_loss_pct)) / 100
-    if -summary.realized_pnl_usd >= threshold:
+    if -summary.realized_pnl_since_reset_usd >= threshold:
         write_status_flag(
             settings,
             enabled=False,
             auto_killed=True,
             reason=(
-                f"perdida acumulada real ${-summary.realized_pnl_usd:,.2f} "
+                f"perdida acumulada real (desde el ultimo reset) ${-summary.realized_pnl_since_reset_usd:,.2f} "
                 f">= umbral ${threshold:,.2f} ({settings.kill_switch_loss_pct}% de ${settings.initial_bankroll_usd:,.2f})"
             ),
             since=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+            # Preserve the baseline - explicitly don't touch it here. The
+            # auto-trip must never look like a reset.
         )
         return True
     return False
