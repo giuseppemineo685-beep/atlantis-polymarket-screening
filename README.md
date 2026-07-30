@@ -71,10 +71,28 @@ viceversa:
      está deprecada y sus órdenes son rechazadas por el exchange) y escribe
      en `outputs/live_trade_log.csv`.
 3. **Kill switch** (`atlantis/live/kill_switch.py`): antes de cada corrida,
-   si la pérdida acumulada real (`realized_pnl_usd` sumado) supera
-   `kill_switch_loss_pct`% del capital, escribe `enabled: false,
-   auto_killed: true` en `state/live_trading_status.json` — **no se
-   reactiva solo**, hay que editarlo a mano de nuevo.
+   si la pérdida acumulada real supera `kill_switch_loss_pct`% del capital,
+   escribe `enabled: false, auto_killed: true` en
+   `state/live_trading_status.json` — **no se reactiva solo**.
+
+   Para reactivarlo después de un disparo: **no alcanza con poner
+   `enabled: true`** — el switch mide `realized_pnl_usd` (histórico,
+   acumulado desde siempre), así que se volvería a disparar en el
+   siguiente ciclo. Hay que resetear `pnl_baseline_usd` al valor actual de
+   `realized_pnl_usd` (así `realized_pnl_since_reset_usd = 0` y el contador
+   arranca de cero desde ese momento, sin borrar el historial):
+
+   ```python
+   from atlantis.live.config import load_live_settings
+   from atlantis.services.live_status import compute_live_status, write_status_flag
+   from datetime import datetime, timezone
+
+   s = load_live_settings()
+   summary = compute_live_status(s)
+   write_status_flag(s, enabled=True, auto_killed=False, reason="",
+                      since=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                      pnl_baseline_usd=summary.realized_pnl_usd)
+   ```
 4. **Notificaciones Telegram distintas**: 🟢 "COMPRA REAL ejecutada" / 🟡
    "VENTA REAL ejecutada" / 🔴 fallidas — nunca se confunden con las alertas
    normales de señal de papel.
