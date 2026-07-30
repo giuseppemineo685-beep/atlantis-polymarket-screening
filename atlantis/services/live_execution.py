@@ -190,6 +190,40 @@ def process_pending_intents(*, settings: LiveSettings, clob_client_factory=None)
                 if not kill_status.get("enabled", False):
                     killed += 1
                     continue
+
+                # A market can close between the signal firing and a retry
+                # of a previously-errored BUY (e.g. the game ended) - the
+                # CLOB drops its orderbook entirely once that happens, so
+                # retrying would just fail forever with the same "no
+                # orderbook" error every cron cycle. Mark it terminal instead
+                # of spamming a fresh "COMPRA REAL fallida" alert each time.
+                _, is_closed = get_market_resolution(intent["condition_id"], intent["asset"])
+                if is_closed:
+                    target_log[key] = {
+                        "condition_id": intent["condition_id"],
+                        "asset": intent["asset"],
+                        "title": intent["title"],
+                        "slug": intent.get("slug", ""),
+                        "outcome": intent["outcome"],
+                        "traders": intent.get("traders", ""),
+                        "date_first_seen": intent["ts"],
+                        "signal_price": intent.get("signal_price", ""),
+                        "fill_price_buy": "",
+                        "stake_usd_requested": str(settings.stake_per_signal_usd),
+                        "stake_usd_actual": "",
+                        "shares_held": "",
+                        "order_id_buy": "",
+                        "status": "MISSED_MARKET_CLOSED",
+                        "fill_price_sell": "",
+                        "order_id_sell": "",
+                        "realized_pnl_usd": "",
+                        "pct_return": "",
+                        "date_closed": _now(),
+                        "last_updated": _now(),
+                    }
+                    buys += 1
+                    continue
+
                 try:
                     result = client.place_market_buy(intent["asset"], Decimal(str(settings.stake_per_signal_usd)))
                 except Exception as exc:
