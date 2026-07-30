@@ -14,6 +14,7 @@ TRADE_LOG = ROOT / "outputs" / "trade_log.csv"
 SIGNALS = ROOT / "outputs" / "active_portfolio_signals.csv"
 TRADERS = ROOT / "outputs" / "traders.csv"
 PERFORMANCE = ROOT / "outputs" / "trader_performance.csv"
+ELON_TRADERS = ROOT / "outputs" / "elon_traders.csv"
 OUT_PATH = ROOT / "docs" / "index.html"
 
 PROFILE_URL = "https://polymarket.com/profile/{wallet}"
@@ -173,6 +174,25 @@ def render_trader_row(row: dict) -> str:
     </tr>"""
 
 
+def render_elon_candidate_row(row: dict) -> str:
+    wallet = row.get("wallet_address", "")
+    username = row.get("username") or "(sin username)"
+    profile = esc(PROFILE_URL.format(wallet=wallet))
+    verdict = row.get("verdict", "")
+    pill_class = VERDICT_PILL.get(verdict, "ignore")
+    short_wallet = f"{wallet[:6]}…{wallet[-4:]}" if len(wallet) > 12 else wallet
+    return f"""
+    <tr>
+      <td><a href="{profile}" target="_blank" rel="noopener">{esc(username)}</a></td>
+      <td class="dim">{esc(short_wallet)}</td>
+      <td><span class="pill pill-{pill_class}">{esc(verdict)}</span></td>
+      <td class="num">{esc(row.get('copy_score'))}</td>
+      <td class="num">{fmt_money(row.get('elon_volume'))}</td>
+      <td class="num dim">{esc(row.get('elon_trades'))}</td>
+      <td class="num dim">{esc(row.get('risk_score'))}</td>
+    </tr>"""
+
+
 FLAG_PILL = {
     "DECLINING": "loss",
     "LOW_SAMPLE": "wait",
@@ -214,11 +234,13 @@ def main() -> None:
     signal_rows = read_csv(SIGNALS)
     trader_rows = read_csv(TRADERS)
     performance_rows = read_csv(PERFORMANCE)
+    elon_rows = read_csv(ELON_TRADERS)
 
     log_rows.sort(key=lambda r: (STATUS_ORDER.get(r.get("status", "OPEN"), 9), r.get("last_updated", "")), reverse=False)
     signal_rows.sort(key=lambda r: ACTION_ORDER.get(r.get("action", "IGNORE"), 9))
     trader_rows.sort(key=lambda r: r.get("label", ""))
     performance_rows.sort(key=lambda r: float(r.get("pnl_7d") or 0))
+    elon_rows.sort(key=lambda r: float(r.get("copy_score") or 0), reverse=True)
 
     resolved = [r for r in log_rows if r.get("status") in ("WIN", "LOSS", "CLOSED")]
     wins = [r for r in resolved if r["status"] in ("WIN", "CLOSED")]
@@ -487,6 +509,26 @@ tbody tr:hover {{ background: var(--surface-2); }}
 .pill-warn {{ background: rgba(232,163,61,0.14); color: var(--accent); border-color: rgba(232,163,61,0.4); }}
 .pill-closed {{ background: rgba(45,212,191,0.14); color: var(--closed); border-color: rgba(45,212,191,0.4); }}
 
+.tabs {{
+  display: flex;
+  gap: 8px;
+  margin-bottom: 28px;
+}}
+.tab-btn {{
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 18px;
+  cursor: pointer;
+}}
+.tab-btn.active {{ color: var(--accent); border-color: var(--accent); background: rgba(232,163,61,0.08); }}
+.tab-panel {{ display: none; }}
+.tab-panel.active {{ display: block; }}
+
 .empty {{ padding: 28px; text-align: center; color: var(--text-dim); font-size: 13px; }}
 
 footer {{
@@ -520,6 +562,13 @@ footer a:hover {{ text-decoration: underline; }}
     </div>
     <div class="updated">Última corrida (UTC)<br><b>{esc(now)}</b><br>Hora Zúrich<br><b>{esc(now_zurich)}</b></div>
   </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="sports">Deportes</button>
+    <button class="tab-btn" data-tab="elon">Elon Musk</button>
+  </div>
+
+  <div class="tab-panel active" data-tab-panel="sports">
 
   <div class="scoreboard">
     <div class="stat">
@@ -653,12 +702,47 @@ footer a:hover {{ text-decoration: underline; }}
     </div>
   </section>
 
+  </div>
+
+  <div class="tab-panel" data-tab-panel="elon">
+
+  <section>
+    <div class="section-head">
+      <h2>Candidatos — Elon Musk mentions</h2>
+      <span class="section-note">{len(elon_rows)} wallets candidatas · fase de exploración, sin señales de consenso todavía</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Usuario</th><th>Wallet</th><th>Verdict</th>
+            <th>Copy score</th><th>Volumen Elon</th><th>Trades Elon</th><th>Risk score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {"".join(render_elon_candidate_row(r) for r in elon_rows) or '<tr><td colspan="7" class="empty">Sin candidatos todavía — corré discover-elon-traders o evaluate-elon-wallet</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  </div>
+
   <footer>
     <span>Generado automáticamente por un cron en VPS cada 2 min.</span>
     <a href="https://github.com/giuseppemineo685-beep/atlantis-polymarket-screening" target="_blank">Ver repositorio</a>
   </footer>
 
 </div>
+<script>
+document.querySelectorAll('.tab-btn').forEach(btn => {{
+  btn.addEventListener('click', () => {{
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.dataset.tabPanel === tab));
+  }});
+}});
+</script>
 </body>
 </html>
 """

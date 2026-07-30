@@ -19,6 +19,12 @@ from atlantis.services.active_portfolio import (
     write_active_portfolio_csv,
 )
 from atlantis.services.evaluate_wallet import evaluate_wallet, format_wallet_evaluation
+from atlantis.services.evaluate_elon_wallet import evaluate_elon_wallet, format_elon_wallet_evaluation
+from atlantis.services.elon_traders import (
+    discover_elon_traders,
+    format_elon_traders,
+    write_elon_traders_csv,
+)
 from atlantis.services.evaluate_watchlist import (
     evaluate_watchlist,
     format_watchlist_evaluation,
@@ -67,6 +73,25 @@ def main(argv: list[str] | None = None) -> int:
     wallet.add_argument("--max-trades", type=int, default=3000)
     wallet.add_argument("--max-positions", type=int, default=500)
     wallet.add_argument("--active-limit", type=int, default=20)
+
+    elon_discover = subparsers.add_parser(
+        "discover-elon-traders",
+        help="Rank potentially copyable Elon-mention traders (secondary to user-supplied wallets).",
+    )
+    elon_discover.add_argument("--leaderboard-limit", type=int, default=250)
+    elon_discover.add_argument("--max-traders", type=int, default=50)
+    elon_discover.add_argument("--max-trades-per-wallet", type=int, default=1000)
+    elon_discover.add_argument("--min-elon-trades", type=int, default=15)
+    elon_discover.add_argument("--min-elon-volume", type=Decimal, default=Decimal("500"))
+    elon_discover.add_argument("--csv", default="")
+
+    elon_wallet = subparsers.add_parser(
+        "evaluate-elon-wallet", help="Evaluate one wallet for Elon-mention copyability."
+    )
+    elon_wallet.add_argument("wallet")
+    elon_wallet.add_argument("--max-trades", type=int, default=3000)
+    elon_wallet.add_argument("--max-positions", type=int, default=500)
+    elon_wallet.add_argument("--active-limit", type=int, default=20)
 
     bot = subparsers.add_parser("detect-bot-wallet", help="Detect bot-like wallet behavior.")
     bot.add_argument("wallet")
@@ -181,6 +206,31 @@ def main(argv: list[str] | None = None) -> int:
             max_positions=args.max_positions,
         )
         print(format_wallet_evaluation(evaluation, active_limit=args.active_limit))
+        return 0
+
+    if args.command == "discover-elon-traders":
+        scores = discover_elon_traders(
+            settings=settings,
+            leaderboard_limit=args.leaderboard_limit,
+            max_traders=args.max_traders,
+            max_trades_per_wallet=args.max_trades_per_wallet,
+            min_elon_trades=args.min_elon_trades,
+            min_elon_volume=args.min_elon_volume,
+        )
+        print(format_elon_traders(scores))
+        if args.csv:
+            write_elon_traders_csv(Path(args.csv), scores)
+            print(f"\nCSV written: {args.csv}")
+        return 0
+
+    if args.command == "evaluate-elon-wallet":
+        evaluation = evaluate_elon_wallet(
+            settings=settings,
+            wallet_address=args.wallet,
+            max_trades=args.max_trades,
+            max_positions=args.max_positions,
+        )
+        print(format_elon_wallet_evaluation(evaluation, active_limit=args.active_limit))
         return 0
 
     if args.command == "detect-bot-wallet":
