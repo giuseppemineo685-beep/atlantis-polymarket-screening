@@ -100,6 +100,50 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
+def reconcile_resolved_positions(log: dict[str, dict]) -> tuple[int, list[str]]:
+    """Scan every still-open row (EXECUTED/DRY_RUN) and check the market's
+    own resolution status directly, independent of whether a SELL intent
+    was ever enqueued for it.
+
+    A SELL intent only ever gets created via the paper screening's
+    early-exit rule (a trader sold before the market resolved) - a position
+    where NO trader ever exits early (both just hold to the end) never
+    generates any SELL intent at all, so it would otherwise sit as
+    "EXECUTED" forever even after the real-world market has resolved.
+    Confirmed missing in practice: two real positions (both resolved LOSS)
+    sat as EXECUTED with nothing on Polymarket to show for them, discovered
+    only because the user noticed the mismatch by hand."""
+    resolved_count = 0
+    notifications: list[str] = []
+    for row in log.values():
+        if row.get("status") not in ("EXECUTED", "DRY_RUN"):
+            continue
+        settled_price, is_closed = get_market_resolution(row["condition_id"], row["asset"])
+        if not (is_closed and settled_price is not None):
+            continue
+
+        stake = Decimal(row.get("stake_usd_actual") or 0)
+        if settled_price == 1:
+            row["status"] = "WON_UNREDEEMED" if row["status"] == "EXECUTED" else "CLOSED"
+            if row["status"] == "WON_UNREDEEMED":
+                shares = row.get("shares_held") or "?"
+                notifications.append(
+                    f"🟢 <b>GANADA - falta redimir</b>\n{row['title']} → {row['outcome']}\n"
+                    f"El mercado ya resolvió a tu favor (detectado en el chequeo de reconciliación).\n"
+                    f"Andá a Polymarket y redimí manualmente ({shares} shares, ~${shares} USDC)."
+                )
+        else:
+            row["status"] = "LOST" if row["status"] == "EXECUTED" else "CLOSED"
+            if row["status"] == "LOST":
+                row["realized_pnl_usd"] = str(-stake)
+                row["pct_return"] = "-100"
+        row["fill_price_sell"] = str(settled_price)
+        row["date_closed"] = _now()
+        row["last_updated"] = _now()
+        resolved_count += 1
+    return resolved_count, notifications
+
+
 def process_pending_intents(*, settings: LiveSettings, clob_client_factory=None) -> ExecutionSummary:
     """clob_client_factory is injectable for testing; defaults to the real
     atlantis.polymarket.clob_client.build_live_client, imported lazily so
@@ -114,6 +158,11 @@ def process_pending_intents(*, settings: LiveSettings, clob_client_factory=None)
     buys = sells = skipped = killed = 0
     errors: list[str] = []
     notifications: list[str] = []
+
+    reconciled_real, reconcile_notifications = reconcile_resolved_positions(real_log)
+    _reconciled_dry, _ = reconcile_resolved_positions(dry_log)
+    sells += reconciled_real
+    notifications.extend(reconcile_notifications)
 
     client = None
     if live_enabled:
