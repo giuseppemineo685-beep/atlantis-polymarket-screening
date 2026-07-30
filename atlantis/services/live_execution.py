@@ -329,7 +329,15 @@ def process_pending_intents(*, settings: LiveSettings, clob_client_factory=None)
                 row["last_updated"] = _now()
             sells += 1
 
-    if live_enabled:
+    # Always persist real_log, even when live_enabled is False (kill switch
+    # tripped, or trading never turned on) - the kill switch's job is to
+    # stop NEW buys, not to freeze tracking of positions that are already
+    # real. Gating this save on live_enabled meant reconcile_resolved_positions
+    # could correctly detect a real position resolved (in memory) and then
+    # silently discard that update the moment the kill switch fired - found
+    # in practice: two real LOST positions never got saved as LOST because
+    # the kill switch tripped in the same run that reconciled them.
+    if real_log:
         save_live_trade_log(settings.live_trade_log_path, real_log)
     save_live_trade_log(settings.dryrun_trade_log_path, dry_log)
 
