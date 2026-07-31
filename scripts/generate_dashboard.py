@@ -247,6 +247,13 @@ def main() -> None:
     open_trades = [r for r in log_rows if r.get("status") == "OPEN"]
     win_rate = (len(wins) / len(resolved) * 100) if resolved else 0.0
 
+    # Historial de trades: abiertos primero (siempre visibles, son pocos),
+    # despues solo los ultimos 10 cerrados - por fecha, no por resultado -
+    # para que la tabla no crezca sin limite con el historico.
+    open_by_date = sorted(open_trades, key=lambda r: r.get("date_first_seen", ""), reverse=True)
+    resolved_recent = sorted(resolved, key=lambda r: r.get("last_updated", ""), reverse=True)[:10]
+    history_rows = open_by_date + resolved_recent
+
     copy_signals = [r for r in signal_rows if r.get("action") == "COPY"]
     other_signals = [r for r in signal_rows if r.get("action") != "COPY"][:20]
 
@@ -645,7 +652,7 @@ footer a:hover {{ text-decoration: underline; }}
   <section>
     <div class="section-head">
       <h2>Historial de trades</h2>
-      <span class="section-note">Los cerrados quedan siempre visibles — {len(resolved)} resueltos, {len(open_trades)} abiertos · * = retorno no realizado, mercado sigue abierto</span>
+      <span class="section-note">{len(open_trades)} abiertos + últimos 10 cerrados (de {len(resolved)} resueltos) · ordenado por fecha · * = retorno no realizado, mercado sigue abierto</span>
     </div>
     <div class="table-scroll">
       <table>
@@ -656,7 +663,7 @@ footer a:hover {{ text-decoration: underline; }}
           </tr>
         </thead>
         <tbody>
-          {"".join(render_log_row(r) for r in log_rows) or '<tr><td colspan="8" class="empty">Todavía no hay trades registrados</td></tr>'}
+          {"".join(render_log_row(r) for r in history_rows) or '<tr><td colspan="8" class="empty">Todavía no hay trades registrados</td></tr>'}
         </tbody>
       </table>
     </div>
