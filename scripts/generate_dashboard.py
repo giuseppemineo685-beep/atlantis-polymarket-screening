@@ -14,8 +14,6 @@ TRADE_LOG = ROOT / "outputs" / "trade_log.csv"
 SIGNALS = ROOT / "outputs" / "active_portfolio_signals.csv"
 TRADERS = ROOT / "outputs" / "traders.csv"
 PERFORMANCE = ROOT / "outputs" / "trader_performance.csv"
-ELON_TRADERS = ROOT / "outputs" / "elon_traders.csv"
-ESPORTS_TRADERS = ROOT / "outputs" / "esports_traders.csv"
 ESPORTS_REVIEWED = ROOT / "outputs" / "esports_reviewed.csv"
 OUT_PATH = ROOT / "docs" / "index.html"
 
@@ -181,48 +179,6 @@ def render_trader_row(row: dict) -> str:
     </tr>"""
 
 
-def render_elon_candidate_row(row: dict) -> str:
-    wallet = row.get("wallet_address", "")
-    username = row.get("username") or "(sin username)"
-    profile = esc(PROFILE_URL.format(wallet=wallet))
-    verdict = row.get("verdict", "")
-    pill_class = VERDICT_PILL.get(verdict, "ignore")
-    short_wallet = f"{wallet[:6]}…{wallet[-4:]}" if len(wallet) > 12 else wallet
-    return f"""
-    <tr>
-      <td><a href="{profile}" target="_blank" rel="noopener">{esc(username)}</a></td>
-      <td class="dim">{esc(short_wallet)}</td>
-      <td><span class="pill pill-{pill_class}">{esc(verdict)}</span></td>
-      <td class="num">{float(row.get('copy_score') or 0):.0f}</td>
-      <td class="num">{fmt_money(row.get('elon_volume'))}</td>
-      <td class="num dim">{esc(row.get('elon_trades'))}</td>
-      <td class="num dim">{esc(row.get('risk_score'))}</td>
-    </tr>"""
-
-
-def render_esports_candidate_row(row: dict) -> str:
-    wallet = row.get("wallet_address", "")
-    username = row.get("username") or "(sin username)"
-    profile = esc(PROFILE_URL.format(wallet=wallet))
-    verdict = row.get("verdict", "")
-    pill_class = VERDICT_PILL.get(verdict, "ignore")
-    short_wallet = f"{wallet[:6]}…{wallet[-4:]}" if len(wallet) > 12 else wallet
-    win_rate = row.get("win_rate_esports")
-    win_rate_str = fmt_pct(str(float(win_rate) * 100)) if win_rate not in (None, "", "None") else "—"
-    return f"""
-    <tr>
-      <td><a href="{profile}" target="_blank" rel="noopener">{esc(username)}</a></td>
-      <td class="dim">{esc(short_wallet)}</td>
-      <td><span class="pill pill-{pill_class}">{esc(verdict)}</span></td>
-      <td class="num">{float(row.get('copy_score') or 0):.0f}</td>
-      <td class="num">{fmt_money(row.get('esports_volume'))}</td>
-      <td class="num">{fmt_money(row.get('realized_pnl_esports'))}</td>
-      <td class="num">{win_rate_str}</td>
-      <td class="num dim">{esc(row.get('events_participated'))}</td>
-      <td class="num dim">{esc(row.get('risk_score'))}</td>
-    </tr>"""
-
-
 def render_esports_reviewed_row(row: dict) -> str:
     wallet = row.get("wallet", "")
     username = row.get("username") or ""
@@ -289,16 +245,12 @@ def main() -> None:
     signal_rows = read_csv(SIGNALS)
     trader_rows = read_csv(TRADERS)
     performance_rows = read_csv(PERFORMANCE)
-    elon_rows = read_csv(ELON_TRADERS)
-    esports_rows = read_csv(ESPORTS_TRADERS)
     esports_reviewed_rows = read_csv(ESPORTS_REVIEWED)
 
     log_rows.sort(key=lambda r: (STATUS_ORDER.get(r.get("status", "OPEN"), 9), r.get("last_updated", "")), reverse=False)
     signal_rows.sort(key=lambda r: ACTION_ORDER.get(r.get("action", "IGNORE"), 9))
     trader_rows.sort(key=lambda r: r.get("label", ""))
     performance_rows.sort(key=lambda r: float(r.get("pnl_7d") or 0))
-    elon_rows.sort(key=lambda r: float(r.get("copy_score") or 0), reverse=True)
-    esports_rows.sort(key=lambda r: float(r.get("copy_score") or 0), reverse=True)
     esports_reviewed_rows.sort(key=lambda r: int(r.get("events_participated") or 0), reverse=True)
 
     resolved = [r for r in log_rows if r.get("status") in ("WIN", "LOSS", "CLOSED")]
@@ -637,9 +589,7 @@ footer a:hover {{ text-decoration: underline; }}
 
   <div class="tabs">
     <button class="tab-btn active" data-tab="sports">Deportes</button>
-    <button class="tab-btn" data-tab="elon">Elon Musk</button>
-    <button class="tab-btn" data-tab="esports">Esports</button>
-    <button class="tab-btn" data-tab="esports-reviewed">Esports (revisadas)</button>
+    <button class="tab-btn" data-tab="esports-reviewed">Esports</button>
   </div>
 
   <div class="tab-panel active" data-tab-panel="sports">
@@ -775,54 +725,6 @@ footer a:hover {{ text-decoration: underline; }}
         </thead>
         <tbody>
           {"".join(render_trader_row(r) for r in trader_rows) or '<tr><td colspan="5" class="empty">Sin datos de traders todavia</td></tr>'}
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  </div>
-
-  <div class="tab-panel" data-tab-panel="elon">
-
-  <section>
-    <div class="section-head">
-      <h2>Candidatos — Elon Musk mentions</h2>
-      <span class="section-note">{len(elon_rows)} wallets candidatas · fase de exploración, sin señales de consenso todavía</span>
-    </div>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Usuario</th><th>Wallet</th><th>Verdict</th>
-            <th>Copy score</th><th>Volumen Elon</th><th>Trades Elon</th><th>Risk score</th>
-          </tr>
-        </thead>
-        <tbody>
-          {"".join(render_elon_candidate_row(r) for r in elon_rows) or '<tr><td colspan="7" class="empty">Sin candidatos todavía — corré discover-elon-traders o evaluate-elon-wallet</td></tr>'}
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  </div>
-
-  <div class="tab-panel" data-tab-panel="esports">
-
-  <section>
-    <div class="section-head">
-      <h2>Candidatos — Esports</h2>
-      <span class="section-note">{len(esports_rows)} wallets candidatas (encontradas mirando quién trada los mercados de esports más grandes) · fase de exploración, sin señales de consenso todavía</span>
-    </div>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Usuario</th><th>Wallet</th><th>Verdict</th>
-            <th>Copy score</th><th>Volumen</th><th>PnL realizado</th><th>Win rate</th><th>Eventos</th><th>Risk score</th>
-          </tr>
-        </thead>
-        <tbody>
-          {"".join(render_esports_candidate_row(r) for r in esports_rows) or '<tr><td colspan="9" class="empty">Sin candidatos todavía — corré discover-esports-traders</td></tr>'}
         </tbody>
       </table>
     </div>
