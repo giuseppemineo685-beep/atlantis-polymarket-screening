@@ -16,6 +16,7 @@ TRADERS = ROOT / "outputs" / "traders.csv"
 PERFORMANCE = ROOT / "outputs" / "trader_performance.csv"
 ELON_TRADERS = ROOT / "outputs" / "elon_traders.csv"
 ESPORTS_TRADERS = ROOT / "outputs" / "esports_traders.csv"
+ESPORTS_REVIEWED = ROOT / "outputs" / "esports_reviewed.csv"
 OUT_PATH = ROOT / "docs" / "index.html"
 
 PROFILE_URL = "https://polymarket.com/profile/{wallet}"
@@ -222,6 +223,31 @@ def render_esports_candidate_row(row: dict) -> str:
     </tr>"""
 
 
+def render_esports_reviewed_row(row: dict) -> str:
+    wallet = row.get("wallet", "")
+    username = row.get("username") or ""
+    # discover-esports-traders falls back to Polymarket's raw "name" field
+    # when a wallet never set a public display name, which is literally
+    # "{wallet}-{some id}" - not a searchable handle, so say so instead of
+    # showing something that looks like a real username but isn't.
+    if username.lower().startswith(wallet.lower()):
+        username_display = "(sin username)"
+    else:
+        username_display = username or "(sin username)"
+    profile = esc(PROFILE_URL.format(wallet=wallet))
+    copy_verdict = row.get("copy_verdict", "")
+    pill_class = VERDICT_PILL.get(copy_verdict, "ignore")
+    short_wallet = f"{wallet[:6]}…{wallet[-4:]}" if len(wallet) > 12 else wallet
+    return f"""
+    <tr>
+      <td><a href="{profile}" target="_blank" rel="noopener">{esc(username_display)}</a></td>
+      <td class="dim">{esc(short_wallet)}</td>
+      <td><span class="pill pill-win">sin señal de bot</span></td>
+      <td><span class="pill pill-{pill_class}">{esc(copy_verdict)}</span></td>
+      <td class="num dim">{esc(row.get('events_participated'))}</td>
+    </tr>"""
+
+
 FLAG_PILL = {
     "DECLINING": "loss",
     "LOW_SAMPLE": "wait",
@@ -265,6 +291,7 @@ def main() -> None:
     performance_rows = read_csv(PERFORMANCE)
     elon_rows = read_csv(ELON_TRADERS)
     esports_rows = read_csv(ESPORTS_TRADERS)
+    esports_reviewed_rows = read_csv(ESPORTS_REVIEWED)
 
     log_rows.sort(key=lambda r: (STATUS_ORDER.get(r.get("status", "OPEN"), 9), r.get("last_updated", "")), reverse=False)
     signal_rows.sort(key=lambda r: ACTION_ORDER.get(r.get("action", "IGNORE"), 9))
@@ -272,6 +299,7 @@ def main() -> None:
     performance_rows.sort(key=lambda r: float(r.get("pnl_7d") or 0))
     elon_rows.sort(key=lambda r: float(r.get("copy_score") or 0), reverse=True)
     esports_rows.sort(key=lambda r: float(r.get("copy_score") or 0), reverse=True)
+    esports_reviewed_rows.sort(key=lambda r: int(r.get("events_participated") or 0), reverse=True)
 
     resolved = [r for r in log_rows if r.get("status") in ("WIN", "LOSS", "CLOSED")]
     wins = [r for r in resolved if r["status"] in ("WIN", "CLOSED")]
@@ -611,6 +639,7 @@ footer a:hover {{ text-decoration: underline; }}
     <button class="tab-btn active" data-tab="sports">Deportes</button>
     <button class="tab-btn" data-tab="elon">Elon Musk</button>
     <button class="tab-btn" data-tab="esports">Esports</button>
+    <button class="tab-btn" data-tab="esports-reviewed">Esports (revisadas)</button>
   </div>
 
   <div class="tab-panel active" data-tab-panel="sports">
@@ -794,6 +823,29 @@ footer a:hover {{ text-decoration: underline; }}
         </thead>
         <tbody>
           {"".join(render_esports_candidate_row(r) for r in esports_rows) or '<tr><td colspan="9" class="empty">Sin candidatos todavía — corré discover-esports-traders</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  </div>
+
+  <div class="tab-panel" data-tab-panel="esports-reviewed">
+
+  <section>
+    <div class="section-head">
+      <h2>Esports — revisadas (sin señal de bot)</h2>
+      <span class="section-note">{len(esports_reviewed_rows)} de los candidatos que pasaron detect-bot-wallet (heurístico de frecuencia) · ordenado por eventos donde apareció · igual falta revisión manual antes de aprobar cualquiera</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Usuario</th><th>Wallet</th><th>Chequeo de bot</th><th>Verdict</th><th>Eventos</th>
+          </tr>
+        </thead>
+        <tbody>
+          {"".join(render_esports_reviewed_row(r) for r in esports_reviewed_rows) or '<tr><td colspan="5" class="empty">Sin wallets revisadas todavía</td></tr>'}
         </tbody>
       </table>
     </div>
