@@ -115,6 +115,60 @@ class PolymarketClient:
                 break
             offset += len(batch)
 
+    def get_market_trades(
+        self,
+        *,
+        condition_id: str,
+        limit: int = 500,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """All trades for a market (any wallet) - the same /trades endpoint
+        as get_user_trades, but filtered by market instead of by user. Used
+        to find who's actually trading a given market, for verticals where
+        the interesting wallets aren't necessarily top-N on the general
+        leaderboard (see esports_traders.py::discover_esports_traders)."""
+        return self._get_data(
+            "/trades",
+            {
+                "market": condition_id,
+                "limit": limit,
+                "offset": offset,
+            },
+        )
+
+    def iter_market_trades(self, *, condition_id: str, max_rows: int = 2000):
+        offset = 0
+        while offset < max_rows:
+            limit = min(500, max_rows - offset)
+            batch = self.get_market_trades(condition_id=condition_id, limit=limit, offset=offset)
+            if not batch:
+                break
+            for row in batch:
+                yield row
+            if len(batch) < limit:
+                break
+            offset += len(batch)
+
+    def get_events(
+        self,
+        *,
+        tag_slug: str,
+        closed: bool = False,
+        order: str = "volume24hr",
+        ascending: bool = False,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        return self._get_gamma(
+            "/events",
+            {
+                "tag_slug": tag_slug,
+                "closed": str(closed).lower(),
+                "order": order,
+                "ascending": str(ascending).lower(),
+                "limit": limit,
+            },
+        )
+
     def get_user_positions(
         self,
         *,

@@ -25,6 +25,12 @@ from atlantis.services.elon_traders import (
     format_elon_traders,
     write_elon_traders_csv,
 )
+from atlantis.services.evaluate_esports_wallet import evaluate_esports_wallet, format_esports_wallet_evaluation
+from atlantis.services.esports_traders import (
+    discover_esports_traders,
+    format_esports_traders,
+    write_esports_traders_csv,
+)
 from atlantis.services.evaluate_watchlist import (
     evaluate_watchlist,
     format_watchlist_evaluation,
@@ -92,6 +98,27 @@ def main(argv: list[str] | None = None) -> int:
     elon_wallet.add_argument("--max-trades", type=int, default=3000)
     elon_wallet.add_argument("--max-positions", type=int, default=500)
     elon_wallet.add_argument("--active-limit", type=int, default=20)
+
+    esports_discover = subparsers.add_parser(
+        "discover-esports-traders",
+        help="Rank copyable esports traders by scanning who trades the biggest current esports markets.",
+    )
+    esports_discover.add_argument("--top-events", type=int, default=25)
+    esports_discover.add_argument("--max-trades-per-market", type=int, default=500)
+    esports_discover.add_argument("--min-events-participated", type=int, default=2)
+    esports_discover.add_argument("--max-traders", type=int, default=50)
+    esports_discover.add_argument("--max-trades-per-wallet", type=int, default=1000)
+    esports_discover.add_argument("--min-esports-trades", type=int, default=10)
+    esports_discover.add_argument("--min-esports-volume", type=Decimal, default=Decimal("500"))
+    esports_discover.add_argument("--csv", default="")
+
+    esports_wallet = subparsers.add_parser(
+        "evaluate-esports-wallet", help="Evaluate one wallet for esports copyability."
+    )
+    esports_wallet.add_argument("wallet")
+    esports_wallet.add_argument("--max-trades", type=int, default=3000)
+    esports_wallet.add_argument("--max-positions", type=int, default=500)
+    esports_wallet.add_argument("--active-limit", type=int, default=20)
 
     bot = subparsers.add_parser("detect-bot-wallet", help="Detect bot-like wallet behavior.")
     bot.add_argument("wallet")
@@ -231,6 +258,33 @@ def main(argv: list[str] | None = None) -> int:
             max_positions=args.max_positions,
         )
         print(format_elon_wallet_evaluation(evaluation, active_limit=args.active_limit))
+        return 0
+
+    if args.command == "discover-esports-traders":
+        scores = discover_esports_traders(
+            settings=settings,
+            top_events=args.top_events,
+            max_trades_per_market=args.max_trades_per_market,
+            min_events_participated=args.min_events_participated,
+            max_traders=args.max_traders,
+            max_trades_per_wallet=args.max_trades_per_wallet,
+            min_esports_trades=args.min_esports_trades,
+            min_esports_volume=args.min_esports_volume,
+        )
+        print(format_esports_traders(scores))
+        if args.csv:
+            write_esports_traders_csv(Path(args.csv), scores)
+            print(f"\nCSV written: {args.csv}")
+        return 0
+
+    if args.command == "evaluate-esports-wallet":
+        evaluation = evaluate_esports_wallet(
+            settings=settings,
+            wallet_address=args.wallet,
+            max_trades=args.max_trades,
+            max_positions=args.max_positions,
+        )
+        print(format_esports_wallet_evaluation(evaluation, active_limit=args.active_limit))
         return 0
 
     if args.command == "detect-bot-wallet":
