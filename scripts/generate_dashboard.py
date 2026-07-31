@@ -99,7 +99,7 @@ def render_signal_row(row: dict) -> str:
     </tr>"""
 
 
-def render_log_row(row: dict) -> str:
+def render_log_row(row: dict, *, extra_class: str = "") -> str:
     status = row.get("status", "OPEN")
     consensus_active = row.get("consensus_active", "yes") == "yes"
     pct_return = row.get("pct_return", "")
@@ -137,7 +137,7 @@ def render_log_row(row: dict) -> str:
     return_suffix = "*" if is_live_estimate else ""
 
     return f"""
-    <tr>
+    <tr class="{extra_class}">
       <td>{status_badge}</td>
       <td class="title-cell">{market_link(row.get('title'), row.get('slug'))}</td>
       <td><b>{esc(row.get('outcome'))}</b></td>
@@ -248,11 +248,13 @@ def main() -> None:
     win_rate = (len(wins) / len(resolved) * 100) if resolved else 0.0
 
     # Historial de trades: abiertos primero (siempre visibles, son pocos),
-    # despues solo los ultimos 10 cerrados - por fecha, no por resultado -
-    # para que la tabla no crezca sin limite con el historico.
+    # despues los cerrados por fecha (no por resultado) - solo los ultimos
+    # 10 se ven de entrada, el resto queda oculto detras de un boton
+    # "ver todas" para que la tabla no ocupe la pagina con el historico.
     open_by_date = sorted(open_trades, key=lambda r: r.get("date_first_seen", ""), reverse=True)
-    resolved_recent = sorted(resolved, key=lambda r: r.get("last_updated", ""), reverse=True)[:10]
-    history_rows = open_by_date + resolved_recent
+    resolved_by_date = sorted(resolved, key=lambda r: r.get("last_updated", ""), reverse=True)
+    resolved_visible = resolved_by_date[:10]
+    resolved_hidden = resolved_by_date[10:]
 
     copy_signals = [r for r in signal_rows if r.get("action") == "COPY"]
     other_signals = [r for r in signal_rows if r.get("action") != "COPY"][:20]
@@ -536,6 +538,10 @@ tbody tr:hover {{ background: var(--surface-2); }}
 .tab-panel {{ display: none; }}
 .tab-panel.active {{ display: block; }}
 
+tr.row-hidden {{ display: none; }}
+table.show-all tr.row-hidden {{ display: table-row; }}
+#toggle-history-btn {{ margin-top: 12px; }}
+
 .empty {{ padding: 28px; text-align: center; color: var(--text-dim); font-size: 13px; }}
 
 footer {{
@@ -655,7 +661,7 @@ footer a:hover {{ text-decoration: underline; }}
       <span class="section-note">{len(open_trades)} abiertos + últimos 10 cerrados (de {len(resolved)} resueltos) · ordenado por fecha · * = retorno no realizado, mercado sigue abierto</span>
     </div>
     <div class="table-scroll">
-      <table>
+      <table id="history-table">
         <thead>
           <tr>
             <th>Estado</th><th>Mercado (clic para abrir)</th><th>Apuesta</th><th>Entrada</th>
@@ -663,10 +669,14 @@ footer a:hover {{ text-decoration: underline; }}
           </tr>
         </thead>
         <tbody>
-          {"".join(render_log_row(r) for r in history_rows) or '<tr><td colspan="8" class="empty">Todavía no hay trades registrados</td></tr>'}
+          {"".join(render_log_row(r) for r in open_by_date)}
+          {"".join(render_log_row(r) for r in resolved_visible)}
+          {"".join(render_log_row(r, extra_class="row-hidden") for r in resolved_hidden)}
+          {'<tr><td colspan="8" class="empty">Todavía no hay trades registrados</td></tr>' if not (open_by_date or resolved_visible) else ''}
         </tbody>
       </table>
     </div>
+    {f'<button class="tab-btn" id="toggle-history-btn" data-count="{len(resolved)}">Ver todas las cerradas ({len(resolved)})</button>' if resolved_hidden else ''}
   </section>
 
   <section>
@@ -742,13 +752,22 @@ footer a:hover {{ text-decoration: underline; }}
 
 </div>
 <script>
-document.querySelectorAll('.tab-btn').forEach(btn => {{
+document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {{
   btn.addEventListener('click', () => {{
     const tab = btn.dataset.tab;
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.tab-btn[data-tab]').forEach(b => b.classList.toggle('active', b === btn));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.dataset.tabPanel === tab));
   }});
 }});
+
+const historyToggleBtn = document.getElementById('toggle-history-btn');
+if (historyToggleBtn) {{
+  historyToggleBtn.addEventListener('click', () => {{
+    const table = document.getElementById('history-table');
+    const showingAll = table.classList.toggle('show-all');
+    historyToggleBtn.textContent = showingAll ? 'Ver menos' : `Ver todas las cerradas (${{historyToggleBtn.dataset.count}})`;
+  }});
+}}
 </script>
 </body>
 </html>
