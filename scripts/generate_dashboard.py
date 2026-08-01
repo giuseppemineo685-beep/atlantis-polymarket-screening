@@ -3,6 +3,9 @@ from __future__ import annotations
 import base64
 import csv
 import html
+import json
+import urllib.error
+import urllib.request
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -68,6 +71,29 @@ def esc(value) -> str:
 
 
 REAL_STATUS_MAP = {"EXECUTED": "OPEN", "WON_UNREDEEMED": "WIN", "LOST": "LOSS", "CLOSED": "CLOSED"}
+
+
+def fetch_live_price(condition_id: str, asset: str) -> str | None:
+    """Current price for one token, same CLOB endpoint already used
+    elsewhere in this codebase for resolution checks (get_market_price_info
+    in run_screening_and_notify.py / live_execution.py) - returns None on
+    any failure so a slow/broken network call never breaks dashboard
+    generation, it just falls back to showing an estimate instead."""
+    url = f"https://clob.polymarket.com/markets/{condition_id}"
+    req = urllib.request.Request(
+        url, headers={"Accept": "application/json", "User-Agent": "atlantis-dashboard/0.1"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            market = json.loads(resp.read())
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+        return None
+    if not market:
+        return None
+    for token in market.get("tokens", []):
+        if token.get("token_id") == asset:
+            return str(token.get("price")) if token.get("price") is not None else None
+    return None
 
 
 def real_log_to_display_rows(raw_rows: list[dict]) -> list[dict]:
@@ -358,6 +384,16 @@ def main() -> None:
     wins = [r for r in resolved if _is_win(r)]
     open_trades = [r for r in log_rows if r.get("status") == "OPEN"]
     win_rate = (len(wins) / len(resolved) * 100) if resolved else 0.0
+
+    # Real open positions only carry the entry fill in live_trade_log.csv -
+    # no live mark-to-market price is tracked between cron cycles, so
+    # current_price defaulted to entry_price (a flat 0%, per
+    # real_log_to_display_rows). There are only ever a handful of these
+    # open at once, so fetching each one's live price directly is cheap.
+    for row in open_trades:
+        live_price = fetch_live_price(row.get("condition_id", ""), row.get("asset", ""))
+        if live_price is not None:
+            row["current_price"] = live_price
 
     # Historial de trades: abiertos primero (siempre visibles, son pocos),
     # despues los cerrados por fecha (no por resultado) - solo los ultimos
