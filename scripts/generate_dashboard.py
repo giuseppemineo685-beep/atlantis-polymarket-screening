@@ -333,7 +333,18 @@ def main() -> None:
     esports_log_rows.sort(key=lambda r: (STATUS_ORDER.get(r.get("status", "OPEN"), 9), r.get("last_updated", "")), reverse=False)
 
     resolved = [r for r in log_rows if r.get("status") in ("WIN", "LOSS", "CLOSED")]
-    wins = [r for r in resolved if r["status"] in ("WIN", "CLOSED")]
+    # CLOSED means "exited early", not "won" - it can be a small loss too (a
+    # real example: Chicago Cubs vs. St. Louis Cardinals closed at -2.00%).
+    # Counting every CLOSED row as a win regardless of sign was inflating
+    # (or in other cases could deflate) the win rate - classify by the
+    # actual pct_return sign instead of the status label.
+    def _is_win(row: dict) -> bool:
+        try:
+            return float(row.get("pct_return") or 0) > 0
+        except ValueError:
+            return False
+
+    wins = [r for r in resolved if _is_win(r)]
     open_trades = [r for r in log_rows if r.get("status") == "OPEN"]
     win_rate = (len(wins) / len(resolved) * 100) if resolved else 0.0
 
