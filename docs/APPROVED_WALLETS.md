@@ -40,6 +40,8 @@ Una wallet aprobada **no significa copiar automaticamente**. Significa que entra
 | 23 | approved | Trader23 | `0x224f7ef690d952cf551a471846d5afb4892e514a` | sports | manual approved |
 | 24 | rejected | Trader24 | `0x2e3c40fa47b27c676ddd573064162f57d51508ba` | sports | confirmed bot (LIKELY_BOT score 90): buy-only + low market diversity, no copy |
 | 25 | rejected | Trader25 | `0x893575c7d99542163c6b6e8a0fe5af0b6d217daa` | sports | confirmed bot (LIKELY_BOT score 90): buy-only + low market diversity, no copy |
+| 26 | approved | Trader26 | `0xa71093cafc0c099b4ccab24c3cb8018d817923c4` | sports | Talvez10 - WATCHLIST_STRONG, $14.3M sports volume (94.8% share), POSSIBLE_BOT score 40 (buy-only + high market churn) - large positions ($10K-70K each), use with caution similar to whale/fund pattern, added 2026-08-01 |
+| 27 | approved | Trader27 | `0x6e82b93eb57b01a63027bd0c6d2f3f04934a752c` | sports | DLEK - WATCHLIST, $16.5M sports volume (94.3% share), no bot signal, added 2026-08-01 |
 
 ## Fuente Ejecutable
 
