@@ -291,16 +291,24 @@ def fmt_money(value: str | None) -> str:
     return f"{sign}{num:,.0f}"
 
 
-def render_performance_row(row: dict) -> str:
+def render_performance_row(row: dict, *, wallet_to_username: dict[str, str] | None = None) -> str:
     flag = row.get("flag", "")
     pill_class = FLAG_PILL.get(flag, "wait")
     pnl_7d = row.get("pnl_7d")
     pnl_class = "num-pos" if (pnl_7d and float(pnl_7d) >= 0) else "num-neg"
     pnl_30d = row.get("pnl_30d")
     pnl_30d_class = "num-pos" if (pnl_30d and float(pnl_30d) >= 0) else "num-neg"
+
+    wallet = row.get("wallet_address", "")
+    username = (wallet_to_username or {}).get(wallet.lower(), "") or "(sin username)"
+    profile = esc(PROFILE_URL.format(wallet=wallet))
+    short_wallet = f"{wallet[:6]}…{wallet[-4:]}" if len(wallet) > 12 else wallet
+
     return f"""
     <tr>
       <td><b>{esc(row.get('label'))}</b></td>
+      <td><a href="{profile}" target="_blank" rel="noopener">{esc(username)}</a></td>
+      <td class="dim">{esc(short_wallet)}</td>
       <td><span class="pill pill-{pill_class}">{esc(flag)}</span></td>
       <td class="num {pnl_class}">{fmt_money(pnl_7d)}</td>
       <td class="num">{fmt_pct(row.get('win_rate_7d'))}</td>
@@ -328,6 +336,7 @@ def main() -> None:
     signal_rows.sort(key=lambda r: ACTION_ORDER.get(r.get("action", "IGNORE"), 9))
     trader_rows.sort(key=lambda r: r.get("label", ""))
     performance_rows.sort(key=lambda r: float(r.get("pnl_7d") or 0))
+    wallet_to_username = {r["wallet"].lower(): r.get("username") for r in trader_rows if r.get("wallet")}
     esports_reviewed_rows.sort(key=lambda r: int(r.get("events_participated") or 0), reverse=True)
     esports_signal_rows.sort(key=lambda r: ACTION_ORDER.get(r.get("action", "IGNORE"), 9))
     esports_log_rows.sort(key=lambda r: (STATUS_ORDER.get(r.get("status", "OPEN"), 9), r.get("last_updated", "")), reverse=False)
@@ -811,13 +820,13 @@ footer a:hover {{ text-decoration: underline; }}
       <table>
         <thead>
           <tr>
-            <th>Label</th><th>Flag</th>
+            <th>Label</th><th>Usuario</th><th>Wallet</th><th>Flag</th>
             <th>PnL 7d</th><th>WR 7d</th><th>Trades 7d</th>
             <th>PnL 30d</th><th>WR 30d</th><th>Trades 30d</th>
           </tr>
         </thead>
         <tbody>
-          {"".join(render_performance_row(r) for r in performance_rows) or '<tr><td colspan="8" class="empty">Sin datos de rendimiento todavia</td></tr>'}
+          {"".join(render_performance_row(r, wallet_to_username=wallet_to_username) for r in performance_rows) or '<tr><td colspan="10" class="empty">Sin datos de rendimiento todavia</td></tr>'}
         </tbody>
       </table>
     </div>
