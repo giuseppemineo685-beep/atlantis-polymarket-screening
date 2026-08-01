@@ -337,10 +337,8 @@ def render_performance_row(row: dict, *, wallet_to_username: dict[str, str] | No
       <td class="dim">{esc(short_wallet)}</td>
       <td><span class="pill pill-{pill_class}">{esc(flag)}</span></td>
       <td class="num {pnl_class}">{fmt_money(pnl_7d)}</td>
-      <td class="num">{fmt_pct(row.get('win_rate_7d'))}</td>
       <td class="num dim">{esc(row.get('resolved_7d'))}</td>
       <td class="num {pnl_30d_class}">{fmt_money(pnl_30d)}</td>
-      <td class="num">{fmt_pct(row.get('win_rate_30d'))}</td>
       <td class="num dim">{esc(row.get('resolved_30d'))}</td>
     </tr>"""
 
@@ -370,20 +368,7 @@ def main() -> None:
     esports_log_rows.sort(key=lambda r: (STATUS_ORDER.get(r.get("status", "OPEN"), 9), r.get("last_updated", "")), reverse=False)
 
     resolved = [r for r in log_rows if r.get("status") in ("WIN", "LOSS", "CLOSED")]
-    # CLOSED means "exited early", not "won" - it can be a small loss too (a
-    # real example: Chicago Cubs vs. St. Louis Cardinals closed at -2.00%).
-    # Counting every CLOSED row as a win regardless of sign was inflating
-    # (or in other cases could deflate) the win rate - classify by the
-    # actual pct_return sign instead of the status label.
-    def _is_win(row: dict) -> bool:
-        try:
-            return float(row.get("pct_return") or 0) > 0
-        except ValueError:
-            return False
-
-    wins = [r for r in resolved if _is_win(r)]
     open_trades = [r for r in log_rows if r.get("status") == "OPEN"]
-    win_rate = (len(wins) / len(resolved) * 100) if resolved else 0.0
 
     # Real open positions only carry the entry fill in live_trade_log.csv -
     # no live mark-to-market price is tracked between cron cycles, so
@@ -794,10 +779,6 @@ footer a:hover {{ text-decoration: underline; }}
       <div class="stat-value">{len(log_rows)}</div>
     </div>
     <div class="stat">
-      <div class="stat-label">Win rate (resueltos)</div>
-      <div class="stat-value accent">{win_rate:.1f}%</div>
-    </div>
-    <div class="stat">
       <div class="stat-label">Retorno promedio</div>
       <div class="stat-value {'pos' if avg_return >= 0 else 'neg'}">{avg_return:+.1f}%</div>
     </div>
@@ -887,21 +868,21 @@ footer a:hover {{ text-decoration: underline; }}
   <section>
     <div class="section-head">
       <h2>Rendimiento por trader</h2>
-      <span class="section-note">{len(performance_ok)} OK visibles ({len(performance_inactive)} DECLINING/LOW_SAMPLE ocultos) · PnL realizado y win rate en ventanas móviles de 7 y 30 días · se actualiza cada ~2h</span>
+      <span class="section-note">{len(performance_ok)} OK visibles ({len(performance_inactive)} DECLINING/LOW_SAMPLE ocultos) · PnL realizado en ventanas móviles de 7 y 30 días · se actualiza cada ~2h</span>
     </div>
     <div class="table-scroll">
       <table id="performance-table">
         <thead>
           <tr>
             <th>Label</th><th>Usuario</th><th>Wallet</th><th>Flag</th>
-            <th>PnL 7d</th><th>WR 7d</th><th>Trades 7d</th>
-            <th>PnL 30d</th><th>WR 30d</th><th>Trades 30d</th>
+            <th>PnL 7d</th><th>Trades 7d</th>
+            <th>PnL 30d</th><th>Trades 30d</th>
           </tr>
         </thead>
         <tbody>
           {"".join(render_performance_row(r, wallet_to_username=wallet_to_username) for r in performance_ok)}
           {"".join(render_performance_row(r, wallet_to_username=wallet_to_username, extra_class="row-hidden") for r in performance_inactive)}
-          {'<tr><td colspan="10" class="empty">Sin datos de rendimiento todavia</td></tr>' if not (performance_ok or performance_inactive) else ''}
+          {'<tr><td colspan="8" class="empty">Sin datos de rendimiento todavia</td></tr>' if not (performance_ok or performance_inactive) else ''}
         </tbody>
       </table>
     </div>
