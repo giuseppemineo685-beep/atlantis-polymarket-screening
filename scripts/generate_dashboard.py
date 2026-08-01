@@ -82,6 +82,23 @@ def real_log_to_display_rows(raw_rows: list[dict]) -> list[dict]:
         # marked as an estimate) instead of fabricating a -100% loss from a
         # blank/zero current price.
         current_price = r.get("fill_price_sell") or r.get("fill_price_buy") or ""
+
+        # WON_UNREDEEMED never gets a pct_return written (it's genuinely not
+        # realized until the user redeems on-chain), but leaving it blank
+        # here silently dropped all of these from the scoreboard's average -
+        # only LOST (-100%) and CLOSED rows have a stored pct_return, so the
+        # average looked like a huge loss even when the account is net up.
+        # Estimate it the same way render_log_row's own per-row fallback
+        # would, so the aggregate stats and the table agree.
+        pct_return = r.get("pct_return", "")
+        if not pct_return and status == "WIN":
+            try:
+                entry = float(r.get("fill_price_buy") or 0)
+                if entry > 0:
+                    pct_return = f"{(1 / entry - 1) * 100:.2f}"
+            except ValueError:
+                pass
+
         out.append(
             {
                 "condition_id": r.get("condition_id", ""),
@@ -96,7 +113,7 @@ def real_log_to_display_rows(raw_rows: list[dict]) -> list[dict]:
                 "consensus_active": "yes" if status == "OPEN" else "no",
                 "status": status,
                 "exit_price": r.get("fill_price_sell", ""),
-                "pct_return": r.get("pct_return", ""),
+                "pct_return": pct_return,
                 "last_updated": r.get("last_updated", ""),
             }
         )
