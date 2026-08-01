@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from math import gcd
 from typing import Any
 
@@ -235,16 +235,45 @@ def _parse_order_response(response: Any, side: str) -> OrderResult:
     order_id = response.get("orderID") or response.get("orderId") or response.get("id")
     status = str(response.get("status", "UNKNOWN"))
 
+    # response.get("success") is the only signal that matters for whether
+    # real money moved - a real incident (2026-08-01) had the exchange
+    # confirm success=True on a fill while makingAmount/takingAmount came
+    # back empty/unparseable, and Decimal(str(...)) raised ConversionSyntax
+    # from inside this function. That exception was caught by the outer
+    # try/except in _place_fok_order and reported as a plain failed order,
+    # which the retry logic (correctly, for an order that never went
+    # through) resubmitted every cron cycle - each resubmission ALSO filled
+    # for real, since the order kept actually succeeding. One $25 signal
+    # turned into a $124 position before anyone noticed. A parse failure on
+    # the fill amounts must never be able to flip success=True into
+    # success=False.
+    def _to_decimal(value: Any) -> Decimal | None:
+        if value in (None, ""):
+            return None
+        try:
+            return Decimal(str(value))
+        except InvalidOperation:
+            return None
+
     making = response.get("makingAmount")
     taking = response.get("takingAmount")
     if side == "BUY":
-        usdc_amount = Decimal(str(making)) if making is not None else None
-        shares_amount = Decimal(str(taking)) if taking is not None else None
+        usdc_amount = _to_decimal(making)
+        shares_amount = _to_decimal(taking)
     else:
-        shares_amount = Decimal(str(making)) if making is not None else None
-        usdc_amount = Decimal(str(taking)) if taking is not None else None
+        shares_amount = _to_decimal(making)
+        usdc_amount = _to_decimal(taking)
 
     avg_price = (usdc_amount / shares_amount) if (usdc_amount and shares_amount) else None
+
+    error = None
+    if not success:
+        error = str(response.get("errorMsg") or response.get("error") or "orden no confirmada")
+    elif usdc_amount is None or shares_amount is None:
+        error = (
+            "orden confirmada por el exchange (success=True) pero no se pudo leer "
+            "makingAmount/takingAmount de la respuesta - revisar raw_response manualmente"
+        )
 
     return OrderResult(
         success=success,
@@ -253,7 +282,7 @@ def _parse_order_response(response: Any, side: str) -> OrderResult:
         filled_size=shares_amount,
         avg_fill_price=avg_price,
         raw_response=response,
-        error=None if success else str(response.get("errorMsg") or response.get("error") or "orden no confirmada"),
+        error=error,
     )
 
 
