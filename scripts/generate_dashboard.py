@@ -447,11 +447,13 @@ def main() -> None:
     all_pct = realized_pct + unrealized_pct
     avg_return = sum(all_pct) / len(all_pct) if all_pct else 0.0
 
+    PAPER_ASSUMED_STAKE_USD = 25.0  # trade_log_esports.csv (paper) never tracks a per-trade stake
+
     def trade_dollar_pnl(row: dict, pct: float) -> float:
         try:
-            stake = float(row.get("stake_usd_actual") or 0)
+            stake = float(row.get("stake_usd_actual") or 0) or PAPER_ASSUMED_STAKE_USD
         except ValueError:
-            return 0.0
+            stake = PAPER_ASSUMED_STAKE_USD
         return stake * pct / 100
 
     # Por dia (hora Zurich): realizado = dia en que cerro (last_updated),
@@ -482,6 +484,39 @@ def main() -> None:
                 f'<td class="num {usd_cls}">${fmt_money(str(total_usd))}</td></tr>'
             )
         return "".join(rows) or '<tr><td colspan="4" class="empty">Sin datos</td></tr>'
+
+    # Same scoreboard/"Rendimiento" stats as Deportes, minus win rate - this
+    # is paper trading, so a % of trades landing on the "right" outcome
+    # isn't as meaningful yet as just tracking whether the simulated
+    # returns are trending positive.
+    esports_realized_pct = [float(r["pct_return"]) for r in esports_resolved if r.get("pct_return") not in (None, "")]
+    esports_realized_avg = sum(esports_realized_pct) / len(esports_realized_pct) if esports_realized_pct else 0.0
+
+    esports_unrealized_pct = []
+    for r in esports_open:
+        try:
+            entry = float(r.get("entry_price") or 0)
+            current = float(r.get("current_price") or 0)
+            if entry > 0:
+                esports_unrealized_pct.append((current / entry - 1) * 100)
+        except ValueError:
+            continue
+    esports_unrealized_avg = sum(esports_unrealized_pct) / len(esports_unrealized_pct) if esports_unrealized_pct else 0.0
+
+    esports_all_pct = esports_realized_pct + esports_unrealized_pct
+    esports_avg_return = sum(esports_all_pct) / len(esports_all_pct) if esports_all_pct else 0.0
+
+    esports_realized_by_day: dict[str, list[tuple[float, float]]] = defaultdict(list)
+    for r in esports_resolved:
+        if r.get("pct_return") not in (None, ""):
+            pct = float(r["pct_return"])
+            esports_realized_by_day[zurich_day(r.get("last_updated", ""))].append((pct, trade_dollar_pnl(r, pct)))
+
+    esports_unrealized_by_day: dict[str, list[tuple[float, float]]] = defaultdict(list)
+    for r, pct in zip(
+        [r for r in esports_open if r.get("entry_price") and r.get("current_price")], esports_unrealized_pct
+    ):
+        esports_unrealized_by_day[zurich_day(r.get("date_first_seen", ""))].append((pct, trade_dollar_pnl(r, pct)))
 
     fonts_css = f"""
     @font-face {{
@@ -895,6 +930,54 @@ footer a:hover {{ text-decoration: underline; }}
   </div>
 
   <div class="tab-panel" data-tab-panel="esports-reviewed">
+
+  <div class="scoreboard">
+    <div class="stat">
+      <div class="stat-label">Trades registrados</div>
+      <div class="stat-value">{len(esports_log_rows)}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Retorno promedio</div>
+      <div class="stat-value {'pos' if esports_avg_return >= 0 else 'neg'}">{esports_avg_return:+.1f}%</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Posiciones abiertas</div>
+      <div class="stat-value">{len(esports_open)}</div>
+    </div>
+  </div>
+
+  <section>
+    <div class="section-head">
+      <h2>Rendimiento — Esports (paper)</h2>
+      <span class="section-note">Realizado = trades cerrados · No realizado = abiertos, marca en vivo · USD asume ${PAPER_ASSUMED_STAKE_USD:.0f} hipotéticos por señal (esto es papel, no dinero real)</span>
+    </div>
+    <div class="scoreboard" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 20px;">
+      <div class="stat">
+        <div class="stat-label">Retorno realizado (promedio)</div>
+        <div class="stat-value {'pos' if esports_realized_avg >= 0 else 'neg'}">{esports_realized_avg:+.1f}%</div>
+        <div class="section-note">{len(esports_realized_pct)} trades cerrados</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Retorno no realizado (promedio)</div>
+        <div class="stat-value {'pos' if esports_unrealized_avg >= 0 else 'neg'}">{esports_unrealized_avg:+.1f}%</div>
+        <div class="section-note">{len(esports_unrealized_pct)} trades abiertos</div>
+      </div>
+    </div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Día (Zúrich)</th><th class="num">Trades</th><th class="num">Promedio %</th><th class="num">USD ganado/perdido</th></tr></thead>
+          <tbody>{day_rows(esports_realized_by_day)}</tbody>
+        </table>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Día detectado (Zúrich)</th><th class="num">Trades</th><th class="num">Promedio %</th><th class="num">USD ganado/perdido</th></tr></thead>
+          <tbody>{day_rows(esports_unrealized_by_day)}</tbody>
+        </table>
+      </div>
+    </div>
+  </section>
 
   <section>
     <div class="section-head">
