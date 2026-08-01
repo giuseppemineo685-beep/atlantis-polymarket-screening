@@ -121,6 +121,7 @@ def real_log_to_display_rows(raw_rows: list[dict]) -> list[dict]:
                 "status": status,
                 "exit_price": r.get("fill_price_sell", ""),
                 "pct_return": pct_return,
+                "stake_usd_actual": r.get("stake_usd_actual", ""),
                 "last_updated": r.get("last_updated", ""),
             }
         )
@@ -388,30 +389,41 @@ def main() -> None:
     all_pct = realized_pct + unrealized_pct
     avg_return = sum(all_pct) / len(all_pct) if all_pct else 0.0
 
+    def trade_dollar_pnl(row: dict, pct: float) -> float:
+        try:
+            stake = float(row.get("stake_usd_actual") or 0)
+        except ValueError:
+            return 0.0
+        return stake * pct / 100
+
     # Por dia (hora Zurich): realizado = dia en que cerro (last_updated),
     # no realizado = dia en que se detecto la posicion (date_first_seen)
-    realized_by_day: dict[str, list[float]] = defaultdict(list)
+    realized_by_day: dict[str, list[tuple[float, float]]] = defaultdict(list)
     for r in resolved:
         if r.get("pct_return") not in (None, ""):
-            realized_by_day[zurich_day(r.get("last_updated", ""))].append(float(r["pct_return"]))
+            pct = float(r["pct_return"])
+            realized_by_day[zurich_day(r.get("last_updated", ""))].append((pct, trade_dollar_pnl(r, pct)))
 
-    unrealized_by_day: dict[str, list[float]] = defaultdict(list)
+    unrealized_by_day: dict[str, list[tuple[float, float]]] = defaultdict(list)
     for r, pct in zip(
         [r for r in open_trades if r.get("entry_price") and r.get("current_price")], unrealized_pct
     ):
-        unrealized_by_day[zurich_day(r.get("date_first_seen", ""))].append(pct)
+        unrealized_by_day[zurich_day(r.get("date_first_seen", ""))].append((pct, trade_dollar_pnl(r, pct)))
 
-    def day_rows(by_day: dict[str, list[float]]) -> str:
+    def day_rows(by_day: dict[str, list[tuple[float, float]]]) -> str:
         rows = []
         for day in sorted(by_day.keys(), reverse=True):
             vals = by_day[day]
-            avg = sum(vals) / len(vals)
+            avg = sum(pct for pct, _ in vals) / len(vals)
+            total_usd = sum(usd for _, usd in vals)
             cls = "num-pos" if avg >= 0 else "num-neg"
+            usd_cls = "num-pos" if total_usd >= 0 else "num-neg"
             rows.append(
                 f'<tr><td class="dim">{esc(day)}</td><td class="num">{len(vals)}</td>'
-                f'<td class="num {cls}">{avg:+.1f}%</td></tr>'
+                f'<td class="num {cls}">{avg:+.1f}%</td>'
+                f'<td class="num {usd_cls}">${fmt_money(str(total_usd))}</td></tr>'
             )
-        return "".join(rows) or '<tr><td colspan="3" class="empty">Sin datos</td></tr>'
+        return "".join(rows) or '<tr><td colspan="4" class="empty">Sin datos</td></tr>'
 
     fonts_css = f"""
     @font-face {{
@@ -722,13 +734,13 @@ footer a:hover {{ text-decoration: underline; }}
     <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
       <div class="table-scroll">
         <table>
-          <thead><tr><th>Día (Zúrich)</th><th>Trades</th><th>Promedio %</th></tr></thead>
+          <thead><tr><th>Día (Zúrich)</th><th class="num">Trades</th><th class="num">Promedio %</th><th class="num">USD ganado/perdido</th></tr></thead>
           <tbody>{day_rows(realized_by_day)}</tbody>
         </table>
       </div>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>Día detectado (Zúrich)</th><th>Trades</th><th>Promedio %</th></tr></thead>
+          <thead><tr><th>Día detectado (Zúrich)</th><th class="num">Trades</th><th class="num">Promedio %</th><th class="num">USD ganado/perdido</th></tr></thead>
           <tbody>{day_rows(unrealized_by_day)}</tbody>
         </table>
       </div>
