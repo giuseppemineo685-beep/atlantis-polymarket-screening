@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 ROOT = Path(__file__).resolve().parent.parent
 FONTS = Path(__file__).resolve().parent / "fonts"
 TRADE_LOG = ROOT / "outputs" / "trade_log.csv"
+LIVE_TRADE_LOG = ROOT / "outputs" / "live_trade_log.csv"
 SIGNALS = ROOT / "outputs" / "active_portfolio_signals.csv"
 TRADERS = ROOT / "outputs" / "traders.csv"
 PERFORMANCE = ROOT / "outputs" / "trader_performance.csv"
@@ -57,6 +58,49 @@ def read_csv(path: Path) -> list[dict]:
 
 def esc(value) -> str:
     return html.escape(str(value if value is not None else ""))
+
+
+REAL_STATUS_MAP = {"EXECUTED": "OPEN", "WON_UNREDEEMED": "WIN", "LOST": "LOSS", "CLOSED": "CLOSED"}
+
+
+def real_log_to_display_rows(raw_rows: list[dict]) -> list[dict]:
+    """Adapt live_trade_log.csv (real money) into the same field shape as
+    the paper trade_log.csv, so the existing scoreboard/history rendering
+    (built for the paper schema) can be reused unchanged. Only rows that
+    reflect an actual real-money state make it through - ERROR (order never
+    placed), DRY_RUN (kill switch was off, no money moved) and
+    MISSED_MARKET_CLOSED (signal arrived too late to act on) are excluded
+    entirely rather than shown as if they were real trades."""
+    out = []
+    for r in raw_rows:
+        status = REAL_STATUS_MAP.get(r.get("status", ""))
+        if status is None:
+            continue
+        # No live mark-to-market price is tracked for an open real position
+        # (live_trade_log.csv only records the buy fill) - fall back to the
+        # entry price itself so the dashboard shows a flat 0% (clearly
+        # marked as an estimate) instead of fabricating a -100% loss from a
+        # blank/zero current price.
+        current_price = r.get("fill_price_sell") or r.get("fill_price_buy") or ""
+        out.append(
+            {
+                "condition_id": r.get("condition_id", ""),
+                "asset": r.get("asset", ""),
+                "title": r.get("title", ""),
+                "slug": r.get("slug", ""),
+                "outcome": r.get("outcome", ""),
+                "traders": r.get("traders", ""),
+                "date_first_seen": r.get("date_first_seen", ""),
+                "entry_price": r.get("fill_price_buy", ""),
+                "current_price": current_price,
+                "consensus_active": "yes" if status == "OPEN" else "no",
+                "status": status,
+                "exit_price": r.get("fill_price_sell", ""),
+                "pct_return": r.get("pct_return", ""),
+                "last_updated": r.get("last_updated", ""),
+            }
+        )
+    return out
 
 
 def fmt_pct(value: str) -> str:
@@ -243,7 +287,11 @@ def render_performance_row(row: dict) -> str:
 
 
 def main() -> None:
-    log_rows = read_csv(TRADE_LOG)
+    # Deportes' history/scoreboard reflect REAL money only - the paper
+    # screening log used to feed this same tab, which meant a signal that
+    # never got a real fill (kill switch off, order errored, etc.) showed up
+    # identically to one that did, no way to tell them apart.
+    log_rows = real_log_to_display_rows(read_csv(LIVE_TRADE_LOG))
     signal_rows = read_csv(SIGNALS)
     trader_rows = read_csv(TRADERS)
     performance_rows = read_csv(PERFORMANCE)
@@ -666,7 +714,7 @@ footer a:hover {{ text-decoration: underline; }}
   <section>
     <div class="section-head">
       <h2>Señales activas ahora</h2>
-      <span class="section-note">{len(copy_signals)} COPY · actualiza cada 2 min</span>
+      <span class="section-note">{len(copy_signals)} COPY · candidatas a operar en base al consenso actual, no son trades ya ejecutados · actualiza cada 2 min</span>
     </div>
     <div class="table-scroll">
       <table>
@@ -685,8 +733,8 @@ footer a:hover {{ text-decoration: underline; }}
 
   <section>
     <div class="section-head">
-      <h2>Historial de trades</h2>
-      <span class="section-note">{len(open_trades)} abiertos + últimos 10 cerrados (de {len(resolved)} resueltos) · ordenado por fecha · * = retorno no realizado, mercado sigue abierto</span>
+      <h2>Historial de trades (dinero real)</h2>
+      <span class="section-note">{len(open_trades)} abiertos + últimos 10 cerrados (de {len(resolved)} resueltos) · solo ejecuciones reales · ordenado por fecha · * = retorno estimado, sin precio en vivo para posiciones abiertas</span>
     </div>
     <div class="table-scroll">
       <table id="history-table">
