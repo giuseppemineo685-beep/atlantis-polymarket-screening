@@ -29,13 +29,20 @@ ZURICH = ZoneInfo("Europe/Zurich")
 
 
 def parse_utc(date_str: str) -> datetime | None:
-    """Parse our "YYYY-MM-DD HH:MM UTC" timestamps into an aware datetime."""
+    """Parse our "YYYY-MM-DD HH:MM[:SS] UTC" timestamps into an aware
+    datetime. The paper log writes minute precision; live_trade_log.csv
+    (real trades) writes seconds too - trying minute-only first silently
+    failed on every real-log row (ValueError -> None -> "?" day bucket),
+    which is why the per-day breakdown looked empty for real trading."""
     if not date_str:
         return None
-    try:
-        return datetime.strptime(date_str.replace(" UTC", ""), "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
-    except ValueError:
-        return None
+    stripped = date_str.replace(" UTC", "")
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            return datetime.strptime(stripped, fmt).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    return None
 
 
 def zurich_day(date_str: str) -> str:
