@@ -36,6 +36,12 @@ from atlantis.services.evaluate_watchlist import (
     format_watchlist_evaluation,
     write_watchlist_evaluation_csv,
 )
+from atlantis.services.evaluate_watchlist_esports import (
+    evaluate_watchlist_esports,
+    format_watchlist_evaluation_esports,
+    write_watchlist_evaluation_esports_csv,
+)
+from atlantis.services.active_portfolio_esports import build_active_portfolio_esports
 from atlantis.services.sports_traders import (
     discover_sports_traders,
     format_sports_traders,
@@ -135,6 +141,17 @@ def main(argv: list[str] | None = None) -> int:
     watchlist.add_argument("--since-days", type=int, default=None)
     watchlist.add_argument("--csv", default="")
 
+    watchlist_esports = subparsers.add_parser(
+        "evaluate-watchlist-esports",
+        help="Evaluate approved esports wallets from a CSV watchlist.",
+    )
+    watchlist_esports.add_argument("--wallets-csv", default="inputs/approved_wallets_esports.csv")
+    watchlist_esports.add_argument("--statuses", default="approved,paper_only")
+    watchlist_esports.add_argument("--max-trades", type=int, default=3000)
+    watchlist_esports.add_argument("--max-positions", type=int, default=500)
+    watchlist_esports.add_argument("--since-days", type=int, default=None)
+    watchlist_esports.add_argument("--csv", default="")
+
     backtest = subparsers.add_parser(
         "consensus-backtest",
         help="Backtest: would copying majority-agreement bets have been profitable?",
@@ -162,6 +179,21 @@ def main(argv: list[str] | None = None) -> int:
     portfolio.add_argument("--max-price", type=Decimal, default=Decimal("0.90"))
     portfolio.add_argument("--limit", type=int, default=30)
     portfolio.add_argument("--csv", default="")
+
+    portfolio_esports = subparsers.add_parser(
+        "active-portfolio-esports",
+        help="Build active esports portfolio signals from ranked traders.",
+    )
+    portfolio_esports.add_argument("--traders-csv", default="outputs/portfolio_traders_esports.csv")
+    portfolio_esports.add_argument("--min-verdict", default="B", choices=["A", "B", "C", "REJECT"])
+    portfolio_esports.add_argument("--max-traders", type=int, default=25)
+    portfolio_esports.add_argument("--bankroll", type=Decimal, default=Decimal("0"))
+    portfolio_esports.add_argument("--max-stake-pct", type=Decimal, default=Decimal("0.005"))
+    portfolio_esports.add_argument("--min-position-value", type=Decimal, default=Decimal("25"))
+    portfolio_esports.add_argument("--min-price", type=Decimal, default=Decimal("0.05"))
+    portfolio_esports.add_argument("--max-price", type=Decimal, default=Decimal("0.90"))
+    portfolio_esports.add_argument("--limit", type=int, default=30)
+    portfolio_esports.add_argument("--csv", default="")
 
     performance = subparsers.add_parser(
         "trader-performance",
@@ -311,6 +343,21 @@ def main(argv: list[str] | None = None) -> int:
             print(f"\nCSV written: {args.csv}")
         return 0
 
+    if args.command == "evaluate-watchlist-esports":
+        evaluations = evaluate_watchlist_esports(
+            settings=settings,
+            wallets_csv=Path(args.wallets_csv),
+            statuses={status.strip() for status in args.statuses.split(",") if status.strip()},
+            max_trades=args.max_trades,
+            max_positions=args.max_positions,
+            since_days=args.since_days,
+        )
+        print(format_watchlist_evaluation_esports(evaluations))
+        if args.csv:
+            write_watchlist_evaluation_esports_csv(Path(args.csv), evaluations)
+            print(f"\nCSV written: {args.csv}")
+        return 0
+
     if args.command == "consensus-backtest":
         signals = run_consensus_backtest(
             settings=settings,
@@ -330,6 +377,24 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "active-portfolio":
         signals = build_active_portfolio(
+            settings=settings,
+            traders_csv=Path(args.traders_csv),
+            min_verdict=args.min_verdict,
+            max_traders=args.max_traders,
+            bankroll=args.bankroll,
+            max_stake_pct=args.max_stake_pct,
+            min_position_value=args.min_position_value,
+            min_price=args.min_price,
+            max_price=args.max_price,
+        )
+        print(format_active_portfolio(signals, limit=args.limit))
+        if args.csv:
+            write_active_portfolio_csv(Path(args.csv), signals)
+            print(f"\nCSV written: {args.csv}")
+        return 0
+
+    if args.command == "active-portfolio-esports":
+        signals = build_active_portfolio_esports(
             settings=settings,
             traders_csv=Path(args.traders_csv),
             min_verdict=args.min_verdict,

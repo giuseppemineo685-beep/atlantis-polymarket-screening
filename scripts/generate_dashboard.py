@@ -15,6 +15,8 @@ SIGNALS = ROOT / "outputs" / "active_portfolio_signals.csv"
 TRADERS = ROOT / "outputs" / "traders.csv"
 PERFORMANCE = ROOT / "outputs" / "trader_performance.csv"
 ESPORTS_REVIEWED = ROOT / "outputs" / "esports_reviewed.csv"
+ESPORTS_SIGNALS = ROOT / "outputs" / "active_portfolio_signals_esports.csv"
+ESPORTS_TRADE_LOG = ROOT / "outputs" / "trade_log_esports.csv"
 OUT_PATH = ROOT / "docs" / "index.html"
 
 PROFILE_URL = "https://polymarket.com/profile/{wallet}"
@@ -246,12 +248,16 @@ def main() -> None:
     trader_rows = read_csv(TRADERS)
     performance_rows = read_csv(PERFORMANCE)
     esports_reviewed_rows = read_csv(ESPORTS_REVIEWED)
+    esports_signal_rows = read_csv(ESPORTS_SIGNALS)
+    esports_log_rows = read_csv(ESPORTS_TRADE_LOG)
 
     log_rows.sort(key=lambda r: (STATUS_ORDER.get(r.get("status", "OPEN"), 9), r.get("last_updated", "")), reverse=False)
     signal_rows.sort(key=lambda r: ACTION_ORDER.get(r.get("action", "IGNORE"), 9))
     trader_rows.sort(key=lambda r: r.get("label", ""))
     performance_rows.sort(key=lambda r: float(r.get("pnl_7d") or 0))
     esports_reviewed_rows.sort(key=lambda r: int(r.get("events_participated") or 0), reverse=True)
+    esports_signal_rows.sort(key=lambda r: ACTION_ORDER.get(r.get("action", "IGNORE"), 9))
+    esports_log_rows.sort(key=lambda r: (STATUS_ORDER.get(r.get("status", "OPEN"), 9), r.get("last_updated", "")), reverse=False)
 
     resolved = [r for r in log_rows if r.get("status") in ("WIN", "LOSS", "CLOSED")]
     wins = [r for r in resolved if r["status"] in ("WIN", "CLOSED")]
@@ -269,6 +275,17 @@ def main() -> None:
 
     copy_signals = [r for r in signal_rows if r.get("action") == "COPY"]
     other_signals = [r for r in signal_rows if r.get("action") != "COPY"][:20]
+
+    # Same open+last-10-closed / show-all pattern as the sports history table.
+    esports_resolved = [r for r in esports_log_rows if r.get("status") in ("WIN", "LOSS", "CLOSED")]
+    esports_open = [r for r in esports_log_rows if r.get("status") == "OPEN"]
+    esports_open_by_date = sorted(esports_open, key=lambda r: r.get("date_first_seen", ""), reverse=True)
+    esports_resolved_by_date = sorted(esports_resolved, key=lambda r: r.get("last_updated", ""), reverse=True)
+    esports_resolved_visible = esports_resolved_by_date[:10]
+    esports_resolved_hidden = esports_resolved_by_date[10:]
+
+    esports_copy_signals = [r for r in esports_signal_rows if r.get("action") == "COPY"]
+    esports_other_signals = [r for r in esports_signal_rows if r.get("action") != "COPY"][:20]
 
     now_utc = datetime.now(timezone.utc)
     now = now_utc.strftime("%Y-%m-%d %H:%M UTC")
@@ -753,6 +770,50 @@ footer a:hover {{ text-decoration: underline; }}
     </div>
   </section>
 
+  <section>
+    <div class="section-head">
+      <h2>Señales activas ahora — Esports (paper)</h2>
+      <span class="section-note">{len(esports_copy_signals)} COPY · paper trading, sin ejecución real · actualiza cada 2 min</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Acción</th><th>Mercado (clic para abrir)</th><th>Apuesta</th><th>Precio</th>
+            <th>Traders</th><th>Convicción</th><th>Stake</th>
+          </tr>
+        </thead>
+        <tbody>
+          {"".join(render_signal_row(r) for r in esports_copy_signals + esports_other_signals) or '<tr><td colspan="7" class="empty">Sin señales activas en este momento</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Historial de trades — Esports (paper)</h2>
+      <span class="section-note">{len(esports_open)} abiertos + últimos 10 cerrados (de {len(esports_resolved)} resueltos) · ordenado por fecha · * = retorno no realizado, mercado sigue abierto</span>
+    </div>
+    <div class="table-scroll">
+      <table id="history-table-esports">
+        <thead>
+          <tr>
+            <th>Estado</th><th>Mercado (clic para abrir)</th><th>Apuesta</th><th>Entrada</th>
+            <th>Salida</th><th>Retorno</th><th>Detectado</th><th>Traders</th>
+          </tr>
+        </thead>
+        <tbody>
+          {"".join(render_log_row(r) for r in esports_open_by_date)}
+          {"".join(render_log_row(r) for r in esports_resolved_visible)}
+          {"".join(render_log_row(r, extra_class="row-hidden") for r in esports_resolved_hidden)}
+          {'<tr><td colspan="8" class="empty">Todavía no hay trades registrados</td></tr>' if not (esports_open_by_date or esports_resolved_visible) else ''}
+        </tbody>
+      </table>
+    </div>
+    {f'<button class="tab-btn" id="toggle-history-btn-esports" data-count="{len(esports_resolved)}">Ver todas las cerradas ({len(esports_resolved)})</button>' if esports_resolved_hidden else ''}
+  </section>
+
   </div>
 
   <footer>
@@ -770,14 +831,17 @@ document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {{
   }});
 }});
 
-const historyToggleBtn = document.getElementById('toggle-history-btn');
-if (historyToggleBtn) {{
-  historyToggleBtn.addEventListener('click', () => {{
-    const table = document.getElementById('history-table');
+function wireHistoryToggle(btnId, tableId) {{
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  btn.addEventListener('click', () => {{
+    const table = document.getElementById(tableId);
     const showingAll = table.classList.toggle('show-all');
-    historyToggleBtn.textContent = showingAll ? 'Ver menos' : `Ver todas las cerradas (${{historyToggleBtn.dataset.count}})`;
+    btn.textContent = showingAll ? 'Ver menos' : `Ver todas las cerradas (${{btn.dataset.count}})`;
   }});
 }}
+wireHistoryToggle('toggle-history-btn', 'history-table');
+wireHistoryToggle('toggle-history-btn-esports', 'history-table-esports');
 </script>
 </body>
 </html>
