@@ -24,6 +24,8 @@ SPORT_TERMS = {
     "baseball",
     "hockey",
     "tennis",
+    "atp",
+    "wta",
     "ufc",
     "mma",
     "boxing",
