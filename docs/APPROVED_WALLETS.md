@@ -22,7 +22,7 @@ Una wallet aprobada **no significa copiar automaticamente**. Significa que entra
 | 5 | approved | Trader05 | `0x6d3c5bd13984b2de47c3a88ddc455309aab3d294` | sports | manual approved |
 | 6 | approved | Trader06 | `0xbc3107551d71e0fe3821b4ec4bb2767d313e971f` | sports | manual approved |
 | 7 | rejected | Trader07 | `0x9d94f602535e518ee1cb6aade0ca9569f1b1017d` | sports | POSSIBLE_BOT + 0 sports trades in last 30d despite $47.8K active - likely dormant/inactive, review manually |
-| 8 | paper_only | RN1_possible_bot | `0x2005d16a84ceefa912d4e380cd32e7ff827875ea` | sports | possible bot, paper only until delay/slippage is tested |
+| 8 | rejected | RN1_possible_bot | `0x2005d16a84ceefa912d4e380cd32e7ff827875ea` | sports | possible bot, paper only until delay/slippage is tested - removida del dashboard a pedido del dueño, rejected 2026-08-01 |
 | 9 | rejected | Trader09 | `0xccd81fbd3395dc43a0531f8484b21c2462daf4de` | sports | DECLINING: -10,811 PnL / 81 resueltos en 7d, -30,573 en 30d, rejected 2026-08-01 |
 | 10 | approved | Trader10 | `0x5e3040eb55cb0f4f86eb0af40cb84c9d3585acbf` | sports | manual approved |
 | 11 | approved | Trader11 | `0xf10299cf1fff507cff45e1a906800e5b44bf1348` | sports | manual approved |

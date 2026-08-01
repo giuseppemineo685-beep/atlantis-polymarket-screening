@@ -3,9 +3,17 @@
 Sistema de copy-trading para Polymarket: vigila un grupo de wallets curadas
 manualmente, detecta cuándo 2+ de ellas coinciden en la misma apuesta
 ("consenso"), y **desde el 28 de julio de 2026 ejecuta órdenes reales** con la
-cuenta de Polymarket del dueño del proyecto ($20 por señal, capital asignado
-$500, kill switch al -20%). El screening en papel sigue corriendo en paralelo
-para siempre, como comparación.
+cuenta de Polymarket del dueño del proyecto ($25 por señal desde el
+2026-08-01 (antes $20), capital asignado $500). El screening en papel sigue
+corriendo en paralelo para siempre, como comparación.
+
+**El kill switch automático por pérdida acumulada está DESACTIVADO desde el
+2026-08-01, a pedido explícito del dueño** (ver sección "Kill switch" más
+abajo) — el trading real ya no se frena solo sin importar cuánto pierda.
+
+Además del vertical original de deportes, existe un segundo vertical
+**Esports (LoL/CS2/Valorant/Dota2)** corriendo en paralelo, **100% en papel,
+sin ninguna conexión al dinero real** — ver sección propia más abajo.
 
 ## Dónde vive cada cosa
 
@@ -14,7 +22,7 @@ para siempre, como comparación.
 | Código | este repo (GitHub, público): `github.com/giuseppemineo685-beep/atlantis-polymarket-screening` |
 | Screening en papel (24/7) | VPS Alemania, Hetzner Nuremberg (`178.105.143.153`), vía `crontab -l` |
 | **Ejecución real (24/7)** | VPS Finlandia, Hetzner Helsinki (`46.62.140.62`), vía `crontab -l` |
-| Dashboard (solo papel, no muestra trades reales todavía) | GitHub Pages: https://giuseppemineo685-beep.github.io/atlantis-polymarket-screening/ |
+| Dashboard (pestaña Deportes: solo trades reales; pestaña Esports: 100% papel) | GitHub Pages: https://giuseppemineo685-beep.github.io/atlantis-polymarket-screening/ |
 | Notificaciones | Telegram (bot propio) |
 | Wallets aprobadas/rechazadas | `inputs/approved_wallets.csv` + `docs/APPROVED_WALLETS.md` |
 | Cuenta de Polymarket usada para ejecutar | `0x25f745698cce689188fbfba7b8614981c028680b` (usuario "Swissman", la cuenta principal del dueño) |
@@ -70,29 +78,24 @@ viceversa:
      usa `py-clob-client-v2`, **no** la versión vieja `py-clob-client`, que
      está deprecada y sus órdenes son rechazadas por el exchange) y escribe
      en `outputs/live_trade_log.csv`.
-3. **Kill switch** (`atlantis/live/kill_switch.py`): antes de cada corrida,
-   si la pérdida acumulada real supera `kill_switch_loss_pct`% del capital,
-   escribe `enabled: false, auto_killed: true` en
-   `state/live_trading_status.json` — **no se reactiva solo**.
+3. **Kill switch** (`atlantis/live/kill_switch.py`) — **DESACTIVADO desde el
+   2026-08-01, a pedido explícito del dueño** ("no used kill switch de ahora
+   en adelante" → confirmó explícitamente "Desactivar el auto-stop por
+   completo"): el trading real ya **no se frena solo sin importar cuánto
+   pierda**. `evaluate_and_maybe_trip()` ya no calcula ni compara la pérdida
+   acumulada contra ningún umbral — solo lee si el switch está *ya* disparado
+   a mano (`state/live_trading_status.json`), nunca lo dispara él mismo.
+   Antes de este cambio, el switch se auto-disparaba a `kill_switch_loss_pct`%
+   de pérdida acumulada; ese código fue removido por completo, no solo
+   deshabilitado por config, así que no hay ningún flag que lo reactive por
+   accidente.
 
-   Para reactivarlo después de un disparo: **no alcanza con poner
-   `enabled: true`** — el switch mide `realized_pnl_usd` (histórico,
-   acumulado desde siempre), así que se volvería a disparar en el
-   siguiente ciclo. Hay que resetear `pnl_baseline_usd` al valor actual de
-   `realized_pnl_usd` (así `realized_pnl_since_reset_usd = 0` y el contador
-   arranca de cero desde ese momento, sin borrar el historial):
-
-   ```python
-   from atlantis.live.config import load_live_settings
-   from atlantis.services.live_status import compute_live_status, write_status_flag
-   from datetime import datetime, timezone
-
-   s = load_live_settings()
-   summary = compute_live_status(s)
-   write_status_flag(s, enabled=True, auto_killed=False, reason="",
-                      since=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
-                      pnl_baseline_usd=summary.realized_pnl_usd)
-   ```
+   Si en algún momento se quisiera volver a tener un freno automático, hay
+   que **reescribir la lógica de umbral en `kill_switch.py`** (no solo
+   cambiar un booleano) y, para reactivar el switch después de un disparo
+   manual, resetear `pnl_baseline_usd` al valor actual de `realized_pnl_usd`
+   en `state/live_trading_status.json` (poner solo `enabled: true` no
+   alcanza, porque `realized_pnl_since_reset_usd` seguiría siendo histórico).
 4. **Notificaciones Telegram distintas**: 🟢 "COMPRA REAL ejecutada" / 🟡
    "VENTA REAL ejecutada" / 🔴 fallidas — nunca se confunden con las alertas
    normales de señal de papel.
@@ -204,6 +207,34 @@ momentáneamente del umbral y colarse de nuevo si solo se confía en el score.
   incluso un poco antes, cuando el precio ya está en ~0 o ~1 y no queda
   nadie operando) — una venta real ahí falla con 404 "No orderbook exists".
   Hay que chequear la resolución del mercado antes de intentar vender.
+- **CRÍTICO (2026-08-01) — un fallo de parseo de la respuesta del exchange
+  puede disfrazarse de orden fallida y disparar reintentos que SÍ ejecutan
+  dinero real cada vez.** `_parse_order_response` (`clob_client.py`) hacía
+  `Decimal(str(makingAmount))` sin capturar `InvalidOperation`; cuando el
+  exchange confirmaba `success=True` pero devolvía esos campos vacíos, la
+  excepción escapaba hasta el `except Exception` de `_place_fok_order`, que
+  reportaba la orden como fallida (`success=False`). La lógica de reintento
+  (correcta para una orden que de verdad nunca se ejecutó) la reintentaba
+  cada 2 minutos — y cada reintento **volvía a ejecutar de verdad**, porque
+  la orden sí se estaba llenando. Una señal de $25 llegó a $102+ en una sola
+  posición (Jaime Faria, Canadian Open) antes de que se detectara. Fix: el
+  parseo de `makingAmount`/`takingAmount` nunca puede degradar
+  `success=True` a `False` — un fallo de parseo se reporta como error
+  informativo aparte, dejando `success` intacto. Regla general: `response.get("success")`
+  del exchange es la única fuente de verdad sobre si el dinero se movió;
+  ningún post-procesamiento downstream debe poder invertir ese valor.
+- **`SPORT_TERMS` (`atlantis/services/sports_traders.py`) no incluía
+  "atp"/"wta"** — los títulos reales de mercados de tenis en Polymarket
+  nunca dicen literalmente "tennis" (ej. `"Wimbledon ATP: Jannik Sinner vs
+  Novak Djokovic"`), así que `is_sports_trade` clasificaba **todo el tenis**
+  como no-deportivo en toda la ruta de dinero real (`active_portfolio.py`,
+  `consensus_backtest.py`, `evaluate_wallet.py`). Se detectó por
+  observación directa del dueño sobre una wallet candidata ("tiene decenas
+  de posiciones abiertas y todas son tennis etc"), no por ningún chequeo
+  automático — recordatorio de que un veredicto automático puede estar
+  sistemáticamente mal para una categoría entera, y que la observación
+  directa de la cuenta real es la señal a confiar cuando contradice al
+  sistema.
 
 ## Comandos útiles (papel)
 
@@ -225,16 +256,61 @@ python3 -B -m atlantis.cli active-portfolio \
   --traders-csv outputs/portfolio_traders.csv --min-verdict B --csv outputs/active_portfolio_signals.csv
 ```
 
+## Vertical Esports (LoL / CS2 / Valorant / Dota2) — 100% papel
+
+Segundo vertical, corriendo en paralelo al de deportes, **sin ninguna
+conexión al dinero real** (decisión de seguridad explícita, no un detalle
+pendiente):
+
+- Roster propio: `inputs/approved_wallets_esports.csv` +
+  `docs/APPROVED_WALLETS_ESPORTS.md` — 21 wallets (reducido de 37 el
+  2026-08-01 tras una auditoría de PnL neto realizado+no-realizado, cutoff
+  `net_esports >= $15K`).
+- Dashboard: pestaña "Esports" propia, con su propio scoreboard/"Rendimiento"
+  (mismo formato que la sección de deportes, sin win-rate) y su propia
+  sección de historial de trades — todo en `outputs/*_esports.csv`
+  independientes de los de deportes.
+- La categorización (`is_esports_trade`) y el resto del pipeline de
+  screening en papel son un espejo del de deportes, corriendo también en el
+  VPS de Alemania. **No existe ningún hook de `enqueue_intent`/`live_intents`
+  en el código de esports** — verificar con
+  `grep -r "live_intents" scripts/run_screening_and_notify_esports.py` (debe
+  dar vacío) antes de tocar cualquier cosa de este vertical.
+- Si algún día se decide llevar esports a dinero real, es un cambio
+  deliberado y explícito (nuevo roster `approved`, nuevo hook), no algo que
+  deba pasar por accidente.
+
 ## Pendientes conocidos
 
 - Automatizar la redención on-chain (`redeemPositions`) para las posiciones
   `WON_UNREDEEMED` — hoy es 100% manual en polymarket.com.
-- El dashboard público (GitHub Pages) todavía **no muestra nada del trading
-  real** — solo papel. Falta agregar una sección separada leyendo
-  `outputs/live_trade_log.csv` + `state/live_trading_status.json`.
 - Sin tope de posiciones concurrentes ni de gasto diario (se decidió
   explícitamente no agregarlo al activar el trading real - revisar si sigue
   siendo la decisión correcta con más datos reales).
 - `state/live_intents_queue.jsonl` es append-only y crece para siempre - cada
   ciclo relee todo el historial (ineficiente pero no incorrecto, ya que hay
   deduplicación). Podría truncarse/archivarse periódicamente.
+- Batch de wallets candidatas a sports (dinero real) evaluadas parcialmente,
+  pendientes de decisión final antes de insertarlas en
+  `inputs/approved_wallets.csv`:
+  - `flatbarrel` (`0x6485f47d0344c03eb4340f985159f6eb2dcba265`) — tras el fix
+    de `SPORT_TERMS` (atp/wta) el veredicto automático sigue siendo REJECT
+    pese a 100% share deportivo ($1.03M volumen); falta decisión final del
+    dueño.
+  - `HalandinhoNazario` (`0x1f7105a18d9f36aef7c83e5df210e57cf487b2e4`) —
+    dirección ya validada (40 caracteres), evaluación todavía pendiente.
+  - `zagzig123` — dirección recibida hasta ahora tiene 39 caracteres
+    (inválida), falta reenviar la correcta.
+  - `mlin1010` (`0xf8371076fb3df0fcfcdb4d9f16bbe98bb2451d42`) — longitud
+    correcta pero devuelve 0 trades; probablemente la wallet no es correcta,
+    falta confirmar.
+  - Instrucción del dueño: mantener cada evaluación en espera y recién al
+    final insertar todas juntas en `inputs/approved_wallets.csv` (sports,
+    dinero real).
+- Brecha de balance real ~$247 sin explicar (2026-08-01): el balance USDC
+  real vía `check-balance` ($1,018.84) superaba la estimación derivada del
+  trade log ($771.71) incluso después de confirmar que las 22 posiciones
+  `WON_UNREDEEMED` ya estaban redimidas. No se pudo explicar con los datos
+  disponibles del propio sistema; el dueño decidió seguir sin resolverlo
+  ("ok no importa, sigamos") — no re-abrir esta investigación salvo que el
+  dueño la mencione de nuevo.
