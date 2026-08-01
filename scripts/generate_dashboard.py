@@ -291,7 +291,7 @@ def fmt_money(value: str | None) -> str:
     return f"{sign}{num:,.0f}"
 
 
-def render_performance_row(row: dict, *, wallet_to_username: dict[str, str] | None = None) -> str:
+def render_performance_row(row: dict, *, wallet_to_username: dict[str, str] | None = None, extra_class: str = "") -> str:
     flag = row.get("flag", "")
     pill_class = FLAG_PILL.get(flag, "wait")
     pnl_7d = row.get("pnl_7d")
@@ -305,7 +305,7 @@ def render_performance_row(row: dict, *, wallet_to_username: dict[str, str] | No
     short_wallet = f"{wallet[:6]}…{wallet[-4:]}" if len(wallet) > 12 else wallet
 
     return f"""
-    <tr>
+    <tr class="{extra_class}">
       <td><b>{esc(row.get('label'))}</b></td>
       <td><a href="{profile}" target="_blank" rel="noopener">{esc(username)}</a></td>
       <td class="dim">{esc(short_wallet)}</td>
@@ -337,6 +337,8 @@ def main() -> None:
     trader_rows.sort(key=lambda r: r.get("label", ""))
     performance_rows.sort(key=lambda r: float(r.get("pnl_7d") or 0))
     wallet_to_username = {r["wallet"].lower(): r.get("username") for r in trader_rows if r.get("wallet")}
+    performance_ok = [r for r in performance_rows if r.get("flag") == "OK"]
+    performance_inactive = [r for r in performance_rows if r.get("flag") != "OK"]
     esports_reviewed_rows.sort(key=lambda r: int(r.get("events_participated") or 0), reverse=True)
     esports_signal_rows.sort(key=lambda r: ACTION_ORDER.get(r.get("action", "IGNORE"), 9))
     esports_log_rows.sort(key=lambda r: (STATUS_ORDER.get(r.get("status", "OPEN"), 9), r.get("last_updated", "")), reverse=False)
@@ -808,16 +810,16 @@ footer a:hover {{ text-decoration: underline; }}
         </tbody>
       </table>
     </div>
-    {f'<button class="tab-btn" id="toggle-history-btn" data-count="{len(resolved)}">Ver todas las cerradas ({len(resolved)})</button>' if resolved_hidden else ''}
+    {f'<button class="tab-btn" id="toggle-history-btn" data-count="{len(resolved)}" data-label="Ver todas las cerradas">Ver todas las cerradas ({len(resolved)})</button>' if resolved_hidden else ''}
   </section>
 
   <section>
     <div class="section-head">
       <h2>Rendimiento por trader</h2>
-      <span class="section-note">PnL realizado y win rate en ventanas móviles de 7 y 30 días · ordenado peor a mejor (7d) · se actualiza cada ~2h</span>
+      <span class="section-note">{len(performance_ok)} OK visibles ({len(performance_inactive)} DECLINING/LOW_SAMPLE ocultos) · PnL realizado y win rate en ventanas móviles de 7 y 30 días · se actualiza cada ~2h</span>
     </div>
     <div class="table-scroll">
-      <table>
+      <table id="performance-table">
         <thead>
           <tr>
             <th>Label</th><th>Usuario</th><th>Wallet</th><th>Flag</th>
@@ -826,10 +828,13 @@ footer a:hover {{ text-decoration: underline; }}
           </tr>
         </thead>
         <tbody>
-          {"".join(render_performance_row(r, wallet_to_username=wallet_to_username) for r in performance_rows) or '<tr><td colspan="10" class="empty">Sin datos de rendimiento todavia</td></tr>'}
+          {"".join(render_performance_row(r, wallet_to_username=wallet_to_username) for r in performance_ok)}
+          {"".join(render_performance_row(r, wallet_to_username=wallet_to_username, extra_class="row-hidden") for r in performance_inactive)}
+          {'<tr><td colspan="10" class="empty">Sin datos de rendimiento todavia</td></tr>' if not (performance_ok or performance_inactive) else ''}
         </tbody>
       </table>
     </div>
+    {f'<button class="tab-btn" id="toggle-performance-btn" data-count="{len(performance_inactive)}" data-label="Ver inactivos">Ver inactivos ({len(performance_inactive)})</button>' if performance_inactive else ''}
   </section>
 
   <section>
@@ -915,7 +920,7 @@ footer a:hover {{ text-decoration: underline; }}
         </tbody>
       </table>
     </div>
-    {f'<button class="tab-btn" id="toggle-history-btn-esports" data-count="{len(esports_resolved)}">Ver todas las cerradas ({len(esports_resolved)})</button>' if esports_resolved_hidden else ''}
+    {f'<button class="tab-btn" id="toggle-history-btn-esports" data-count="{len(esports_resolved)}" data-label="Ver todas las cerradas">Ver todas las cerradas ({len(esports_resolved)})</button>' if esports_resolved_hidden else ''}
   </section>
 
   </div>
@@ -941,11 +946,12 @@ function wireHistoryToggle(btnId, tableId) {{
   btn.addEventListener('click', () => {{
     const table = document.getElementById(tableId);
     const showingAll = table.classList.toggle('show-all');
-    btn.textContent = showingAll ? 'Ver menos' : `Ver todas las cerradas (${{btn.dataset.count}})`;
+    btn.textContent = showingAll ? 'Ver menos' : `${{btn.dataset.label}} (${{btn.dataset.count}})`;
   }});
 }}
 wireHistoryToggle('toggle-history-btn', 'history-table');
 wireHistoryToggle('toggle-history-btn-esports', 'history-table-esports');
+wireHistoryToggle('toggle-performance-btn', 'performance-table');
 </script>
 </body>
 </html>

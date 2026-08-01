@@ -1005,16 +1005,16 @@ footer a:hover { text-decoration: underline; }
         </tbody>
       </table>
     </div>
-    <button class="tab-btn" id="toggle-history-btn" data-count="43">Ver todas las cerradas (43)</button>
+    <button class="tab-btn" id="toggle-history-btn" data-count="43" data-label="Ver todas las cerradas">Ver todas las cerradas (43)</button>
   </section>
 
   <section>
     <div class="section-head">
       <h2>Rendimiento por trader</h2>
-      <span class="section-note">PnL realizado y win rate en ventanas móviles de 7 y 30 días · ordenado peor a mejor (7d) · se actualiza cada ~2h</span>
+      <span class="section-note">11 OK visibles (0 DECLINING/LOW_SAMPLE ocultos) · PnL realizado y win rate en ventanas móviles de 7 y 30 días · se actualiza cada ~2h</span>
     </div>
     <div class="table-scroll">
-      <table>
+      <table id="performance-table">
         <thead>
           <tr>
             <th>Label</th><th>Usuario</th><th>Wallet</th><th>Flag</th>
@@ -1024,7 +1024,7 @@ footer a:hover { text-decoration: underline; }
         </thead>
         <tbody>
           
-    <tr>
+    <tr class="">
       <td><b>Trader17</b></td>
       <td><a href="https://polymarket.com/profile/0x10ff6cd4b1b5669d4ca87faebae0c869ad315088" target="_blank" rel="noopener">02-</a></td>
       <td class="dim">0x10ff…5088</td>
@@ -1036,7 +1036,7 @@ footer a:hover { text-decoration: underline; }
       <td class="num">+41.9%</td>
       <td class="num dim">31</td>
     </tr>
-    <tr>
+    <tr class="">
       <td><b>Trader20</b></td>
       <td><a href="https://polymarket.com/profile/0x60ec17443af511a21945f01430e61c803465f7b0" target="_blank" rel="noopener">igot50k</a></td>
       <td class="dim">0x60ec…f7b0</td>
@@ -1048,7 +1048,7 @@ footer a:hover { text-decoration: underline; }
       <td class="num">+99.4%</td>
       <td class="num dim">172</td>
     </tr>
-    <tr>
+    <tr class="">
       <td><b>Trader11</b></td>
       <td><a href="https://polymarket.com/profile/0xf10299cf1fff507cff45e1a906800e5b44bf1348" target="_blank" rel="noopener">pjotrekkk</a></td>
       <td class="dim">0xf102…1348</td>
@@ -1060,7 +1060,7 @@ footer a:hover { text-decoration: underline; }
       <td class="num">+94.5%</td>
       <td class="num dim">55</td>
     </tr>
-    <tr>
+    <tr class="">
       <td><b>Trader10</b></td>
       <td><a href="https://polymarket.com/profile/0x5e3040eb55cb0f4f86eb0af40cb84c9d3585acbf" target="_blank" rel="noopener">slimjoe</a></td>
       <td class="dim">0x5e30…acbf</td>
@@ -1072,7 +1072,7 @@ footer a:hover { text-decoration: underline; }
       <td class="num">+100.0%</td>
       <td class="num dim">79</td>
     </tr>
-    <tr>
+    <tr class="">
       <td><b>Trader06</b></td>
       <td><a href="https://polymarket.com/profile/0xbc3107551d71e0fe3821b4ec4bb2767d313e971f" target="_blank" rel="noopener">TCA</a></td>
       <td class="dim">0xbc31…971f</td>
@@ -1084,7 +1084,7 @@ footer a:hover { text-decoration: underline; }
       <td class="num">+82.8%</td>
       <td class="num dim">64</td>
     </tr>
-    <tr>
+    <tr class="">
       <td><b>Trader15</b></td>
       <td><a href="https://polymarket.com/profile/0x4df332e27f9ee3224f52ce30e3ce15c1075e788f" target="_blank" rel="noopener">SunlineTicker</a></td>
       <td class="dim">0x4df3…788f</td>
@@ -1096,7 +1096,7 @@ footer a:hover { text-decoration: underline; }
       <td class="num">+100.0%</td>
       <td class="num dim">71</td>
     </tr>
-    <tr>
+    <tr class="">
       <td><b>Trader23</b></td>
       <td><a href="https://polymarket.com/profile/0x224f7ef690d952cf551a471846d5afb4892e514a" target="_blank" rel="noopener">WeBuyHighWeSelllow</a></td>
       <td class="dim">0x224f…514a</td>
@@ -1108,7 +1108,7 @@ footer a:hover { text-decoration: underline; }
       <td class="num">+77.2%</td>
       <td class="num dim">460</td>
     </tr>
-    <tr>
+    <tr class="">
       <td><b>Trader05</b></td>
       <td><a href="https://polymarket.com/profile/0x6d3c5bd13984b2de47c3a88ddc455309aab3d294" target="_blank" rel="noopener">VeryLucky888</a></td>
       <td class="dim">0x6d3c…d294</td>
@@ -1120,7 +1120,7 @@ footer a:hover { text-decoration: underline; }
       <td class="num">+98.7%</td>
       <td class="num dim">519</td>
     </tr>
-    <tr>
+    <tr class="">
       <td><b>Trader01</b></td>
       <td><a href="https://polymarket.com/profile/0xdb859a551fcf56e49416160911476bea7307152f" target="_blank" rel="noopener">AV23IUa</a></td>
       <td class="dim">0xdb85…152f</td>
@@ -1132,7 +1132,7 @@ footer a:hover { text-decoration: underline; }
       <td class="num">+100.0%</td>
       <td class="num dim">25</td>
     </tr>
-    <tr>
+    <tr class="">
       <td><b>RN1_possible_bot</b></td>
       <td><a href="https://polymarket.com/profile/0x2005d16a84ceefa912d4e380cd32e7ff827875ea" target="_blank" rel="noopener">RN1</a></td>
       <td class="dim">0x2005…75ea</td>
@@ -1144,7 +1144,7 @@ footer a:hover { text-decoration: underline; }
       <td class="num">+100.0%</td>
       <td class="num dim">200</td>
     </tr>
-    <tr>
+    <tr class="">
       <td><b>Trader03</b></td>
       <td><a href="https://polymarket.com/profile/0x2c335066fe58fe9237c3d3dc7b275c2a034a0563" target="_blank" rel="noopener">0x2c335066FE58fe9237c3d3Dc7b275C2a034a0563-1759935795465</a></td>
       <td class="dim">0x2c33…0563</td>
@@ -1156,9 +1156,12 @@ footer a:hover { text-decoration: underline; }
       <td class="num">+88.4%</td>
       <td class="num dim">371</td>
     </tr>
+          
+          
         </tbody>
       </table>
     </div>
+    
   </section>
 
   <section>
@@ -1606,11 +1609,12 @@ function wireHistoryToggle(btnId, tableId) {
   btn.addEventListener('click', () => {
     const table = document.getElementById(tableId);
     const showingAll = table.classList.toggle('show-all');
-    btn.textContent = showingAll ? 'Ver menos' : `Ver todas las cerradas (${btn.dataset.count})`;
+    btn.textContent = showingAll ? 'Ver menos' : `${btn.dataset.label} (${btn.dataset.count})`;
   });
 }
 wireHistoryToggle('toggle-history-btn', 'history-table');
 wireHistoryToggle('toggle-history-btn-esports', 'history-table-esports');
+wireHistoryToggle('toggle-performance-btn', 'performance-table');
 </script>
 </body>
 </html>
