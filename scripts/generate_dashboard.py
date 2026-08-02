@@ -26,6 +26,9 @@ OUT_PATH = ROOT / "docs" / "index.html"
 PROFILE_URL = "https://polymarket.com/profile/{wallet}"
 MARKET_URL = "https://polymarket.com/market/{slug}"
 
+# Cuenta real usada para ejecutar (ver README, seccion "Donde vive cada cosa").
+LIVE_ACCOUNT_WALLET = "0x25f745698cce689188fbfba7b8614981c028680b"
+
 ACTION_ORDER = {"COPY": 0, "WAIT": 1, "CONFLICT": 2, "IGNORE": 3}
 STATUS_ORDER = {"OPEN": 0, "CLOSED": 1, "WIN": 2, "LOSS": 3}
 ZURICH = ZoneInfo("Europe/Zurich")
@@ -94,6 +97,52 @@ def fetch_live_price(condition_id: str, asset: str) -> str | None:
         if token.get("token_id") == asset:
             return str(token.get("price")) if token.get("price") is not None else None
     return None
+
+
+def fetch_account_positions(wallet_address: str) -> list[dict]:
+    """Live positions straight from the exchange's own record of the
+    account (data-api.polymarket.com/positions, same endpoint/fields used
+    throughout atlantis/services/*.py for other wallets) instead of
+    deriving "what's open" from our own live_trade_log.csv. Our log can
+    only show a position if our own pipeline detected the signal, queued
+    the intent, and correctly parsed the fill - each of those has had a
+    real bug this session. Querying the account directly sidesteps all of
+    that: whatever's actually open on Polymarket is what shows up here,
+    with curPrice/percentPnl computed by the exchange itself, live, no
+    guessing on our side. Returns [] on any failure (never breaks
+    dashboard generation)."""
+    url = (
+        f"https://data-api.polymarket.com/positions?user={wallet_address}"
+        "&sizeThreshold=0&sortBy=CURRENT&sortDirection=DESC&limit=100"
+    )
+    req = urllib.request.Request(
+        url, headers={"Accept": "application/json", "User-Agent": "atlantis-dashboard/0.1"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            positions = json.loads(resp.read())
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+        return []
+    return positions if isinstance(positions, list) else []
+
+
+def render_account_position_row(p: dict) -> str:
+    pct = p.get("percentPnl")
+    pct_class = ""
+    if pct is not None:
+        try:
+            pct_class = "num-pos" if float(pct) >= 0 else "num-neg"
+        except (TypeError, ValueError):
+            pct_class = ""
+    return f"""
+    <tr>
+      <td class="title-cell">{market_link(p.get('title'), p.get('slug'))}</td>
+      <td><b>{esc(p.get('outcome'))}</b></td>
+      <td class="num">{fmt_price(p.get('avgPrice'))}</td>
+      <td class="num">{fmt_price(p.get('curPrice'))}</td>
+      <td class="num {pct_class}">{fmt_pct(pct)}</td>
+      <td class="num">${fmt_money(p.get('currentValue'))}</td>
+    </tr>"""
 
 
 def real_log_to_display_rows(raw_rows: list[dict]) -> list[dict]:
@@ -381,6 +430,8 @@ def main() -> None:
         live_price = fetch_live_price(row.get("condition_id", ""), row.get("asset", ""))
         if live_price is not None:
             row["current_price"] = live_price
+
+    account_positions = fetch_account_positions(LIVE_ACCOUNT_WALLET)
 
     # Historial de trades: abiertos primero (siempre visibles, son pocos),
     # despues los cerrados por fecha (no por resultado) - solo los ultimos
@@ -820,6 +871,26 @@ footer a:hover {{ text-decoration: underline; }}
           <tbody>{day_rows(unrealized_by_day)}</tbody>
         </table>
       </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Posiciones reales ahora</h2>
+      <span class="section-note">directo de la cuenta en Polymarket (no de nuestro registro interno) · precio y % en vivo, calculados por el exchange · se actualiza cada ~1 min</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Mercado (clic para abrir)</th><th>Apuesta</th><th>Entrada</th>
+            <th>Actual</th><th>Retorno</th><th>Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {"".join(render_account_position_row(p) for p in account_positions) or '<tr><td colspan="6" class="empty">Sin posiciones abiertas ahora mismo (o no se pudo consultar Polymarket)</td></tr>'}
+        </tbody>
+      </table>
     </div>
   </section>
 
