@@ -1,7 +1,7 @@
 {
-  "enabled": false,
+  "enabled": true,
   "auto_killed": false,
-  "reason": "PAUSADO MANUALMENTE 2026-08-01 - investigando bug de compra duplicada en Jaime Faria (posicion de $102 en vez de $25)",
-  "since": "2026-08-01 20:15:00 UTC",
+  "reason": "REACTIVADO 2026-08-02 a pedido explicito del dueno, para quedar SIEMPRE encendido - bug de compra duplicada (parseo de _parse_order_response en clob_client.py) ya arreglado y desplegado, kill switch automatico por perdida ya esta desactivado permanentemente asi que esto no debe volver a pausarse solo",
+  "since": "2026-08-02 14:13:32 UTC",
   "pnl_baseline_usd": "-276.4114296200000000000000000"
 }
