@@ -1,7 +1,7 @@
 {
-  "enabled": true,
+  "enabled": false,
   "auto_killed": false,
-  "reason": "REACTIVADO 2026-08-02 a pedido explicito del dueno, para quedar SIEMPRE encendido - bug de compra duplicada (parseo de _parse_order_response en clob_client.py) ya arreglado y desplegado, kill switch automatico por perdida ya esta desactivado permanentemente asi que esto no debe volver a pausarse solo",
-  "since": "2026-08-02 14:13:32 UTC",
+  "reason": "PAUSADO 2026-08-03 a pedido explicito del dueno via chat (\"haz stop de todos los trades\") - detiene ordenes reales nuevas (compra y venta), no es un disparo del kill switch",
+  "since": "2026-08-02 22:03:52 UTC",
   "pnl_baseline_usd": "-276.4114296200000000000000000"
 }
