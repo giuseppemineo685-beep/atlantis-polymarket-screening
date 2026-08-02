@@ -20,6 +20,7 @@ from atlantis.services.sports_traders import as_decimal, as_int, is_sports_trade
 # the auto-reject threshold on every single run.
 CONFIRMED_BOT_WALLETS = {
     "0x2005d16a84ceefa912d4e380cd32e7ff827875ea",  # RN1_possible_bot
+    "0x6d3c5bd13984b2de47c3a88ddc455309aab3d294",  # Trader05, confirmed bot 2026-08-02
 }
 
 
