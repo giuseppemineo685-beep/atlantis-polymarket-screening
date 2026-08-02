@@ -263,9 +263,12 @@ conexión al dinero real** (decisión de seguridad explícita, no un detalle
 pendiente):
 
 - Roster propio: `inputs/approved_wallets_esports.csv` +
-  `docs/APPROVED_WALLETS_ESPORTS.md` — 21 wallets (reducido de 37 el
+  `docs/APPROVED_WALLETS_ESPORTS.md` — 16 wallets (reducido de 37 el
   2026-08-01 tras una auditoría de PnL neto realizado+no-realizado, cutoff
-  `net_esports >= $15K`).
+  `net_esports >= $15K`, quedando 21; y 5 más sacadas el 2026-08-02 a
+  pedido directo del dueño sin relación al PnL). Si una wallet sacada tenía
+  una posición abierta en `outputs/trade_log_esports.csv`, se deja correr
+  hasta que cierre sola.
 - Dashboard: pestaña "Esports" propia, con su propio scoreboard/"Rendimiento"
   (mismo formato que la sección de deportes, sin win-rate) y su propia
   sección de historial de trades — todo en `outputs/*_esports.csv`
