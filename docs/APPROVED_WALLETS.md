@@ -15,7 +15,7 @@ Una wallet aprobada **no significa copiar automaticamente**. Significa que entra
 
 | # | status | label | wallet | vertical | notes |
 |---|---|---|---|---|---|
-| 1 | approved | Trader01 | `0xdb859a551fcf56e49416160911476bea7307152f` | sports | manual approved |
+| 1 | rejected | Trader01 | `0xdb859a551fcf56e49416160911476bea7307152f` | sports | decision manual del dueno, 2026-08-03 - excelente en deportes (+$157,919/7d 100% WR, +$752,996/30d 95.1% WR, lo unico que copiamos), pero la cuenta completa (username AV23IUa) esta en -$172,452 a 1 ano en Polymarket por perdidas fuera de deportes; el dueno no confia en el perfil de riesgo general, rejected 2026-08-03 |
 | 2 | rejected | Trader02 | `0x1610db79f753a80207e1d66716be9e91e627ae49` | sports | LOW_SAMPLE: 0 resueltos en 7d (13 en 30d), sin muestra suficiente para confiar, rejected 2026-08-01 |
 | 3 | approved | Trader03 | `0x2c335066fe58fe9237c3d3dc7b275c2a034a0563` | sports | whale/fund - $69M lifetime volume, buy-and-hold (no HFT). Use as directional signal, NOT copy position size 1:1 (scale down heavily). Also has large active losing positions - not infallible. |
 | 4 | rejected | Trader04 | `0x85bbb00a84f100a74ec6a479ce6f8f45b04c9ada` | sports | LOW_SAMPLE: 0 resueltos en 7d (14 en 30d), sin muestra suficiente para confiar, rejected 2026-08-01 |
