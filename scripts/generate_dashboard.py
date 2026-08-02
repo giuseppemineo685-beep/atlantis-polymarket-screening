@@ -542,7 +542,7 @@ def main() -> None:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ATLANTIS — Screening en vivo</title>
-<meta http-equiv="refresh" content="120">
+<meta http-equiv="refresh" content="60">
 <style>
 {fonts_css}
 :root {{
@@ -826,7 +826,7 @@ footer a:hover {{ text-decoration: underline; }}
   <section>
     <div class="section-head">
       <h2>Señales activas ahora</h2>
-      <span class="section-note">{len(copy_signals)} COPY · candidatas a operar en base al consenso actual, no son trades ya ejecutados · actualiza cada 2 min</span>
+      <span class="section-note">{len(copy_signals)} COPY · candidatas a operar en base al consenso actual, no son trades ya ejecutados · actualiza cada ~1 min</span>
     </div>
     <div class="table-scroll">
       <table>
@@ -984,7 +984,7 @@ footer a:hover {{ text-decoration: underline; }}
   <section>
     <div class="section-head">
       <h2>Señales activas ahora — Esports (paper)</h2>
-      <span class="section-note">{len(esports_copy_signals)} COPY · paper trading, sin ejecución real · actualiza cada 2 min</span>
+      <span class="section-note">{len(esports_copy_signals)} COPY · paper trading, sin ejecución real · actualiza cada ~1 min</span>
     </div>
     <div class="table-scroll">
       <table>
