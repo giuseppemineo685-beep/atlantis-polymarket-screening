@@ -252,7 +252,22 @@ def process_pending_intents(*, settings: LiveSettings, clob_client_factory=None)
                     "date_closed": "",
                     "last_updated": _now(),
                 }
-                if result.success:
+                if result.success and (result.avg_fill_price is None or result.filled_size is None):
+                    # Exchange confirmed success but the fill amounts couldn't
+                    # be parsed (see _parse_order_response) - real money moved
+                    # and this must never be retried (status is already
+                    # EXECUTED above), but fill_price_buy/stake_usd_actual/
+                    # shares_held are blank and there's nowhere else this
+                    # raw_response is persisted, so it has to go out now or
+                    # it's lost the moment this cron cycle ends.
+                    errors.append(f"BUY {intent.get('title')}: {result.error}")
+                    notifications.append(
+                        f"🟡 <b>COMPRA REAL ejecutada - revisar manualmente</b>\n"
+                        f"{intent['title']} → {intent['outcome']}\n{result.error}\n"
+                        f"order_id: {result.order_id}\n"
+                        f"raw_response: {result.raw_response}"
+                    )
+                elif result.success:
                     notifications.append(
                         f"🟢 <b>COMPRA REAL ejecutada</b>\n{intent['title']} → {intent['outcome']}\n"
                         f"${target_log[key]['stake_usd_actual']} a precio {result.avg_fill_price}\n"
@@ -334,7 +349,22 @@ def process_pending_intents(*, settings: LiveSettings, clob_client_factory=None)
                 except Exception as exc:
                     errors.append(f"SELL {intent.get('title')}: {exc}")
                     continue
-                if result.success:
+                if result.success and result.avg_fill_price is None:
+                    # Same parse gap as the BUY side: exchange confirmed the
+                    # sell but we can't read the fill price, so pnl/pct stay
+                    # blank and this needs a manual check against Polymarket -
+                    # must not be silent or the raw_response is lost forever.
+                    row["status"] = "CLOSED"
+                    row["order_id_sell"] = result.order_id or ""
+                    row["date_closed"] = _now()
+                    errors.append(f"SELL {intent.get('title')}: {result.error}")
+                    notifications.append(
+                        f"🟡 <b>VENTA REAL ejecutada - revisar manualmente</b>\n"
+                        f"{row['title']} → {row['outcome']}\n{result.error}\n"
+                        f"order_id: {result.order_id}\n"
+                        f"raw_response: {result.raw_response}"
+                    )
+                elif result.success:
                     buy_price = Decimal(row["fill_price_buy"]) if row.get("fill_price_buy") else None
                     sell_price = result.avg_fill_price
                     pnl = None
