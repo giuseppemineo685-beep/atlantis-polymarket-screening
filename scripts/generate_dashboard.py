@@ -123,7 +123,23 @@ def fetch_account_positions(wallet_address: str) -> list[dict]:
             positions = json.loads(resp.read())
     except (urllib.error.URLError, TimeoutError, OSError, ValueError):
         return []
-    return positions if isinstance(positions, list) else []
+    if not isinstance(positions, list):
+        return []
+
+    # /positions never drops a position that resolved to $0 until it's
+    # redeemed/merged on-chain (same gotcha already known for other
+    # wallets' closed-positions data) - a market lost months ago can sit
+    # here forever showing curPrice=0/-100% even though Polymarket's own
+    # "open positions" view doesn't show it as open anymore. currentValue
+    # is 0 for exactly those; a genuinely open or won-unredeemed position
+    # is always worth something.
+    def _value(p: dict) -> float:
+        try:
+            return float(p.get("currentValue") or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    return [p for p in positions if _value(p) > 0]
 
 
 def render_account_position_row(p: dict) -> str:
