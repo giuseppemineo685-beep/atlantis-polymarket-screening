@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import time
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -39,6 +40,60 @@ def get_market_resolution(condition_id: str, asset: str) -> tuple[Decimal | None
             except InvalidOperation:
                 return None, closed
     return None, closed
+
+
+def get_confirmed_fill(
+    *, wallet_address: str, condition_id: str, asset: str, side: str, since_ts: int
+) -> tuple[Decimal, Decimal] | None:
+    """Confirm a fill straight from the exchange's own trade history instead
+    of trusting the order-post response's makingAmount/takingAmount - the
+    field that was empty/unparseable in both the Jaime Faria duplicate-buy
+    incident and the Kaitlin Quevedo blank-fill case (2026-08-01/02). Same
+    /trades endpoint already used elsewhere for reconciliation
+    (data-api.polymarket.com), just called right after our own order instead
+    of by hand. A FOK order fills instantly, but the trade can take a beat
+    to get indexed, so this retries a few times before giving up. Returns
+    None (never a guess) if no matching trade shows up - callers must fall
+    back to flagging the row for manual review."""
+    url = (
+        f"https://data-api.polymarket.com/trades?user={wallet_address}"
+        f"&market={condition_id}&limit=20"
+    )
+    req = urllib.request.Request(
+        url, headers={"Accept": "application/json", "User-Agent": "atlantis-live-execution/0.1"}
+    )
+    for attempt in range(4):
+        if attempt:
+            time.sleep(2)
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                trades = json.loads(resp.read())
+        except Exception:
+            continue
+        if not isinstance(trades, list):
+            continue
+        candidates = []
+        for t in trades:
+            if str(t.get("asset", "")) != str(asset):
+                continue
+            if str(t.get("side", "")).upper() != side.upper():
+                continue
+            try:
+                ts = int(t.get("timestamp") or 0)
+            except (TypeError, ValueError):
+                continue
+            if ts < since_ts:
+                continue
+            candidates.append((ts, t))
+        if not candidates:
+            continue
+        _, best = max(candidates, key=lambda pair: pair[0])
+        try:
+            return Decimal(str(best["price"])), Decimal(str(best["size"]))
+        except (InvalidOperation, KeyError):
+            continue
+    return None
+
 
 LIVE_TRADE_LOG_FIELDS = [
     "condition_id",
@@ -224,11 +279,29 @@ def process_pending_intents(*, settings: LiveSettings, clob_client_factory=None)
                     buys += 1
                     continue
 
+                order_ts = int(datetime.now(timezone.utc).timestamp())
                 try:
                     result = client.place_market_buy(intent["asset"], Decimal(str(settings.stake_per_signal_usd)))
                 except Exception as exc:
                     errors.append(f"BUY {intent.get('title')}: {exc}")
                     continue
+
+                fill_price, fill_size = result.avg_fill_price, result.filled_size
+                if result.success:
+                    # Authoritative source: the exchange's own trade history,
+                    # not the parsed order-post response (empty/unparseable
+                    # makingAmount/takingAmount caused both the duplicate-buy
+                    # and blank-fill incidents this session).
+                    confirmed = get_confirmed_fill(
+                        wallet_address=settings.funder_address,
+                        condition_id=intent["condition_id"],
+                        asset=intent["asset"],
+                        side="BUY",
+                        since_ts=order_ts - 30,
+                    )
+                    if confirmed:
+                        fill_price, fill_size = confirmed
+
                 status_value = "EXECUTED" if result.success else "ERROR"
                 target_log[key] = {
                     "condition_id": intent["condition_id"],
@@ -239,10 +312,10 @@ def process_pending_intents(*, settings: LiveSettings, clob_client_factory=None)
                     "traders": intent.get("traders", ""),
                     "date_first_seen": intent["ts"],
                     "signal_price": intent.get("signal_price", ""),
-                    "fill_price_buy": str(result.avg_fill_price) if result.avg_fill_price else "",
+                    "fill_price_buy": str(fill_price) if fill_price else "",
                     "stake_usd_requested": str(settings.stake_per_signal_usd),
-                    "stake_usd_actual": str(result.avg_fill_price * result.filled_size) if (result.avg_fill_price and result.filled_size) else "",
-                    "shares_held": str(result.filled_size) if result.filled_size else "",
+                    "stake_usd_actual": str(fill_price * fill_size) if (fill_price and fill_size) else "",
+                    "shares_held": str(fill_size) if fill_size else "",
                     "order_id_buy": result.order_id or "",
                     "status": status_value,
                     "fill_price_sell": "",
@@ -252,14 +325,15 @@ def process_pending_intents(*, settings: LiveSettings, clob_client_factory=None)
                     "date_closed": "",
                     "last_updated": _now(),
                 }
-                if result.success and (result.avg_fill_price is None or result.filled_size is None):
-                    # Exchange confirmed success but the fill amounts couldn't
-                    # be parsed (see _parse_order_response) - real money moved
-                    # and this must never be retried (status is already
-                    # EXECUTED above), but fill_price_buy/stake_usd_actual/
-                    # shares_held are blank and there's nowhere else this
-                    # raw_response is persisted, so it has to go out now or
-                    # it's lost the moment this cron cycle ends.
+                if result.success and (fill_price is None or fill_size is None):
+                    # Exchange confirmed success but neither the order
+                    # response nor /trades could confirm the fill - real
+                    # money moved and this must never be retried (status is
+                    # already EXECUTED above), but fill_price_buy/
+                    # stake_usd_actual/shares_held are blank and
+                    # result.raw_response is the only trace left of what
+                    # happened, so it has to go out now or it's lost the
+                    # moment this cron cycle ends.
                     errors.append(f"BUY {intent.get('title')}: {result.error}")
                     notifications.append(
                         f"🟡 <b>COMPRA REAL ejecutada - revisar manualmente</b>\n"
@@ -270,7 +344,7 @@ def process_pending_intents(*, settings: LiveSettings, clob_client_factory=None)
                 elif result.success:
                     notifications.append(
                         f"🟢 <b>COMPRA REAL ejecutada</b>\n{intent['title']} → {intent['outcome']}\n"
-                        f"${target_log[key]['stake_usd_actual']} a precio {result.avg_fill_price}\n"
+                        f"${target_log[key]['stake_usd_actual']} a precio {fill_price}\n"
                         f"Traders: {intent.get('traders', '')}"
                     )
                 else:
@@ -344,16 +418,31 @@ def process_pending_intents(*, settings: LiveSettings, clob_client_factory=None)
                     sells += 1
                     continue
 
+                order_ts = int(datetime.now(timezone.utc).timestamp())
                 try:
                     result = client.place_market_sell(intent["asset"], Decimal(shares))
                 except Exception as exc:
                     errors.append(f"SELL {intent.get('title')}: {exc}")
                     continue
-                if result.success and result.avg_fill_price is None:
-                    # Same parse gap as the BUY side: exchange confirmed the
-                    # sell but we can't read the fill price, so pnl/pct stay
-                    # blank and this needs a manual check against Polymarket -
-                    # must not be silent or the raw_response is lost forever.
+
+                sell_fill_price = result.avg_fill_price
+                if result.success and sell_fill_price is None:
+                    confirmed = get_confirmed_fill(
+                        wallet_address=settings.funder_address,
+                        condition_id=intent["condition_id"],
+                        asset=intent["asset"],
+                        side="SELL",
+                        since_ts=order_ts - 30,
+                    )
+                    if confirmed:
+                        sell_fill_price, _ = confirmed
+
+                if result.success and sell_fill_price is None:
+                    # Same parse gap as the BUY side, and /trades couldn't
+                    # confirm it either: exchange confirmed the sell but we
+                    # can't read the fill price, so pnl/pct stay blank and
+                    # this needs a manual check against Polymarket - must not
+                    # be silent or the raw_response is lost forever.
                     row["status"] = "CLOSED"
                     row["order_id_sell"] = result.order_id or ""
                     row["date_closed"] = _now()
@@ -366,7 +455,7 @@ def process_pending_intents(*, settings: LiveSettings, clob_client_factory=None)
                     )
                 elif result.success:
                     buy_price = Decimal(row["fill_price_buy"]) if row.get("fill_price_buy") else None
-                    sell_price = result.avg_fill_price
+                    sell_price = sell_fill_price
                     pnl = None
                     pct = None
                     if buy_price and sell_price:
