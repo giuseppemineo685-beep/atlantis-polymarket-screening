@@ -8,23 +8,35 @@ nothing here should ever be able to touch the real-money order queue
 Unlike the wallet-copying verticals, a window opens and resolves within
 the same script invocation - by the time a 5-minute window closes we
 already hold the final spot-vs-target sample, so there's no cross-cycle
-"still open" state to track, and no state/notified_signals-style dedupe
-file (every window is an inherently new one-shot event).
+"still open" trade status to track.
 
 Invoked every minute by cron (wrapped in `flock -n` at the crontab level,
-same pattern as run_live_execution.py). Most invocations are a near-
-instant no-op: crontab can only express 1-minute granularity, but the
-strategies need price samples every few seconds in the final ~60s before
-each 5-minute boundary, so this script checks how close the next boundary
-is and only does real work when within reach of it - looping internally
-with time.sleep() until the boundary passes, then evaluating and exiting.
+same pattern as run_live_execution.py). Every invocation does one cheap
+thing (detect a new window, record its opening reference price) and then,
+only near a close, does the expensive thing (poll every few seconds until
+the boundary passes). Crontab can only express 1-minute granularity, but
+the strategies need price samples every few seconds in the final ~60s
+before each 5-minute boundary, so this script checks how close the next
+boundary is and only loops internally (`time.sleep`) when within reach.
 
-UNVERIFIED AS OF 2026-08-03 (no network access during initial writing):
-`find_current_btc5m_market()` and `extract_strike_price()` below are a
-best-effort guess at Polymarket's gamma-api shape for these recurring
-markets, never confirmed against a live example. Confirm both against a
-real market (see docs/ or the plan doc) before trusting this in
-production - see the inline TODOs.
+Verified 2026-08-04 against a live market (a real high-volume bot wallet's
+trade history led here) - Polymarket's own gamma-api event object for one
+of these markets:
+- Title: "Bitcoin Up or Down - August 3, 6:15PM-6:20PM ET"
+- Slug: "btc-updown-5m-1785795300" (1785795300 == 2026-08-03 22:15:00 UTC,
+  the window's OPENING instant - these windows are 5-min-UTC-aligned,
+  :00/:05/:10/..., not something separately ET-aligned).
+- Resolution rule (from the event description): "This market will resolve
+  to 'Up' if the Bitcoin price at the end of the time range ... is
+  greater than or equal to the price at the beginning of that range.
+  Otherwise, it will resolve to 'Down'." Resolution source is Chainlink's
+  BTC/USD data stream (data.chain.link/streams/btc-usd), not a generic
+  exchange spot price - there is NO separate strike/target field to fetch;
+  the target IS the window's own opening price, which this script has to
+  record itself (state/btc5m_window.json) since it can't be looked up
+  after the fact. Coinbase's public spot endpoint is used as a proxy for
+  Chainlink's stream (tracks within milliseconds in practice, but is not
+  a guaranteed tick-for-tick match).
 """
 
 from __future__ import annotations
@@ -35,12 +47,13 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TRADE_LOG_PATH = ROOT / "outputs" / "trade_log_btc5m.csv"
+WINDOW_STATE_PATH = ROOT / "state" / "btc5m_window.json"
 
 TRADE_LOG_FIELDS = [
     "window_slug",
@@ -59,9 +72,12 @@ TRADE_LOG_FIELDS = [
 
 STAKE_USD = Decimal("1")
 WINDOW_SECONDS = 5 * 60
-LOOKAHEAD_SECONDS = 65  # start polling once within this many seconds of a close
+LOOKAHEAD_SECONDS = 65  # start the tight polling loop once within this many seconds of a close
+STALE_START_SECONDS = 90  # if we first see a window this late into it, its target price is unusable
 SAMPLE_INTERVAL_SECONDS = 4
 SPOT_PRICE_URL = "https://api.coinbase.com/v2/prices/BTC-USD/spot"
+GAMMA_API_BASE = "https://gamma-api.polymarket.com"
+CLOB_API_BASE = "https://clob.polymarket.com"
 
 
 def _now() -> str:
@@ -83,30 +99,27 @@ class MarketInfo:
     slug: str
     up_token_id: str
     down_token_id: str
-    target_price: Decimal | None
 
 
-def seconds_to_next_boundary(now: datetime | None = None) -> float:
-    """Seconds until the next 5-minute-aligned UTC boundary (:00, :05, ...).
-
-    TODO: confirm these windows are actually UTC-aligned, not ET-aligned -
-    the owner's screenshot showed "Aug 3, 5:05-5:10PM ET" as the display
-    label, which doesn't by itself confirm the underlying boundary is a
-    round 5-minute mark in UTC vs. in US Eastern time. If it's ET-aligned,
-    this function needs a timezone shift before use.
-    """
+def current_window_start(now: datetime | None = None) -> datetime:
+    """Floor `now` to the current 5-minute-aligned UTC boundary."""
     now = now or datetime.now(timezone.utc)
-    seconds_into_hour = now.minute * 60 + now.second + now.microsecond / 1e6
-    seconds_into_window = seconds_into_hour % WINDOW_SECONDS
-    return WINDOW_SECONDS - seconds_into_window
+    epoch = int(now.timestamp())
+    floored = epoch - (epoch % WINDOW_SECONDS)
+    return datetime.fromtimestamp(floored, tz=timezone.utc)
+
+
+def slug_for_window(window_start: datetime) -> str:
+    return f"btc-updown-5m-{int(window_start.timestamp())}"
 
 
 def fetch_spot_price() -> Decimal | None:
     """Independent BTC/USD reference (Coinbase's public, unauthenticated
-    spot endpoint) - used as a proxy for whatever internal reference price
-    Polymarket resolves these markets against. Public exchange spot prices
-    track each other within milliseconds in practice, but this is a proxy,
-    not a guaranteed match to Polymarket's own resolution source."""
+    spot endpoint) - a proxy for Chainlink's BTC/USD stream, which is
+    Polymarket's actual resolution source for these markets (confirmed via
+    the event description, see module docstring). Public exchange spot
+    prices track a Chainlink aggregate closely in practice, but this is a
+    proxy, not a guaranteed match."""
     req = urllib.request.Request(
         SPOT_PRICE_URL, headers={"Accept": "application/json", "User-Agent": "atlantis-btc5m/0.1"}
     )
@@ -118,78 +131,47 @@ def fetch_spot_price() -> Decimal | None:
         return None
 
 
-def extract_strike_price(market: dict) -> Decimal | None:
-    """UNVERIFIED - guess at where the strike/"price to beat" lives in the
-    gamma-api market object. Tries a few plausible field names; returns
-    None (never guesses wrong) if none parse, in which case strategies
-    that need a target price (A, C) simply won't fire for that window."""
-    for key in ("strikePrice", "targetPrice", "priceToBeat", "resolutionPrice"):
-        value = market.get(key)
-        if value in (None, ""):
-            continue
-        try:
-            return Decimal(str(value))
-        except InvalidOperation:
-            continue
-    return None
-
-
-def find_current_btc5m_market() -> MarketInfo | None:
-    """UNVERIFIED - best-effort discovery of the currently-open "BTC Up or
-    Down 5m" market via gamma-api. Tries a couple of plausible tag_slug
-    guesses (mirroring atlantis/services/esports_traders.py's category
-    discovery pattern) and filters open events by title. Returns None on
-    any failure - callers must treat that as "skip this window", never
-    fabricate a market."""
-    gamma_base = "https://gamma-api.polymarket.com"
-    for tag_slug in ("bitcoin", "crypto", "crypto-prices"):
-        url = f"{gamma_base}/events?tag_slug={tag_slug}&closed=false&limit=50"
-        req = urllib.request.Request(
-            url, headers={"Accept": "application/json", "User-Agent": "atlantis-btc5m/0.1"}
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                events = json.loads(resp.read())
-        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
-            continue
-        if not isinstance(events, list):
-            continue
-        for event in events:
-            title = str(event.get("title", ""))
-            if "up or down" not in title.lower() and "5m" not in title.lower():
-                continue
-            for market in event.get("markets", []):
-                tokens = market.get("clobTokenIds") or market.get("tokens")
-                outcomes = market.get("outcomes")
-                if not tokens or not outcomes:
-                    continue
-                try:
-                    if isinstance(tokens, str):
-                        tokens = json.loads(tokens)
-                    if isinstance(outcomes, str):
-                        outcomes = json.loads(outcomes)
-                except (json.JSONDecodeError, TypeError):
-                    continue
-                if len(tokens) != 2 or len(outcomes) != 2:
-                    continue
-                up_idx = 0 if str(outcomes[0]).lower().startswith("up") else 1
-                down_idx = 1 - up_idx
-                return MarketInfo(
-                    condition_id=str(market.get("conditionId", "")),
-                    slug=str(market.get("slug", event.get("slug", ""))),
-                    up_token_id=str(tokens[up_idx]),
-                    down_token_id=str(tokens[down_idx]),
-                    target_price=extract_strike_price(market),
-                )
-    return None
+def fetch_market_by_slug(slug: str) -> MarketInfo | None:
+    """GET gamma-api's /events/slug/{slug} (same endpoint as
+    PolymarketClient.get_event_by_slug) and pull the single market's
+    condition_id + the token_id for each of Up/Down. Returns None on any
+    failure - callers must treat that as "can't track this window"."""
+    url = f"{GAMMA_API_BASE}/events/slug/{slug}"
+    req = urllib.request.Request(
+        url, headers={"Accept": "application/json", "User-Agent": "atlantis-btc5m/0.1"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            event = json.loads(resp.read())
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+        return None
+    markets = event.get("markets") or []
+    if not markets:
+        return None
+    market = markets[0]
+    try:
+        tokens = json.loads(market.get("clobTokenIds") or "[]")
+        outcomes = json.loads(market.get("outcomes") or "[]")
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if len(tokens) != 2 or len(outcomes) != 2:
+        return None
+    up_idx = 0 if str(outcomes[0]).lower().startswith("up") else 1
+    down_idx = 1 - up_idx
+    return MarketInfo(
+        condition_id=str(market.get("conditionId", "")),
+        slug=slug,
+        up_token_id=str(tokens[up_idx]),
+        down_token_id=str(tokens[down_idx]),
+    )
 
 
 def fetch_clob_quotes(condition_id: str, up_token_id: str, down_token_id: str) -> tuple[Decimal | None, Decimal | None]:
-    """Same live-snapshot shape already used 3x elsewhere in this repo
+    """Same live-snapshot shape already used elsewhere in this repo
     (live_execution.py::get_market_resolution, generate_dashboard.py::
-    fetch_live_price, run_screening_and_notify.py::get_market_price_info) -
-    GET clob.polymarket.com/markets/{condition_id} -> {"tokens": [...]}."""
-    url = f"https://clob.polymarket.com/markets/{condition_id}"
+    fetch_live_price) - GET clob.polymarket.com/markets/{condition_id} ->
+    {"tokens": [...]}."""
+    url = f"{CLOB_API_BASE}/markets/{condition_id}"
     req = urllib.request.Request(
         url, headers={"Accept": "application/json", "User-Agent": "atlantis-btc5m/0.1"}
     )
@@ -212,6 +194,20 @@ def fetch_clob_quotes(condition_id: str, up_token_id: str, down_token_id: str) -
         elif tid == down_token_id:
             down_price = price
     return up_price, down_price
+
+
+def load_window_state() -> dict | None:
+    if not WINDOW_STATE_PATH.exists():
+        return None
+    try:
+        return json.loads(WINDOW_STATE_PATH.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def save_window_state(state: dict) -> None:
+    WINDOW_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    WINDOW_STATE_PATH.write_text(json.dumps(state))
 
 
 # --- Strategies -------------------------------------------------------
@@ -300,19 +296,19 @@ def append_trade_log_rows(rows: list[dict]) -> None:
             writer.writerow(row)
 
 
-def collect_samples(market: MarketInfo) -> list[Sample]:
+def collect_samples(market: MarketInfo, target_price: Decimal | None) -> list[Sample]:
     samples: list[Sample] = []
+    window_start = current_window_start()
+    close_at = window_start + timedelta(seconds=WINDOW_SECONDS)
     while True:
-        seconds_left = seconds_to_next_boundary()
-        if seconds_left > WINDOW_SECONDS - 1:
-            seconds_left -= WINDOW_SECONDS  # just crossed the boundary
+        seconds_left = (close_at - datetime.now(timezone.utc)).total_seconds()
         spot = fetch_spot_price()
         up_q, down_q = fetch_clob_quotes(market.condition_id, market.up_token_id, market.down_token_id)
         samples.append(
             Sample(
                 seconds_to_close=seconds_left,
                 spot_price=spot,
-                target_price=market.target_price,
+                target_price=target_price,
                 up_quote=up_q,
                 down_quote=down_q,
             )
@@ -326,17 +322,20 @@ def collect_samples(market: MarketInfo) -> list[Sample]:
 def evaluate_and_log(market: MarketInfo, samples: list[Sample]) -> None:
     priced = [s for s in samples if s.spot_price is not None and s.target_price is not None]
     if not priced:
-        print(f"btc5m: no priced samples for {market.slug}, skipping window")
-        return
-    final = priced[-1]
-    winner = "UP" if final.spot_price > final.target_price else "DOWN"
+        print(f"btc5m: no priced samples with a known target for {market.slug}, skipping strategies A/C")
     now = _now()
     rows = []
+    winner = None
+    if priced:
+        final = priced[-1]
+        winner = "UP" if final.spot_price >= final.target_price else "DOWN"
     for name, fn in STRATEGIES.items():
         result = fn(samples)
         if result is None:
             continue
         direction, entry_price = result
+        if winner is None:
+            continue  # can't score a strategy without knowing who won
         won = direction == winner
         pct_return = (
             str((Decimal(1) / entry_price - 1) * 100) if won and entry_price > 0 else "-100"
@@ -347,9 +346,9 @@ def evaluate_and_log(market: MarketInfo, samples: list[Sample]) -> None:
                 "strategy": name,
                 "direction": direction,
                 "entry_price": str(entry_price),
-                "target_price": str(final.target_price) if final.target_price is not None else "",
+                "target_price": str(priced[-1].target_price) if priced else "",
                 "spot_price_at_entry": str(samples[0].spot_price) if samples[0].spot_price else "",
-                "spot_price_at_close": str(final.spot_price),
+                "spot_price_at_close": str(priced[-1].spot_price) if priced else "",
                 "stake_usd": str(STAKE_USD),
                 "status": "WIN" if won else "LOSS",
                 "pct_return": pct_return,
@@ -361,20 +360,50 @@ def evaluate_and_log(market: MarketInfo, samples: list[Sample]) -> None:
         append_trade_log_rows(rows)
         print(f"btc5m: logged {len(rows)} strategy result(s) for {market.slug}")
     else:
-        print(f"btc5m: no strategy fired for {market.slug}")
+        print(f"btc5m: no strategy fired (or no target price) for {market.slug}")
 
 
 def main() -> None:
-    seconds_left = seconds_to_next_boundary()
+    now = datetime.now(timezone.utc)
+    window_start = current_window_start(now)
+    slug = slug_for_window(window_start)
+    seconds_since_start = (now - window_start).total_seconds()
+
+    state = load_window_state()
+    if state is None or state.get("slug") != slug:
+        market = fetch_market_by_slug(slug)
+        if market is None:
+            print(f"btc5m: could not fetch market for {slug}, skipping")
+            return
+        # Only trust a just-detected window's opening price if we caught it
+        # early - if this process was down and restarts mid-window, "now"
+        # is not "the start of the window" and target_price would be
+        # wrong, so strategies A/C are deliberately left without a target
+        # for that one window rather than scored against a bad reference.
+        target_price = fetch_spot_price() if seconds_since_start <= STALE_START_SECONDS else None
+        state = {
+            "slug": slug,
+            "condition_id": market.condition_id,
+            "up_token_id": market.up_token_id,
+            "down_token_id": market.down_token_id,
+            "target_price": str(target_price) if target_price is not None else "",
+        }
+        save_window_state(state)
+        print(f"btc5m: tracking new window {slug}, opening spot price {target_price}")
+
+    close_at = window_start + timedelta(seconds=WINDOW_SECONDS)
+    seconds_left = (close_at - now).total_seconds()
     if seconds_left > LOOKAHEAD_SECONDS:
-        return  # cheap no-op - most cron ticks land here
+        return  # already did the cheap bookkeeping above - nothing else this tick
 
-    market = find_current_btc5m_market()
-    if market is None:
-        print("btc5m: could not discover current market this cycle, skipping")
-        return
-
-    samples = collect_samples(market)
+    target_price = Decimal(state["target_price"]) if state.get("target_price") else None
+    market = MarketInfo(
+        condition_id=state["condition_id"],
+        slug=slug,
+        up_token_id=state["up_token_id"],
+        down_token_id=state["down_token_id"],
+    )
+    samples = collect_samples(market, target_price)
     evaluate_and_log(market, samples)
 
 
