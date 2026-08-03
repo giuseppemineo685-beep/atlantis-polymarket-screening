@@ -21,6 +21,7 @@ PERFORMANCE = ROOT / "outputs" / "trader_performance.csv"
 ESPORTS_REVIEWED = ROOT / "outputs" / "esports_reviewed.csv"
 ESPORTS_SIGNALS = ROOT / "outputs" / "active_portfolio_signals_esports.csv"
 ESPORTS_TRADE_LOG = ROOT / "outputs" / "trade_log_esports.csv"
+BTC5M_TRADE_LOG = ROOT / "outputs" / "trade_log_btc5m.csv"
 OUT_PATH = ROOT / "docs" / "index.html"
 
 PROFILE_URL = "https://polymarket.com/profile/{wallet}"
@@ -158,6 +159,50 @@ def render_account_position_row(p: dict) -> str:
       <td class="num">{fmt_price(p.get('curPrice'))}</td>
       <td class="num {pct_class}">{fmt_pct(pct)}</td>
       <td class="num">${fmt_money(p.get('currentValue'))}</td>
+    </tr>"""
+
+
+STRATEGY_LABELS = {
+    "A_lag_arbitrage": "A · Arbitraje de rezago",
+    "B_momentum": "B · Momentum de cierre",
+    "C_spike_fade": "C · Fade de spike",
+    "D_cheap_blind": "D · Barato sin filtro",
+}
+
+
+def render_btc5m_row(r: dict, *, extra_class: str = "") -> str:
+    pct_return = r.get("pct_return", "")
+    return_class = ""
+    if pct_return not in (None, ""):
+        try:
+            return_class = "num-pos" if float(pct_return) >= 0 else "num-neg"
+        except ValueError:
+            return_class = ""
+    status = r.get("status", "")
+    status_badge = f'<span class="pill pill-{"win" if status == "WIN" else "loss"}">{esc(status)}</span>'
+    return f"""
+    <tr class="{extra_class}">
+      <td>{status_badge}</td>
+      <td class="dim">{esc(STRATEGY_LABELS.get(r.get('strategy'), r.get('strategy')))}</td>
+      <td class="title-cell">{esc(r.get('window_slug'))}</td>
+      <td><b>{esc(r.get('direction'))}</b></td>
+      <td class="num">{fmt_price(r.get('entry_price'))}</td>
+      <td class="num {return_class}">{fmt_pct(pct_return)}</td>
+      <td class="dim">{esc(r.get('date_closed'))}</td>
+    </tr>"""
+
+
+def render_btc5m_strategy_row(name: str, stats: dict) -> str:
+    n = stats["n"]
+    win_rate = (stats["wins"] / n * 100) if n else 0
+    usd_class = "num-pos" if stats["usd_sum"] >= 0 else "num-neg"
+    return f"""
+    <tr>
+      <td>{esc(STRATEGY_LABELS.get(name, name))}</td>
+      <td class="num">{n}</td>
+      <td class="num">{win_rate:.1f}%</td>
+      <td class="num {'num-pos' if stats['pct_sum'] / n >= 0 else 'num-neg'}">{(stats['pct_sum'] / n if n else 0):+.1f}%</td>
+      <td class="num {usd_class}">${stats['usd_sum']:+.2f}</td>
     </tr>"""
 
 
@@ -422,6 +467,7 @@ def main() -> None:
     esports_reviewed_rows = read_csv(ESPORTS_REVIEWED)
     esports_signal_rows = read_csv(ESPORTS_SIGNALS)
     esports_log_rows = read_csv(ESPORTS_TRADE_LOG)
+    btc5m_rows = read_csv(BTC5M_TRADE_LOG)
 
     log_rows.sort(key=lambda r: (STATUS_ORDER.get(r.get("status", "OPEN"), 9), r.get("last_updated", "")), reverse=False)
     signal_rows.sort(key=lambda r: ACTION_ORDER.get(r.get("action", "IGNORE"), 9))
@@ -433,6 +479,30 @@ def main() -> None:
     esports_reviewed_rows.sort(key=lambda r: int(r.get("events_participated") or 0), reverse=True)
     esports_signal_rows.sort(key=lambda r: ACTION_ORDER.get(r.get("action", "IGNORE"), 9))
     esports_log_rows.sort(key=lambda r: (STATUS_ORDER.get(r.get("status", "OPEN"), 9), r.get("last_updated", "")), reverse=False)
+    btc5m_rows.sort(key=lambda r: r.get("date_closed", ""), reverse=True)
+
+    # Every btc5m row opens and resolves within the same script run (see
+    # scripts/run_btc5m_paper_trading.py) - there's no OPEN status here,
+    # just WIN/LOSS per strategy per window, so the scoreboard is a
+    # straight per-strategy rollup rather than realized/unrealized split.
+    btc5m_by_strategy: dict[str, dict] = defaultdict(lambda: {"n": 0, "wins": 0, "pct_sum": 0.0, "usd_sum": 0.0})
+    for r in btc5m_rows:
+        d = btc5m_by_strategy[r.get("strategy", "")]
+        d["n"] += 1
+        try:
+            pct = float(r.get("pct_return") or 0)
+        except ValueError:
+            pct = 0.0
+        try:
+            stake = float(r.get("stake_usd") or 1)
+        except ValueError:
+            stake = 1.0
+        d["pct_sum"] += pct
+        d["usd_sum"] += stake * pct / 100
+        if r.get("status") == "WIN":
+            d["wins"] += 1
+    btc5m_visible = btc5m_rows[:20]
+    btc5m_hidden = btc5m_rows[20:]
 
     resolved = [r for r in log_rows if r.get("status") in ("WIN", "LOSS", "CLOSED")]
     open_trades = [r for r in log_rows if r.get("status") == "OPEN"]
@@ -838,6 +908,7 @@ footer a:hover {{ text-decoration: underline; }}
   <div class="tabs">
     <button class="tab-btn active" data-tab="sports">Deportes</button>
     <button class="tab-btn" data-tab="esports-reviewed">Esports</button>
+    <button class="tab-btn" data-tab="btc5m">BTC 5m</button>
   </div>
 
   <div class="tab-panel active" data-tab-panel="sports">
@@ -1114,6 +1185,53 @@ footer a:hover {{ text-decoration: underline; }}
 
   </div>
 
+  <div class="tab-panel" data-tab-panel="btc5m">
+
+  <section>
+    <div class="section-head">
+      <h2>BTC "Up or Down 5m" — 4 estrategias (paper)</h2>
+      <span class="section-note">$1 simulado por señal · cada ventana de 5 min abre y resuelve en el mismo ciclo · sin relación con deportes/esports ni con dinero real</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Estrategia</th><th class="num">Trades</th><th class="num">Win rate</th>
+            <th class="num">Retorno promedio</th><th class="num">USD total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {"".join(render_btc5m_strategy_row(name, stats) for name, stats in btc5m_by_strategy.items()) or '<tr><td colspan="5" class="empty">Todavía no hay resultados</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Historial de trades — BTC 5m (paper)</h2>
+      <span class="section-note">{len(btc5m_rows)} señales registradas · últimas 20 visibles · ordenado por fecha de cierre</span>
+    </div>
+    <div class="table-scroll">
+      <table id="history-table-btc5m">
+        <thead>
+          <tr>
+            <th>Estado</th><th>Estrategia</th><th>Ventana</th><th>Dirección</th>
+            <th>Entrada</th><th>Retorno</th><th>Cerrado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {"".join(render_btc5m_row(r) for r in btc5m_visible)}
+          {"".join(render_btc5m_row(r, extra_class="row-hidden") for r in btc5m_hidden)}
+          {'<tr><td colspan="7" class="empty">Todavía no hay trades registrados</td></tr>' if not btc5m_rows else ''}
+        </tbody>
+      </table>
+    </div>
+    {f'<button class="tab-btn" id="toggle-history-btn-btc5m" data-count="{len(btc5m_rows)}" data-label="Ver todas">Ver todas ({len(btc5m_rows)})</button>' if btc5m_hidden else ''}
+  </section>
+
+  </div>
+
   <footer>
     <span>Generado automáticamente por un cron en VPS cada 2 min.</span>
     <a href="https://github.com/giuseppemineo685-beep/atlantis-polymarket-screening" target="_blank">Ver repositorio</a>
@@ -1140,6 +1258,7 @@ function wireHistoryToggle(btnId, tableId) {{
 }}
 wireHistoryToggle('toggle-history-btn', 'history-table');
 wireHistoryToggle('toggle-history-btn-esports', 'history-table-esports');
+wireHistoryToggle('toggle-history-btn-btc5m', 'history-table-btc5m');
 wireHistoryToggle('toggle-performance-btn', 'performance-table');
 </script>
 </body>
