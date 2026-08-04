@@ -89,6 +89,14 @@ LIVE_WINDOW_STATE_PATH = ROOT / "state" / "btc5m_live_window.json"
 # normal git sync, without needing a separate untracked state file.
 SINGLE_ORDER_TEST_KEY_PREFIX = "TEST_SINGLE_ORDER_"
 
+# Second one-shot diagnostic (owner's request, 2026-08-04, right after the
+# cheap-side test above confirmed EXECUTED): mirror test on the EXPENSIVE
+# side (the one Strategy E actually buys) with the same $6 stake E uses,
+# to isolate with direct evidence whether that specific side is what
+# fails with "no orders found to match" - now that the order pipeline
+# itself is proven to work.
+EXPENSIVE_ORDER_TEST_KEY_PREFIX = "TEST_EXPENSIVE_ORDER_"
+
 # Wider than the shared 3% default in clob_client.py (sports keeps using
 # that default, unaffected) - every real BTC5m attempt so far has failed
 # with FOK "couldn't be fully filled" (thin order-book liquidity at the
@@ -195,9 +203,20 @@ def check_kill_switch(settings) -> None:
         print("btc5m-live: KILL SWITCH disparado, trading real pausado")
 
 
-def run_single_order_test(settings, state: dict, slug: str, seconds_left: float) -> None:
+def _run_diagnostic_order_test(
+    settings,
+    state: dict,
+    slug: str,
+    seconds_left: float,
+    *,
+    key_prefix: str,
+    stake_usd: Decimal,
+    pick_side,
+    title: str,
+    log_tag: str,
+) -> None:
     log = load_log(settings.live_trade_log_path)
-    if any(key.startswith(SINGLE_ORDER_TEST_KEY_PREFIX) for key in log):
+    if any(key.startswith(key_prefix) for key in log):
         return  # already attempted once, ever - never repeat
     if not (10 < seconds_left <= 90):
         return
@@ -215,8 +234,7 @@ def run_single_order_test(settings, state: dict, slug: str, seconds_left: float)
     if down_price is not None:
         candidates.append(("DOWN", state["down_token_id"], down_price))
 
-    entry_key = f"{SINGLE_ORDER_TEST_KEY_PREFIX}{slug}"
-    title = "BTC5m TEST orden unica $1"
+    entry_key = f"{key_prefix}{slug}"
 
     if not candidates:
         log[entry_key] = {
@@ -228,7 +246,7 @@ def run_single_order_test(settings, state: dict, slug: str, seconds_left: float)
             "outcome": "",
             "direction": "",
             "fill_price_buy": "",
-            "stake_usd_requested": "1",
+            "stake_usd_requested": str(stake_usd),
             "stake_usd_actual": "",
             "shares_held": "",
             "order_id_buy": "",
@@ -241,21 +259,16 @@ def run_single_order_test(settings, state: dict, slug: str, seconds_left: float)
             "last_updated": _now(),
         }
         save_log(settings.live_trade_log_path, log)
-        print("btc5m-test: sin precio disponible en ningun lado")
+        print(f"{log_tag}: sin precio disponible en ningun lado")
         return
 
-    # Pick the CHEAPER side - $1 needs price <= ~0.20 to clear the real
-    # 5-share min_order_size floor, and Strategy E's failures were always
-    # on the expensive/favored side, so this deliberately tests the
-    # opposite case: can we execute AT ALL when our own size math is
-    # comfortably valid.
-    direction, token_id, price = min(candidates, key=lambda c: c[2])
+    direction, token_id, price = pick_side(candidates)
     order_ts = int(datetime.now(timezone.utc).timestamp())
 
     try:
         result = client.place_market_buy(
             token_id,
-            Decimal("1"),
+            stake_usd,
             max_slippage_pct=BTC5M_MAX_SLIPPAGE_PCT,
             order_type=OrderType.FAK,
         )
@@ -291,7 +304,7 @@ def run_single_order_test(settings, state: dict, slug: str, seconds_left: float)
         "outcome": direction,
         "direction": direction,
         "fill_price_buy": str(fill_price) if fill_price else "",
-        "stake_usd_requested": "1",
+        "stake_usd_requested": str(stake_usd),
         "stake_usd_actual": str(fill_price * fill_size) if (fill_price and fill_size) else "",
         "shares_held": str(fill_size) if fill_size else "",
         "order_id_buy": order_id,
@@ -304,7 +317,45 @@ def run_single_order_test(settings, state: dict, slug: str, seconds_left: float)
         "last_updated": _now(),
     }
     save_log(settings.live_trade_log_path, log)
-    print(f"btc5m-test: intento unico $1 {direction} @ {price} -> status={status_value} error={error_text}")
+    print(f"{log_tag}: intento unico ${stake_usd} {direction} @ {price} -> status={status_value} error={error_text}")
+
+
+def run_single_order_test(settings, state: dict, slug: str, seconds_left: float) -> None:
+    """Buys the CHEAP side with $1 - confirmed 2026-08-04 this executes
+    fine (EXECUTED, first real fill of the whole pilot), proving the order
+    pipeline itself works when size is comfortably above the real
+    min_order_size floor (5 shares)."""
+    _run_diagnostic_order_test(
+        settings,
+        state,
+        slug,
+        seconds_left,
+        key_prefix=SINGLE_ORDER_TEST_KEY_PREFIX,
+        stake_usd=Decimal("1"),
+        pick_side=lambda candidates: min(candidates, key=lambda c: c[2]),
+        title="BTC5m TEST orden unica $1 (lado barato)",
+        log_tag="btc5m-test",
+    )
+
+
+def run_expensive_side_order_test(settings, state: dict, slug: str, seconds_left: float) -> None:
+    """Mirror of run_single_order_test but buys the EXPENSIVE/favored
+    side - the one Strategy E actually buys - with $6 (same stake E uses,
+    comfortably clears the 5-share floor even at a 0.99 price). Owner's
+    request 2026-08-04: isolate whether THIS specific side is what fails
+    with "no orders found to match", now that the cheap side is proven to
+    work end-to-end."""
+    _run_diagnostic_order_test(
+        settings,
+        state,
+        slug,
+        seconds_left,
+        key_prefix=EXPENSIVE_ORDER_TEST_KEY_PREFIX,
+        stake_usd=Decimal("6"),
+        pick_side=lambda candidates: max(candidates, key=lambda c: c[2]),
+        title="BTC5m TEST orden unica $6 (lado caro/favorito)",
+        log_tag="btc5m-test-expensive",
+    )
 
 
 def main() -> None:
@@ -368,6 +419,7 @@ def main() -> None:
         # "btc5m-test" log lines across 2 full windows with the old
         # single pre-loop placement.
         run_single_order_test(settings, state, slug, seconds_left)
+        run_expensive_side_order_test(settings, state, slug, seconds_left)
         spot = fetch_spot_price()
         up_q, down_q = fetch_clob_quotes(market.condition_id, market.up_token_id, market.down_token_id)
         samples.append(
