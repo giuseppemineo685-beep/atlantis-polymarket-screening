@@ -345,8 +345,6 @@ def main() -> None:
     close_at = window_start + timedelta(seconds=WINDOW_SECONDS)
     seconds_left = (close_at - now).total_seconds()
 
-    run_single_order_test(settings, state, slug, seconds_left)
-
     if seconds_left > LOOKAHEAD_SECONDS:
         return  # cheap no-op - most cron ticks land here
 
@@ -361,6 +359,15 @@ def main() -> None:
     samples: list[Sample] = []
     while True:
         seconds_left = (close_at - datetime.now(timezone.utc)).total_seconds()
+        # Checked every SAMPLE_INTERVAL_SECONDS (4s) here, not once before
+        # this loop - flock serializes this whole ~148s window into a
+        # SINGLE cron invocation (later per-minute ticks find the lock
+        # held and skip entirely), so a single pre-loop check only ever
+        # sees seconds_left near the ~150s LOOKAHEAD threshold, never the
+        # ~60s this test targets. Confirmed live 2026-08-04: zero
+        # "btc5m-test" log lines across 2 full windows with the old
+        # single pre-loop placement.
+        run_single_order_test(settings, state, slug, seconds_left)
         spot = fetch_spot_price()
         up_q, down_q = fetch_clob_quotes(market.condition_id, market.up_token_id, market.down_token_id)
         samples.append(
