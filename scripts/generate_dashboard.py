@@ -170,6 +170,14 @@ STRATEGY_LABELS = {
     "E_scaling_replicator": "E · Réplica de bot real (escalado)",
 }
 
+STRATEGY_DESCRIPTIONS = {
+    "A_lag_arbitrage": "Compra el lado que el precio de BTC ya favorece, pero solo si esa cuota sigue barata (&lt;20¢) — apuesta a que el libro de órdenes todavía no se re-precio.",
+    "B_momentum": "Mira hacia dónde viene la tendencia del precio en el último minuto y compra ese lado, sin importar si la cuota está cara o barata.",
+    "C_spike_fade": "Si el precio pega un salto brusco en los últimos segundos, apuesta a que revierte antes del cierre — lo opuesto a A, acá apuesta a un cambio que todavía no pasó.",
+    "D_cheap_blind": "Compra cualquier lado que esté por debajo de 15¢ cerca del cierre, sin mirar hacia dónde va el precio — sirve de comparación para saber si las otras 4 realmente le ganan a comprar barato a ciegas.",
+    "E_scaling_replicator": "Va comprando de a poco (cada ~25 seg) del lado que el precio favorece en cada momento, pudiendo cambiar de lado si se da vuelta — inspirada en el patrón real de una wallet que opera estos mercados con ~78% de acierto.",
+}
+
 
 def render_btc5m_row(r: dict, *, extra_class: str = "", show_strategy: bool = True) -> str:
     pct_return = r.get("pct_return", "")
@@ -229,10 +237,12 @@ def render_btc5m_strategy_section(strategy_key: str, stats: dict, rows: list[dic
         if hidden
         else ""
     )
+    description = STRATEGY_DESCRIPTIONS.get(strategy_key, "")
     return f"""
   <section>
     <div class="section-head">
       <h2>{esc(label)}</h2>
+      <p class="strategy-desc">{description}</p>
       <span class="section-note">{n} trades · win rate {win_rate:.1f}% · retorno promedio <span class="{avg_class}">{avg_pct:+.1f}%</span> · USD total <span class="{usd_class}">${usd_sum:+.2f}</span></span>
     </div>
     <div class="table-scroll">
@@ -836,6 +846,7 @@ h2 {{
   margin: 0;
 }}
 .section-note {{ font-size: 12px; color: var(--text-dim); }}
+.strategy-desc {{ font-size: 13px; color: var(--text); opacity: 0.85; margin: 4px 0 8px; max-width: 720px; }}
 
 .table-scroll {{
   overflow-x: auto;

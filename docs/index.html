@@ -140,6 +140,7 @@ h2 {
   margin: 0;
 }
 .section-note { font-size: 12px; color: var(--text-dim); }
+.strategy-desc { font-size: 13px; color: var(--text); opacity: 0.85; margin: 4px 0 8px; max-width: 720px; }
 
 .table-scroll {
   overflow-x: auto;
@@ -256,7 +257,7 @@ footer a:hover { text-decoration: underline; }
       <h1>ATLANTIS <span>SCREENING</span></h1>
       <div class="subtitle">Señales de consenso · Polymarket sports · 14 traders verificados</div>
     </div>
-    <div class="updated">Última corrida (UTC)<br><b>2026-08-04 10:40 UTC</b><br>Hora Zúrich<br><b>2026-08-04 12:40</b></div>
+    <div class="updated">Última corrida (UTC)<br><b>2026-08-04 11:00 UTC</b><br>Hora Zúrich<br><b>2026-08-04 13:00</b></div>
   </header>
 
   <div class="tabs">
@@ -2824,6 +2825,7 @@ footer a:hover { text-decoration: underline; }
   <section>
     <div class="section-head">
       <h2>A · Arbitraje de rezago</h2>
+      <p class="strategy-desc">Compra el lado que el precio de BTC ya favorece, pero solo si esa cuota sigue barata (&lt;20¢) — apuesta a que el libro de órdenes todavía no se re-precio.</p>
       <span class="section-note">0 trades · win rate 0.0% · retorno promedio <span class="num-pos">+0.0%</span> · USD total <span class="num-pos">$+0.00</span></span>
     </div>
     <div class="table-scroll">
@@ -2845,6 +2847,7 @@ footer a:hover { text-decoration: underline; }
   <section>
     <div class="section-head">
       <h2>B · Momentum de cierre</h2>
+      <p class="strategy-desc">Mira hacia dónde viene la tendencia del precio en el último minuto y compra ese lado, sin importar si la cuota está cara o barata.</p>
       <span class="section-note">2 trades · win rate 100.0% · retorno promedio <span class="num-pos">+98.0%</span> · USD total <span class="num-pos">$+1.96</span></span>
     </div>
     <div class="table-scroll">
@@ -2884,6 +2887,7 @@ footer a:hover { text-decoration: underline; }
   <section>
     <div class="section-head">
       <h2>C · Fade de spike</h2>
+      <p class="strategy-desc">Si el precio pega un salto brusco en los últimos segundos, apuesta a que revierte antes del cierre — lo opuesto a A, acá apuesta a un cambio que todavía no pasó.</p>
       <span class="section-note">0 trades · win rate 0.0% · retorno promedio <span class="num-pos">+0.0%</span> · USD total <span class="num-pos">$+0.00</span></span>
     </div>
     <div class="table-scroll">
@@ -2905,6 +2909,7 @@ footer a:hover { text-decoration: underline; }
   <section>
     <div class="section-head">
       <h2>D · Barato sin filtro</h2>
+      <p class="strategy-desc">Compra cualquier lado que esté por debajo de 15¢ cerca del cierre, sin mirar hacia dónde va el precio — sirve de comparación para saber si las otras 4 realmente le ganan a comprar barato a ciegas.</p>
       <span class="section-note">0 trades · win rate 0.0% · retorno promedio <span class="num-pos">+0.0%</span> · USD total <span class="num-pos">$+0.00</span></span>
     </div>
     <div class="table-scroll">
@@ -2926,6 +2931,7 @@ footer a:hover { text-decoration: underline; }
   <section>
     <div class="section-head">
       <h2>E · Réplica de bot real (escalado)</h2>
+      <p class="strategy-desc">Va comprando de a poco (cada ~25 seg) del lado que el precio favorece en cada momento, pudiendo cambiar de lado si se da vuelta — inspirada en el patrón real de una wallet que opera estos mercados con ~78% de acierto.</p>
       <span class="section-note">10 trades · win rate 70.0% · retorno promedio <span class="num-pos">+41.8%</span> · USD total <span class="num-pos">$+0.84</span></span>
     </div>
     <div class="table-scroll">
