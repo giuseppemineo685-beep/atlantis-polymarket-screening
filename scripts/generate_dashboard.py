@@ -956,12 +956,12 @@ footer a:hover {{ text-decoration: underline; }}
   </header>
 
   <div class="tabs">
-    <button class="tab-btn active" data-tab="sports">Deportes</button>
+    <button class="tab-btn active" data-tab="btc5m">BTC 5m</button>
+    <button class="tab-btn" data-tab="sports">Deportes</button>
     <button class="tab-btn" data-tab="esports-reviewed">Esports</button>
-    <button class="tab-btn" data-tab="btc5m">BTC 5m</button>
   </div>
 
-  <div class="tab-panel active" data-tab-panel="sports">
+  <div class="tab-panel" data-tab-panel="sports">
 
   <div class="scoreboard">
     <div class="stat">
@@ -1235,7 +1235,7 @@ footer a:hover {{ text-decoration: underline; }}
 
   </div>
 
-  <div class="tab-panel" data-tab-panel="btc5m">
+  <div class="tab-panel active" data-tab-panel="btc5m">
 
   <section>
     <div class="section-head">
