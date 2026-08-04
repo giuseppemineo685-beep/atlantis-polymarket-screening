@@ -88,23 +88,40 @@ class LiveClobClient:
             return []
 
     def place_market_buy(
-        self, token_id: str, usdc_amount: Decimal, max_slippage_pct: Decimal = Decimal("3")
+        self,
+        token_id: str,
+        usdc_amount: Decimal,
+        max_slippage_pct: Decimal = Decimal("3"),
+        order_type: Any = None,
     ) -> OrderResult:
         """Spend up to usdc_amount USDC buying token_id, executed as an
-        aggressive FOK limit order (fills immediately at the protective price
-        or better, or cancels entirely - functionally a market order, but see
-        the note on _place_fok_order for why it isn't a literal MarketOrderArgs)."""
-        return self._place_fok_order(token_id, "BUY", usdc_amount, max_slippage_pct)
+        aggressive limit order at a protective price (see the note on
+        _place_order for why it isn't a literal MarketOrderArgs). Defaults
+        to FOK (fills immediately in full or cancels entirely, sports'
+        original and unchanged behavior) - order_type=OrderType.FAK lets a
+        caller accept a partial fill instead of an all-or-nothing match
+        (added for BTC5m, whose thin order books were failing FOK
+        entirely; see run_btc5m_live_execution.py)."""
+        return self._place_order(token_id, "BUY", usdc_amount, max_slippage_pct, order_type)
 
     def place_market_sell(
-        self, token_id: str, shares_amount: Decimal, max_slippage_pct: Decimal = Decimal("3")
+        self,
+        token_id: str,
+        shares_amount: Decimal,
+        max_slippage_pct: Decimal = Decimal("3"),
+        order_type: Any = None,
     ) -> OrderResult:
-        """Sell shares_amount shares of token_id, same FOK-immediate-or-cancel
-        semantics as place_market_buy."""
-        return self._place_fok_order(token_id, "SELL", shares_amount, max_slippage_pct)
+        """Sell shares_amount shares of token_id, same semantics as
+        place_market_buy (FOK by default, override via order_type)."""
+        return self._place_order(token_id, "SELL", shares_amount, max_slippage_pct, order_type)
 
-    def _place_fok_order(
-        self, token_id: str, side: str, amount: Decimal, max_slippage_pct: Decimal
+    def _place_order(
+        self,
+        token_id: str,
+        side: str,
+        amount: Decimal,
+        max_slippage_pct: Decimal,
+        order_type: Any = None,
     ) -> OrderResult:
         # A true MarketOrderArgs order lets the exchange derive maker/taker
         # amounts from (dollar amount / price), and that division routinely
@@ -115,13 +132,20 @@ class LiveClobClient:
         # A limit order sidesteps this: WE round both price (to the tick)
         # and size before asking the library to compute maker_amount =
         # size * price, which stays clean because both inputs already are.
-        # OrderType.FOK gives the same "fill now or don't fill at all"
-        # behavior as a market order, so nothing about the trading semantics
-        # changes - only which library code path builds the order.
+        # OrderType.FOK (the default) gives the same "fill now in full or
+        # don't fill at all" behavior as a market order, so nothing about
+        # the trading semantics changes there - only which library code
+        # path builds the order. OrderType.FAK relaxes that to "fill
+        # whatever's available now, cancel the rest" - added for BTC5m
+        # after every FOK attempt failed with "couldn't be fully filled"
+        # against these markets' thin order books (2026-08-04); the
+        # price/size math below is identical either way.
         from urllib.error import HTTPError, URLError
 
         from py_clob_client_v2.clob_types import OrderArgs, OrderType
         from py_clob_client_v2.order_builder.constants import BUY, SELL
+
+        resolved_order_type = order_type if order_type is not None else OrderType.FOK
 
         clob_side = BUY if side == "BUY" else SELL
 
@@ -201,7 +225,7 @@ class LiveClobClient:
                 side=clob_side,
             )
             signed_order = self._client.create_order(order_args)
-            response = self._client.post_order(signed_order, order_type=OrderType.FOK)
+            response = self._client.post_order(signed_order, order_type=resolved_order_type)
             return _parse_order_response(response, side)
         except (HTTPError, URLError, TimeoutError, ConnectionError, OSError) as exc:
             # Same broad exception discipline as PolymarketClient._get - a
@@ -256,7 +280,8 @@ def _parse_order_response(response: Any, side: str) -> OrderResult:
     # confirm success=True on a fill while makingAmount/takingAmount came
     # back empty/unparseable, and Decimal(str(...)) raised ConversionSyntax
     # from inside this function. That exception was caught by the outer
-    # try/except in _place_fok_order and reported as a plain failed order,
+    # try/except in _place_order (formerly _place_fok_order) and reported
+    # as a plain failed order,
     # which the retry logic (correctly, for an order that never went
     # through) resubmitted every cron cycle - each resubmission ALSO filled
     # for real, since the order kept actually succeeding. One $25 signal

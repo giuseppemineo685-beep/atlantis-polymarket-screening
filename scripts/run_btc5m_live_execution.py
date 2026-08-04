@@ -259,6 +259,7 @@ def main() -> None:
     log = load_log(settings.live_trade_log_path)  # reload - reconciliation above may have changed it
 
     from atlantis.polymarket.clob_client import build_live_client
+    from py_clob_client_v2.clob_types import OrderType
 
     client = build_live_client(settings)
     title = title_for_slug(slug)
@@ -271,8 +272,17 @@ def main() -> None:
         token_id = market.up_token_id if direction == "UP" else market.down_token_id
         order_ts = int(datetime.now(timezone.utc).timestamp())
         try:
+            # FAK, not the default FOK - every FOK attempt today failed with
+            # "couldn't be fully filled" (thin order books at the moment of
+            # the attempt), unrelated to price/slippage. FAK takes whatever
+            # fill is available and cancels the rest instead of requiring
+            # 100% or nothing; the existing fill-confirmation logic below
+            # already handles "whatever filled_size actually is" correctly.
             result = client.place_market_buy(
-                token_id, Decimal(str(settings.stake_per_signal_usd)), max_slippage_pct=BTC5M_MAX_SLIPPAGE_PCT
+                token_id,
+                Decimal(str(settings.stake_per_signal_usd)),
+                max_slippage_pct=BTC5M_MAX_SLIPPAGE_PCT,
+                order_type=OrderType.FAK,
             )
         except Exception as exc:
             log[entry_key] = {
