@@ -268,6 +268,11 @@ def render_btc5m_strategy_section(strategy_key: str, stats: dict, rows: list[dic
 
 BTC5M_LIVE_PILL = {"EXECUTED": "open", "WON_UNREDEEMED": "win", "LOST": "loss", "ERROR": "loss"}
 
+BTC5M_LIVE_STRATEGY_LABELS = {
+    "E": "E · Réplica de bot real (escalado)",
+    "B": "B · Momentum de cierre",
+}
+
 
 def read_json_safe(path: Path) -> dict:
     try:
@@ -276,26 +281,110 @@ def read_json_safe(path: Path) -> dict:
         return {}
 
 
-def render_btc5m_live_row(r: dict, *, extra_class: str = "") -> str:
+def btc5m_live_strategy_for_key(entry_key: str) -> str:
+    """Real trades from different strategies share one CSV (owner's
+    choice, 2026-08-04: one $100 pool for both E and B) - the entry_key
+    prefix is the only thing that tells them apart: E uses "{slug}#{i}"
+    (bare, no prefix), B uses "B_{slug}", and the one-off diagnostic
+    orders from earlier the same day used "TEST_..." - those never
+    represent a real strategy signal, so they're excluded from the
+    per-strategy stats below (they'd skew win rate/avg return with a
+    single mismatched-size sample)."""
+    if entry_key.startswith("TEST_"):
+        return "diagnostico"
+    if entry_key.startswith("B_"):
+        return "B"
+    return "E"
+
+
+def btc5m_live_effective_pct_return(row: dict) -> float | None:
+    """A WON_UNREDEEMED row has a blank pct_return until the position is
+    actually redeemed for USDC (same known limitation as sports) - but a
+    won binary token is worth exactly $1 at resolution regardless, so
+    (1/fill_price - 1) is a safe, honest estimate to show while waiting,
+    clearly not the same as realized_pnl_usd."""
+    pct = row.get("pct_return")
+    if pct not in (None, ""):
+        try:
+            return float(pct)
+        except ValueError:
+            return None
+    if row.get("status") == "WON_UNREDEEMED":
+        try:
+            price = float(row.get("fill_price_buy") or 0)
+        except ValueError:
+            return None
+        if price > 0:
+            return (1 / price - 1) * 100
+    return None
+
+
+def render_btc5m_live_row(r: dict, *, extra_class: str = "", show_strategy: bool = False) -> str:
     status = r.get("status", "")
     pill_class = BTC5M_LIVE_PILL.get(status, "wait")
-    pct_return = r.get("pct_return", "")
-    return_class = ""
-    if pct_return not in (None, ""):
-        try:
-            return_class = "num-pos" if float(pct_return) >= 0 else "num-neg"
-        except ValueError:
-            return_class = ""
+    pct_return = btc5m_live_effective_pct_return(r)
+    return_class = "num-pos" if (pct_return is not None and pct_return >= 0) else ("num-neg" if pct_return is not None else "")
+    strategy_cell = (
+        f'<td class="dim">{esc(BTC5M_LIVE_STRATEGY_LABELS.get(r.get("strategy"), r.get("strategy")))}</td>'
+        if show_strategy
+        else ""
+    )
     return f"""
     <tr class="{extra_class}">
       <td><span class="pill pill-{pill_class}">{esc(status)}</span></td>
+      {strategy_cell}
       <td class="dim">{esc(r.get('window_slug'))}</td>
       <td><b>{esc(r.get('direction'))}</b></td>
       <td class="num">{fmt_price(r.get('fill_price_buy'))}</td>
       <td class="num">${fmt_money(r.get('stake_usd_actual'))}</td>
-      <td class="num {return_class}">{fmt_pct(pct_return) if pct_return not in (None, '') else '—'}</td>
+      <td class="num {return_class}">{f'{pct_return:+.1f}%' if pct_return is not None else '—'}</td>
       <td class="dim">{esc(r.get('date_opened'))}</td>
     </tr>"""
+
+
+def render_btc5m_live_strategy_section(strategy_key: str, rows: list[dict]) -> str:
+    label = BTC5M_LIVE_STRATEGY_LABELS.get(strategy_key, strategy_key)
+    attempts = len(rows)
+    executed = [r for r in rows if r.get("status") in ("EXECUTED", "WON_UNREDEEMED", "LOST")]
+    resolved = [r for r in rows if r.get("status") in ("WON_UNREDEEMED", "LOST")]
+    wins = [r for r in resolved if r.get("status") == "WON_UNREDEEMED"]
+    win_rate = (len(wins) / len(resolved) * 100) if resolved else 0
+    returns = [x for x in (btc5m_live_effective_pct_return(r) for r in resolved) if x is not None]
+    avg_pct = (sum(returns) / len(returns)) if returns else 0
+    realized = sum(float(r.get("realized_pnl_usd") or 0) for r in rows if r.get("realized_pnl_usd"))
+    staked = sum(float(r.get("stake_usd_actual") or 0) for r in rows if r.get("stake_usd_actual"))
+    avg_class = "num-pos" if avg_pct >= 0 else "num-neg"
+    realized_class = "num-pos" if realized >= 0 else "num-neg"
+
+    visible = rows[:15]
+    hidden = rows[15:]
+    table_id = f"history-table-btc5m-real-{strategy_key}"
+    toggle_id = f"toggle-history-btn-btc5m-real-{strategy_key}"
+    toggle_btn = (
+        f'<button class="tab-btn" id="{toggle_id}" data-count="{len(rows)}" data-label="Ver todas">Ver todas ({len(rows)})</button>'
+        if hidden
+        else ""
+    )
+    return f"""
+  <section>
+    <div class="section-head">
+      <h2>{esc(label)} — dinero real</h2>
+      <span class="section-note">{attempts} intentos · {len(executed)} ejecutadas · {len(resolved)} resueltas · win rate {win_rate:.1f}% · retorno promedio <span class="{avg_class}">{avg_pct:+.1f}%</span> · apostado ${staked:,.2f} · PnL realizado <span class="{realized_class}">${realized:+.2f}</span> (no cuenta ganadas sin redimir todavía)</span>
+    </div>
+    <div class="table-scroll">
+      <table id="{table_id}">
+        <thead>
+          <tr><th>Estado</th><th>Ventana</th><th>Dirección</th><th>Precio fill</th><th>Stake</th><th>Retorno</th><th>Abierto</th></tr>
+        </thead>
+        <tbody>
+          {"".join(render_btc5m_live_row(r) for r in visible)}
+          {"".join(render_btc5m_live_row(r, extra_class="row-hidden") for r in hidden)}
+          {'<tr><td colspan="7" class="empty">Sin operaciones reales todavía</td></tr>' if not rows else ''}
+        </tbody>
+      </table>
+    </div>
+    {toggle_btn}
+  </section>"""
 
 
 def real_log_to_display_rows(raw_rows: list[dict]) -> list[dict]:
@@ -599,21 +688,39 @@ def main() -> None:
     for r in btc5m_rows:
         btc5m_rows_by_strategy[r.get("strategy", "")].append(r)
 
-    # BTC5m real pilot (Strategy E only) - separate CSV/status file from
-    # everything else, deliberately: see scripts/run_btc5m_live_execution.py.
+    # BTC5m real pilot - one shared $100 pool/CSV for both E and B (owner's
+    # choice, 2026-08-04) - separate from everything else, see
+    # scripts/run_btc5m_live_execution.py / run_btc5m_b_live_execution.py.
     btc5m_live_rows = read_csv(BTC5M_LIVE_TRADE_LOG)
     btc5m_live_rows.sort(key=lambda r: r.get("date_opened", ""), reverse=True)
+    for r in btc5m_live_rows:
+        r["strategy"] = btc5m_live_strategy_for_key(r.get("entry_key", ""))
+    # One-off diagnostic orders (2026-08-04, "TEST_..." keys) proved the
+    # order pipeline works but aren't a real strategy signal - excluded
+    # from every stat below so they don't skew win rate/avg return.
+    btc5m_live_rows_real = [r for r in btc5m_live_rows if r["strategy"] != "diagnostico"]
+    btc5m_live_rows_by_strategy: dict[str, list[dict]] = defaultdict(list)
+    for r in btc5m_live_rows_real:
+        btc5m_live_rows_by_strategy[r["strategy"]].append(r)
     btc5m_live_status = read_json_safe(BTC5M_LIVE_STATUS_PATH)
-    btc5m_live_open = [r for r in btc5m_live_rows if r.get("status") == "EXECUTED"]
-    btc5m_live_resolved = [r for r in btc5m_live_rows if r.get("status") in ("WON_UNREDEEMED", "LOST")]
+    btc5m_live_open = [r for r in btc5m_live_rows_real if r.get("status") == "EXECUTED"]
+    btc5m_live_resolved = [r for r in btc5m_live_rows_real if r.get("status") in ("WON_UNREDEEMED", "LOST")]
     btc5m_live_wins = [r for r in btc5m_live_resolved if r.get("status") == "WON_UNREDEEMED"]
     btc5m_live_win_rate = (len(btc5m_live_wins) / len(btc5m_live_resolved) * 100) if btc5m_live_resolved else 0
-    btc5m_live_staked = sum(float(r.get("stake_usd_actual") or 0) for r in btc5m_live_rows if r.get("stake_usd_actual"))
+    btc5m_live_staked = sum(float(r.get("stake_usd_actual") or 0) for r in btc5m_live_rows_real if r.get("stake_usd_actual"))
     btc5m_live_realized = sum(
-        float(r.get("realized_pnl_usd") or 0) for r in btc5m_live_rows if r.get("realized_pnl_usd")
+        float(r.get("realized_pnl_usd") or 0) for r in btc5m_live_rows_real if r.get("realized_pnl_usd")
     )
-    btc5m_live_visible = btc5m_live_rows[:30]
-    btc5m_live_hidden = btc5m_live_rows[30:]
+    btc5m_live_visible = btc5m_live_rows_real[:30]
+    btc5m_live_hidden = btc5m_live_rows_real[30:]
+    # Rows are sorted newest-first, so this is always the CURRENT
+    # configured stake - reading it from the data itself means this text
+    # never goes stale again after a future stake change (it did once
+    # already: hardcoded "$1 por entrada" stayed on screen long after the
+    # real stake moved to $6).
+    btc5m_live_current_stake = next(
+        (r.get("stake_usd_requested") for r in btc5m_live_rows_real if r.get("stake_usd_requested")), None
+    )
 
     resolved = [r for r in log_rows if r.get("status") in ("WIN", "LOSS", "CLOSED")]
     open_trades = [r for r in log_rows if r.get("status") == "OPEN"]
@@ -1368,27 +1475,29 @@ footer a:hover {{ text-decoration: underline; }}
     </div>
   </div>
 
+  {"".join(render_btc5m_live_strategy_section(name, btc5m_live_rows_by_strategy.get(name, [])) for name in ("E", "B") if btc5m_live_rows_by_strategy.get(name))}
+
   <section>
     <div class="section-head">
-      <h2>BTC "Up or Down 5m" — dinero real (solo Estrategia E)</h2>
-      <span class="section-note">$1 por entrada real · piloto de ${BTC5M_PILOT_CAPITAL_USD:,.0f} · se pausa solo si se pierde todo el capital asignado · {len(btc5m_live_resolved)} resueltos, win rate {btc5m_live_win_rate:.1f}% · PnL realizado ${btc5m_live_realized:+.2f} (no cuenta ganadas sin redimir todavía){' · <b style="color: var(--loss)">KILL SWITCH DISPARADO: ' + esc(btc5m_live_status.get('reason', '')) + '</b>' if btc5m_live_status.get('auto_killed') else ''}</span>
+      <h2>BTC "Up or Down 5m" — dinero real, todas las estrategias combinadas</h2>
+      <span class="section-note">{f'${float(btc5m_live_current_stake):,.0f}' if btc5m_live_current_stake else '?'} por entrada real (más reciente) · piloto compartido de ${BTC5M_PILOT_CAPITAL_USD:,.0f} · se pausa solo si se pierde todo el capital asignado · {len(btc5m_live_resolved)} resueltos, win rate {btc5m_live_win_rate:.1f}% · PnL realizado ${btc5m_live_realized:+.2f} (no cuenta ganadas sin redimir todavía){' · <b style="color: var(--loss)">KILL SWITCH DISPARADO: ' + esc(btc5m_live_status.get('reason', '')) + '</b>' if btc5m_live_status.get('auto_killed') else ''}</span>
     </div>
     <div class="table-scroll">
       <table id="history-table-btc5m-live">
         <thead>
           <tr>
-            <th>Estado</th><th>Ventana</th><th>Dirección</th><th>Precio fill</th>
+            <th>Estado</th><th>Estrategia</th><th>Ventana</th><th>Dirección</th><th>Precio fill</th>
             <th>Stake</th><th>Retorno</th><th>Abierto</th>
           </tr>
         </thead>
         <tbody>
-          {"".join(render_btc5m_live_row(r) for r in btc5m_live_visible)}
-          {"".join(render_btc5m_live_row(r, extra_class="row-hidden") for r in btc5m_live_hidden)}
-          {'<tr><td colspan="7" class="empty">Sin operaciones reales todavía</td></tr>' if not btc5m_live_rows else ''}
+          {"".join(render_btc5m_live_row(r, show_strategy=True) for r in btc5m_live_visible)}
+          {"".join(render_btc5m_live_row(r, extra_class="row-hidden", show_strategy=True) for r in btc5m_live_hidden)}
+          {'<tr><td colspan="8" class="empty">Sin operaciones reales todavía</td></tr>' if not btc5m_live_rows_real else ''}
         </tbody>
       </table>
     </div>
-    {f'<button class="tab-btn" id="toggle-history-btn-btc5m-live" data-count="{len(btc5m_live_rows)}" data-label="Ver todas">Ver todas ({len(btc5m_live_rows)})</button>' if btc5m_live_hidden else ''}
+    {f'<button class="tab-btn" id="toggle-history-btn-btc5m-live" data-count="{len(btc5m_live_rows_real)}" data-label="Ver todas">Ver todas ({len(btc5m_live_rows_real)})</button>' if btc5m_live_hidden else ''}
   </section>
 
   </div>
@@ -1421,7 +1530,7 @@ wireHistoryToggle('toggle-history-btn', 'history-table');
 wireHistoryToggle('toggle-history-btn-esports', 'history-table-esports');
 wireHistoryToggle('toggle-history-btn-btc5m', 'history-table-btc5m');
 wireHistoryToggle('toggle-history-btn-btc5m-live', 'history-table-btc5m-live');
-{"".join(f"wireHistoryToggle('toggle-history-btn-btc5m-{name}', 'history-table-btc5m-{name}');" + chr(10) for name in STRATEGY_LABELS)}wireHistoryToggle('toggle-performance-btn', 'performance-table');
+{"".join(f"wireHistoryToggle('toggle-history-btn-btc5m-{name}', 'history-table-btc5m-{name}');" + chr(10) for name in STRATEGY_LABELS)}{"".join(f"wireHistoryToggle('toggle-history-btn-btc5m-real-{name}', 'history-table-btc5m-real-{name}');" + chr(10) for name in ("E", "B"))}wireHistoryToggle('toggle-performance-btn', 'performance-table');
 </script>
 </body>
 </html>
