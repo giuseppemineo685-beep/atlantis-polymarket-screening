@@ -22,7 +22,15 @@ def load_btc5m_live_settings() -> LiveSettings:
         ),
         funder_address=os.getenv("POLYMARKET_FUNDER_ADDRESS", ""),
         signature_type=int(os.getenv("POLYMARKET_SIGNATURE_TYPE", "1")),
-        stake_per_signal_usd=float(os.getenv("BTC5M_STAKE_PER_SIGNAL_USD", "1")),
+        # $1 failed in practice (2026-08-04): at prices whose cents value
+        # shares no common factor with 100 (gcd=1), Polymarket's own order-
+        # size granularity rule forces a full $1-worth-of-shares step, so a
+        # $1 stake often can't buy even 1 clean share. $2 clears this in
+        # most cases; Polymarket's stated 5-share order minimum could still
+        # bite at prices near $1 (5 shares * ~$1 = ~$5) - unconfirmed until
+        # tried live, but any failure here is just a skipped entry (status
+        # ERROR), never a partial/duplicate real fill.
+        stake_per_signal_usd=float(os.getenv("BTC5M_STAKE_PER_SIGNAL_USD", "2")),
         # Pilot capital allocated to this vertical (2026-08-04, owner's
         # explicit instruction: "capital dispuesto 100usd, si se pierde
         # todo que se pause"). Not used by kill_switch.py (that module is

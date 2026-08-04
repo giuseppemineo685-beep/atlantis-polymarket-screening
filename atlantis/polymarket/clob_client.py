@@ -144,6 +144,17 @@ class LiveClobClient:
                 # Round UP - a BUY protective price must never round down
                 # below what we actually intend to tolerate.
                 limit_price = (raw_price / tick_size).to_integral_value(rounding="ROUND_CEILING") * tick_size
+                # A binary outcome token can never be worth more than $1 -
+                # but current_price close to 1 (a near-certain outcome, seen
+                # in practice on BTC5m's Strategy E) plus slippage can push
+                # the raw computation above 1.0, which is nonsensical and
+                # also breaks the size-granularity math below (confirmed:
+                # limit_price=1.029 rejected 5 real BTC5m orders in a row
+                # with "amount demasiado chico", 2026-08-04). Cap one tick
+                # below the maximum instead.
+                max_price = Decimal("1") - tick_size
+                if limit_price > max_price:
+                    limit_price = max_price
                 # The exchange rounds our submitted size to 2 decimals
                 # itself, then computes maker_amount (USDC spent) = size *
                 # price - and rejects a marketable BUY if that product has
