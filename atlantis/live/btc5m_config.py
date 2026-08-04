@@ -27,11 +27,17 @@ def load_btc5m_live_settings() -> LiveSettings:
         # price near the 0.99 cap computed exactly $0.99 of notional - the
         # exchange rejected it outright ("invalid amount ... min size: 1",
         # i.e. a real $1.00 minimum notional per order that our own floor-
-        # rounding can undercut by a cent). $2 clears this with margin.
-        # Settled on $2 (owner's decision) + the wider slippage tolerance
-        # below (BTC5M_MAX_SLIPPAGE_PCT) as the combination most likely to
-        # clear every sizing rule AND find a FOK match.
-        stake_per_signal_usd=float(os.getenv("BTC5M_STAKE_PER_SIGNAL_USD", "2")),
+        # rounding can undercut by a cent). $2 cleared THAT floor, but every
+        # order still failed ("no orders found to match"/"couldn't be fully
+        # filled") - root-caused (2026-08-04) to a SEPARATE, unrelated
+        # minimum: the exchange's real min_order_size is 5 SHARES, not a
+        # dollar amount. Strategy E buys the "favored" side late in the
+        # window, when price is often >0.90 - at $2, that's ~2.2 shares,
+        # well under 5. $6 guarantees >=5 shares even at the 0.99 price cap
+        # (5 x 0.99 = $4.95) with margin. clob_client.py now also validates
+        # against min_order_size directly so a future mismatch fails with a
+        # clear message instead of a cryptic exchange rejection.
+        stake_per_signal_usd=float(os.getenv("BTC5M_STAKE_PER_SIGNAL_USD", "6")),
         # Pilot capital allocated to this vertical (2026-08-04, owner's
         # explicit instruction: "capital dispuesto 100usd, si se pierde
         # todo que se pause"). Not used by kill_switch.py (that module is
