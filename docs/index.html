@@ -276,7 +276,7 @@ footer a:hover { text-decoration: underline; }
     </div>
     <div class="stat">
       <div class="stat-label">Retorno promedio</div>
-      <div class="stat-value pos">+4.0%</div>
+      <div class="stat-value pos">+5.5%</div>
     </div>
     <div class="stat">
       <div class="stat-label">Posiciones abiertas</div>
@@ -297,7 +297,7 @@ footer a:hover { text-decoration: underline; }
       </div>
       <div class="stat">
         <div class="stat-label">Retorno no realizado (promedio)</div>
-        <div class="stat-value neg">-99.3%</div>
+        <div class="stat-value pos">+0.0%</div>
         <div class="section-note">1 trades abiertos</div>
       </div>
     </div>
@@ -311,7 +311,7 @@ footer a:hover { text-decoration: underline; }
       <div class="table-scroll">
         <table>
           <thead><tr><th>Día detectado (Zúrich)</th><th class="num">Trades</th><th class="num">Promedio %</th><th class="num">USD ganado/perdido</th></tr></thead>
-          <tbody><tr><td class="dim">2026-08-02</td><td class="num">1</td><td class="num num-neg">-99.3%</td><td class="num num-neg">$-25</td></tr></tbody>
+          <tbody><tr><td class="dim">2026-08-02</td><td class="num">1</td><td class="num num-pos">+0.0%</td><td class="num num-pos">$0</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -331,15 +331,7 @@ footer a:hover { text-decoration: underline; }
           </tr>
         </thead>
         <tbody>
-          
-    <tr>
-      <td class="title-cell"><a href="https://polymarket.com/market/mlb-phi-bal-2026-08-02" target="_blank" rel="noopener">Philadelphia Phillies vs. Baltimore Orioles</a></td>
-      <td><b>Baltimore Orioles</b></td>
-      <td class="num">0.230</td>
-      <td class="num">0.002</td>
-      <td class="num num-neg">-99.3%</td>
-      <td class="num">$+0</td>
-    </tr>
+          <tr><td colspan="6" class="empty">Sin posiciones abiertas ahora mismo (o no se pudo consultar Polymarket)</td></tr>
         </tbody>
       </table>
     </div>
@@ -574,8 +566,8 @@ footer a:hover { text-decoration: underline; }
       <td class="title-cell"><a href="https://polymarket.com/market/mlb-phi-bal-2026-08-02" target="_blank" rel="noopener">Philadelphia Phillies vs. Baltimore Orioles</a></td>
       <td><b>Baltimore Orioles</b></td>
       <td class="num">0.230</td>
-      <td class="num">0.002</td>
-      <td class="num num-neg">-99.3%*</td>
+      <td class="num">0.230</td>
+      <td class="num num-pos">0.0%*</td>
       <td class="dim">2026-08-02 18:33:06 UTC</td>
       <td class="dim">Trader03, Trader05</td>
     </tr>
@@ -11333,14 +11325,46 @@ footer a:hover { text-decoration: underline; }
 
   <div class="tab-panel" data-tab-panel="btc5m-real">
 
+  <div class="scoreboard">
+    <div class="stat">
+      <div class="stat-label">Estado</div>
+      <div class="stat-value neg">APAGADO</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Capital asignado</div>
+      <div class="stat-value">$100</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Apostado hasta ahora</div>
+      <div class="stat-value">$0.00</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Posiciones abiertas</div>
+      <div class="stat-value">0</div>
+    </div>
+  </div>
+
   <section>
     <div class="section-head">
       <h2>BTC "Up or Down 5m" — dinero real (solo Estrategia E)</h2>
-      <span class="section-note">Todavía NO está conectado a dinero real — esta pestaña queda lista para cuando terminemos de diseñar y probar la ejecución real de forma segura.</span>
+      <span class="section-note">$1 por entrada real · piloto de $100 · se pausa solo si se pierde todo el capital asignado · 0 resueltos, win rate 0.0% · PnL realizado $+0.00 (no cuenta ganadas sin redimir todavía)</span>
     </div>
-    <div class="empty" style="padding: 24px 0;">
-      Sin operaciones reales todavía. La Estrategia E sigue corriendo en papel en la otra pestaña mientras se diseña la ejecución real con las mismas protecciones que ya usamos en deportes (confirmación de fill vía /trades, sin reintentos en falso, kill switch, etc.).
+    <div class="table-scroll">
+      <table id="history-table-btc5m-live">
+        <thead>
+          <tr>
+            <th>Estado</th><th>Ventana</th><th>Dirección</th><th>Precio fill</th>
+            <th>Stake</th><th>Retorno</th><th>Abierto</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          
+          <tr><td colspan="7" class="empty">Sin operaciones reales todavía</td></tr>
+        </tbody>
+      </table>
     </div>
+    
   </section>
 
   </div>
@@ -11372,6 +11396,7 @@ function wireHistoryToggle(btnId, tableId) {
 wireHistoryToggle('toggle-history-btn', 'history-table');
 wireHistoryToggle('toggle-history-btn-esports', 'history-table-esports');
 wireHistoryToggle('toggle-history-btn-btc5m', 'history-table-btc5m');
+wireHistoryToggle('toggle-history-btn-btc5m-live', 'history-table-btc5m-live');
 wireHistoryToggle('toggle-history-btn-btc5m-A_lag_arbitrage', 'history-table-btc5m-A_lag_arbitrage');
 wireHistoryToggle('toggle-history-btn-btc5m-B_momentum', 'history-table-btc5m-B_momentum');
 wireHistoryToggle('toggle-history-btn-btc5m-C_spike_fade', 'history-table-btc5m-C_spike_fade');
