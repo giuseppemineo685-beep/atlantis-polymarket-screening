@@ -74,29 +74,6 @@ from run_btc5m_paper_trading import (  # noqa: E402
 
 LIVE_WINDOW_STATE_PATH = ROOT / "state" / "btc5m_live_window.json"
 
-# One-shot diagnostic (owner's request, 2026-08-04): Strategy E's real
-# entries always buy the FAVORED side late in the window, which stacks
-# TWO independent things that can each cause a failed order - our own
-# size-vs-min_order_size math, and genuine liquidity at that specific
-# price/moment. This test isolates just "can we execute a real order at
-# all" by placing exactly ONE minimal ($1) FAK buy on whichever side is
-# CHEAP enough for $1 to clear the exchange's real min_order_size floor
-# (confirmed live 2026-08-04: 5 shares) - buying the expensive/favored
-# side with $1 would fail our own pre-flight check before ever reaching
-# the exchange, telling us nothing. Logs into the SAME real trade log as
-# Strategy E (distinct "TEST_SINGLE_ORDER_" entry_key prefix, never
-# collides with E's "{slug}#{i}" keys) so the result is visible via the
-# normal git sync, without needing a separate untracked state file.
-SINGLE_ORDER_TEST_KEY_PREFIX = "TEST_SINGLE_ORDER_"
-
-# Second one-shot diagnostic (owner's request, 2026-08-04, right after the
-# cheap-side test above confirmed EXECUTED): mirror test on the EXPENSIVE
-# side (the one Strategy E actually buys) with the same $6 stake E uses,
-# to isolate with direct evidence whether that specific side is what
-# fails with "no orders found to match" - now that the order pipeline
-# itself is proven to work.
-EXPENSIVE_ORDER_TEST_KEY_PREFIX = "TEST_EXPENSIVE_ORDER_"
-
 # Wider than the shared 3% default in clob_client.py (sports keeps using
 # that default, unaffected) - every real BTC5m attempt so far has failed
 # with FOK "couldn't be fully filled" (thin order-book liquidity at the
@@ -203,161 +180,6 @@ def check_kill_switch(settings) -> None:
         print("btc5m-live: KILL SWITCH disparado, trading real pausado")
 
 
-def _run_diagnostic_order_test(
-    settings,
-    state: dict,
-    slug: str,
-    seconds_left: float,
-    *,
-    key_prefix: str,
-    stake_usd: Decimal,
-    pick_side,
-    title: str,
-    log_tag: str,
-) -> None:
-    log = load_log(settings.live_trade_log_path)
-    if any(key.startswith(key_prefix) for key in log):
-        return  # already attempted once, ever - never repeat
-    if not (10 < seconds_left <= 90):
-        return
-
-    from atlantis.polymarket.clob_client import build_live_client
-    from py_clob_client_v2.clob_types import OrderType
-
-    client = build_live_client(settings)
-    up_price = client.get_price(state["up_token_id"], "BUY")
-    down_price = client.get_price(state["down_token_id"], "BUY")
-
-    candidates = []
-    if up_price is not None:
-        candidates.append(("UP", state["up_token_id"], up_price))
-    if down_price is not None:
-        candidates.append(("DOWN", state["down_token_id"], down_price))
-
-    entry_key = f"{key_prefix}{slug}"
-
-    if not candidates:
-        log[entry_key] = {
-            "entry_key": entry_key,
-            "condition_id": state["condition_id"],
-            "asset": "",
-            "window_slug": slug,
-            "title": title,
-            "outcome": "",
-            "direction": "",
-            "fill_price_buy": "",
-            "stake_usd_requested": str(stake_usd),
-            "stake_usd_actual": "",
-            "shares_held": "",
-            "order_id_buy": "",
-            "status": "ERROR",
-            "fill_price_sell": "",
-            "realized_pnl_usd": "",
-            "pct_return": "",
-            "date_opened": _now(),
-            "date_closed": _now(),
-            "last_updated": _now(),
-        }
-        save_log(settings.live_trade_log_path, log)
-        print(f"{log_tag}: sin precio disponible en ningun lado")
-        return
-
-    direction, token_id, price = pick_side(candidates)
-    order_ts = int(datetime.now(timezone.utc).timestamp())
-
-    try:
-        result = client.place_market_buy(
-            token_id,
-            stake_usd,
-            max_slippage_pct=BTC5M_MAX_SLIPPAGE_PCT,
-            order_type=OrderType.FAK,
-        )
-    except Exception as exc:
-        result = None
-        error_text = f"{type(exc).__name__}: {exc}"
-    else:
-        error_text = result.error
-
-    fill_price = fill_size = None
-    status_value = "ERROR"
-    order_id = ""
-    if result is not None and result.success:
-        fill_price, fill_size = result.avg_fill_price, result.filled_size
-        confirmed = get_confirmed_fill(
-            wallet_address=settings.funder_address,
-            condition_id=state["condition_id"],
-            asset=token_id,
-            side="BUY",
-            since_ts=order_ts - 30,
-        )
-        if confirmed:
-            fill_price, fill_size = confirmed
-        status_value = "EXECUTED"
-        order_id = result.order_id or ""
-
-    log[entry_key] = {
-        "entry_key": entry_key,
-        "condition_id": state["condition_id"],
-        "asset": token_id,
-        "window_slug": slug,
-        "title": title,
-        "outcome": direction,
-        "direction": direction,
-        "fill_price_buy": str(fill_price) if fill_price else "",
-        "stake_usd_requested": str(stake_usd),
-        "stake_usd_actual": str(fill_price * fill_size) if (fill_price and fill_size) else "",
-        "shares_held": str(fill_size) if fill_size else "",
-        "order_id_buy": order_id,
-        "status": status_value,
-        "fill_price_sell": "",
-        "realized_pnl_usd": "",
-        "pct_return": "",
-        "date_opened": _now(),
-        "date_closed": "" if status_value == "EXECUTED" else _now(),
-        "last_updated": _now(),
-    }
-    save_log(settings.live_trade_log_path, log)
-    print(f"{log_tag}: intento unico ${stake_usd} {direction} @ {price} -> status={status_value} error={error_text}")
-
-
-def run_single_order_test(settings, state: dict, slug: str, seconds_left: float) -> None:
-    """Buys the CHEAP side with $1 - confirmed 2026-08-04 this executes
-    fine (EXECUTED, first real fill of the whole pilot), proving the order
-    pipeline itself works when size is comfortably above the real
-    min_order_size floor (5 shares)."""
-    _run_diagnostic_order_test(
-        settings,
-        state,
-        slug,
-        seconds_left,
-        key_prefix=SINGLE_ORDER_TEST_KEY_PREFIX,
-        stake_usd=Decimal("1"),
-        pick_side=lambda candidates: min(candidates, key=lambda c: c[2]),
-        title="BTC5m TEST orden unica $1 (lado barato)",
-        log_tag="btc5m-test",
-    )
-
-
-def run_expensive_side_order_test(settings, state: dict, slug: str, seconds_left: float) -> None:
-    """Mirror of run_single_order_test but buys the EXPENSIVE/favored
-    side - the one Strategy E actually buys - with $6 (same stake E uses,
-    comfortably clears the 5-share floor even at a 0.99 price). Owner's
-    request 2026-08-04: isolate whether THIS specific side is what fails
-    with "no orders found to match", now that the cheap side is proven to
-    work end-to-end."""
-    _run_diagnostic_order_test(
-        settings,
-        state,
-        slug,
-        seconds_left,
-        key_prefix=EXPENSIVE_ORDER_TEST_KEY_PREFIX,
-        stake_usd=Decimal("6"),
-        pick_side=lambda candidates: max(candidates, key=lambda c: c[2]),
-        title="BTC5m TEST orden unica $6 (lado caro/favorito)",
-        log_tag="btc5m-test-expensive",
-    )
-
-
 def main() -> None:
     settings = load_btc5m_live_settings()
     now = datetime.now(timezone.utc)
@@ -407,66 +229,30 @@ def main() -> None:
         down_token_id=state["down_token_id"],
     )
 
-    samples: list[Sample] = []
-    while True:
-        seconds_left = (close_at - datetime.now(timezone.utc)).total_seconds()
-        # Checked every SAMPLE_INTERVAL_SECONDS (4s) here, not once before
-        # this loop - flock serializes this whole ~148s window into a
-        # SINGLE cron invocation (later per-minute ticks find the lock
-        # held and skip entirely), so a single pre-loop check only ever
-        # sees seconds_left near the ~150s LOOKAHEAD threshold, never the
-        # ~60s this test targets. Confirmed live 2026-08-04: zero
-        # "btc5m-test" log lines across 2 full windows with the old
-        # single pre-loop placement.
-        run_single_order_test(settings, state, slug, seconds_left)
-        run_expensive_side_order_test(settings, state, slug, seconds_left)
-        spot = fetch_spot_price()
-        up_q, down_q = fetch_clob_quotes(market.condition_id, market.up_token_id, market.down_token_id)
-        samples.append(
-            Sample(
-                seconds_to_close=seconds_left,
-                spot_price=spot,
-                target_price=target_price,
-                up_quote=up_q,
-                down_quote=down_q,
-            )
-        )
-        if seconds_left <= 2:
-            break
-        time.sleep(SAMPLE_INTERVAL_SECONDS)
-
-    entries = strategy_e_scaling_replicator(samples)
-    if not entries:
-        print(f"btc5m-live: Strategy E no disparo para {slug}")
-        return
-
     status = read_status_flag(settings)
-    if not status.get("enabled"):
-        print(f"btc5m-live: {len(entries)} señal(es) de E en {slug}, pero trading real esta apagado - nada ejecutado")
-        return
-
     log = load_log(settings.live_trade_log_path)  # reload - reconciliation above may have changed it
-
-    from atlantis.polymarket.clob_client import build_live_client
-    from py_clob_client_v2.clob_types import OrderType
-
-    client = build_live_client(settings)
     title = title_for_slug(slug)
 
-    for i, (direction, _paper_entry_price, _paper_stake) in enumerate(entries):
+    client = None
+    if status.get("enabled"):
+        from atlantis.polymarket.clob_client import build_live_client
+
+        client = build_live_client(settings)
+
+    from py_clob_client_v2.clob_types import OrderType
+
+    def place_entry(i: int, direction: str) -> None:
         entry_key = f"{slug}#{i}"
         if entry_key in log and log[entry_key].get("status") != "ERROR":
-            continue  # already placed - retry-safety, mirrors the sports invariant
+            return  # already placed - retry-safety, mirrors the sports invariant
 
         token_id = market.up_token_id if direction == "UP" else market.down_token_id
         order_ts = int(datetime.now(timezone.utc).timestamp())
         try:
-            # FAK, not the default FOK - every FOK attempt today failed with
+            # FAK, not the default FOK - every FOK attempt failed with
             # "couldn't be fully filled" (thin order books at the moment of
-            # the attempt), unrelated to price/slippage. FAK takes whatever
-            # fill is available and cancels the rest instead of requiring
-            # 100% or nothing; the existing fill-confirmation logic below
-            # already handles "whatever filled_size actually is" correctly.
+            # the attempt); FAK takes whatever fill is available and
+            # cancels the rest.
             result = client.place_market_buy(
                 token_id,
                 Decimal(str(settings.stake_per_signal_usd)),
@@ -495,8 +281,9 @@ def main() -> None:
                 "date_closed": "",
                 "last_updated": _now(),
             }
+            save_log(settings.live_trade_log_path, log)
             print(f"btc5m-live: EXCEPTION placing BUY {entry_key}: {exc}")
-            continue
+            return
 
         fill_price, fill_size = result.avg_fill_price, result.filled_size
         if result.success:
@@ -532,6 +319,7 @@ def main() -> None:
             "date_closed": "",
             "last_updated": _now(),
         }
+        save_log(settings.live_trade_log_path, log)
 
         if not result.success:
             print(f"btc5m-live: ORDEN FALLIDA {direction} {entry_key}: {result.error}")
@@ -546,7 +334,53 @@ def main() -> None:
                 f"stake ${log[entry_key]['stake_usd_actual']}"
             )
 
-    save_log(settings.live_trade_log_path, log)
+    samples: list[Sample] = []
+    entries_seen = 0
+    while True:
+        seconds_left = (close_at - datetime.now(timezone.utc)).total_seconds()
+        spot = fetch_spot_price()
+        up_q, down_q = fetch_clob_quotes(market.condition_id, market.up_token_id, market.down_token_id)
+        samples.append(
+            Sample(
+                seconds_to_close=seconds_left,
+                spot_price=spot,
+                target_price=target_price,
+                up_quote=up_q,
+                down_quote=down_q,
+            )
+        )
+
+        # Evaluated after EVERY sample, not once after this loop ends. The
+        # old structure called strategy_e_scaling_replicator(samples) only
+        # AFTER the loop broke (seconds_left <= 2) and then placed every
+        # entry back-to-back at that instant - meaning even the entry
+        # "computed for 150s before close" actually reached the exchange
+        # right as (or after) the window itself closed, guaranteeing a
+        # dead/frozen book. Paper trading never noticed this bug because
+        # it only replays each sample's already-recorded quote after the
+        # fact - it never needs to transact at that exact instant. Root-
+        # caused 2026-08-04 after two isolated $1/$6 test orders proved the
+        # order pipeline itself works fine (the cheap-side one filled
+        # instantly); the batching bug is what put every real Strategy E
+        # attempt at the worst possible moment regardless of order type.
+        entries = strategy_e_scaling_replicator(samples)
+        if client is not None:
+            for i in range(entries_seen, len(entries)):
+                direction, _paper_entry_price, _paper_stake = entries[i]
+                place_entry(i, direction)
+        elif len(entries) > entries_seen:
+            print(
+                f"btc5m-live: {len(entries) - entries_seen} señal(es) nueva(s) de E en "
+                f"{slug}, pero trading real esta apagado - nada ejecutado"
+            )
+        entries_seen = len(entries)
+
+        if seconds_left <= 2:
+            break
+        time.sleep(SAMPLE_INTERVAL_SECONDS)
+
+    if entries_seen == 0:
+        print(f"btc5m-live: Strategy E no disparo para {slug}")
 
 
 if __name__ == "__main__":
