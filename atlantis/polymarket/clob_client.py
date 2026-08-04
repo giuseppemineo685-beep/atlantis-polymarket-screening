@@ -150,11 +150,16 @@ class LiveClobClient:
                 # the raw computation above 1.0, which is nonsensical and
                 # also breaks the size-granularity math below (confirmed:
                 # limit_price=1.029 rejected 5 real BTC5m orders in a row
-                # with "amount demasiado chico", 2026-08-04). Cap one tick
-                # below the maximum instead.
-                max_price = Decimal("1") - tick_size
-                if limit_price > max_price:
-                    limit_price = max_price
+                # with "amount demasiado chico", 2026-08-04). Cap at a FIXED
+                # 2-decimal 0.99, not "1 - tick_size" - a near-resolution
+                # market's real tick_size can be finer than 0.01 (Polymarket
+                # narrows ticks close to 0/1), and every line below this
+                # assumes limit_price has exactly 2 decimals; a 3-decimal
+                # cap (e.g. 0.999) silently broke that and got a real order
+                # rejected by the exchange itself ("max accuracy of 2
+                # decimals"), confirmed the same day as the first fix.
+                if limit_price > Decimal("0.99"):
+                    limit_price = Decimal("0.99")
                 # The exchange rounds our submitted size to 2 decimals
                 # itself, then computes maker_amount (USDC spent) = size *
                 # price - and rejects a marketable BUY if that product has
