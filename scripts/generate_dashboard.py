@@ -167,6 +167,7 @@ STRATEGY_LABELS = {
     "B_momentum": "B · Momentum de cierre",
     "C_spike_fade": "C · Fade de spike",
     "D_cheap_blind": "D · Barato sin filtro",
+    "E_scaling_replicator": "E · Réplica de bot real (escalado)",
 }
 
 
@@ -1189,8 +1190,8 @@ footer a:hover {{ text-decoration: underline; }}
 
   <section>
     <div class="section-head">
-      <h2>BTC "Up or Down 5m" — 4 estrategias (paper)</h2>
-      <span class="section-note">$1 simulado por señal · cada ventana de 5 min abre y resuelve en el mismo ciclo · sin relación con deportes/esports ni con dinero real</span>
+      <h2>BTC "Up or Down 5m" — 5 estrategias (paper)</h2>
+      <span class="section-note">A-D: $1 por señal (una entrada) · E: $0.20 por entrada, varias por ventana, inspirada en una wallet real que opera estos mercados · cada ventana abre y resuelve en el mismo ciclo · sin relación con deportes/esports ni con dinero real</span>
     </div>
     <div class="table-scroll">
       <table>

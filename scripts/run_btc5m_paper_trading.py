@@ -1,9 +1,22 @@
-"""BTC 'Up or Down 5m' paper-trading experiment - 4 independent entry
-strategies (A/B/C/D) tested against the same price samples. Paper only,
-$1/signal, deliberately standalone: no import of live_intents or anything
-from the live-execution path - this vertical has no wallets to vet and
-nothing here should ever be able to touch the real-money order queue
-(same isolation rule scripts/run_screening_and_notify_esports.py uses).
+"""BTC 'Up or Down 5m' paper-trading experiment - 5 independent entry
+strategies (A/B/C/D/E) tested against the same price samples. Paper only,
+deliberately standalone: no import of live_intents or anything from the
+live-execution path - this vertical has no wallets to vet and nothing
+here should ever be able to touch the real-money order queue (same
+isolation rule scripts/run_screening_and_notify_esports.py uses).
+
+Strategy E (added 2026-08-04) is inspired by a real high-volume wallet
+(0x3048d65321be3497164cdfc2996f94f98a2e7537) found to be trading these
+exact markets - not a byte-for-byte reproduction of its actual algorithm
+(that isn't observable, only its resulting trades are), but a faithful
+approximation of the confirmed pattern: within one 5-minute window it
+placed ~6 small buys over ~57 seconds, mostly scaling into whichever side
+spot favored, with brief cheap probes of the other side, able to flip
+sides entirely if price reversed mid-window. Investigated live via
+data-api.polymarket.com/trades + /positions (~78% real win rate, small
+losses/large wins - the "ghost loss" gotcha already known in this repo
+meant /closed-positions alone looked like ~100% win rate before cross-
+checking against /positions for the never-redeemed losing side).
 
 Unlike the wallet-copying verticals, a window opens and resolves within
 the same script invocation - by the time a 5-minute window closes we
@@ -71,8 +84,13 @@ TRADE_LOG_FIELDS = [
 ]
 
 STAKE_USD = Decimal("1")
+STAKE_USD_SCALED_ENTRY = Decimal("0.20")  # Strategy E's per-increment stake (several fire per window)
 WINDOW_SECONDS = 5 * 60
-LOOKAHEAD_SECONDS = 65  # start the tight polling loop once within this many seconds of a close
+# Strategy E needs samples from the back half of the window (its earliest
+# confirmed real-world entry was ~200s before close) - the other 4 only
+# ever look at the closing ~40s, but sampling from 150s doesn't cost them
+# anything, they just ignore the earlier samples.
+LOOKAHEAD_SECONDS = 150
 STALE_START_SECONDS = 90  # if we first see a window this late into it, its target price is unusable
 SAMPLE_INTERVAL_SECONDS = 4
 SPOT_PRICE_URL = "https://api.coinbase.com/v2/prices/BTC-USD/spot"
@@ -212,69 +230,100 @@ def save_window_state(state: dict) -> None:
 
 # --- Strategies -------------------------------------------------------
 # Each takes the full ordered (oldest -> newest) sample list for one
-# window and returns (direction, entry_price) if it would have entered,
-# or None if its condition never fired. Pure functions, no shared state -
-# all 4 run independently over the same sample list every window.
+# window and returns a list of (direction, entry_price, stake_usd)
+# entries it would have made - empty if its condition never fired. Pure
+# functions, no shared state - all 5 run independently over the same
+# sample list every window. A-D only ever make at most one entry each;
+# E (see module docstring) can make several.
 
-def strategy_a_lag_arbitrage(samples: list[Sample]) -> tuple[str, Decimal] | None:
+def strategy_a_lag_arbitrage(samples: list[Sample]) -> list[tuple[str, Decimal, Decimal]]:
     candidates = [s for s in samples if 30 <= s.seconds_to_close <= 40]
     if not candidates:
-        return None
+        return []
     s = candidates[-1]
     if s.spot_price is None or s.target_price is None:
-        return None
+        return []
     if s.spot_price > s.target_price and s.up_quote is not None and s.up_quote < Decimal("0.20"):
-        return "UP", s.up_quote
+        return [("UP", s.up_quote, STAKE_USD)]
     if s.spot_price < s.target_price and s.down_quote is not None and s.down_quote < Decimal("0.20"):
-        return "DOWN", s.down_quote
-    return None
+        return [("DOWN", s.down_quote, STAKE_USD)]
+    return []
 
 
-def strategy_b_momentum(samples: list[Sample]) -> tuple[str, Decimal] | None:
+def strategy_b_momentum(samples: list[Sample]) -> list[tuple[str, Decimal, Decimal]]:
     candidates = [s for s in samples if 30 <= s.seconds_to_close <= 40]
     priced = [s for s in samples if s.spot_price is not None]
     if not candidates or len(priced) < 2:
-        return None
+        return []
     s = candidates[-1]
     if s.spot_price is None:
-        return None
+        return []
     earliest, latest = priced[0], priced[-1]
     if latest.spot_price > earliest.spot_price and s.up_quote is not None:
-        return "UP", s.up_quote
+        return [("UP", s.up_quote, STAKE_USD)]
     if latest.spot_price < earliest.spot_price and s.down_quote is not None:
-        return "DOWN", s.down_quote
-    return None
+        return [("DOWN", s.down_quote, STAKE_USD)]
+    return []
 
 
-def strategy_c_spike_fade(samples: list[Sample]) -> tuple[str, Decimal] | None:
+def strategy_c_spike_fade(samples: list[Sample]) -> list[tuple[str, Decimal, Decimal]]:
     candidates = [s for s in samples if s.seconds_to_close <= 15]
     priced = [s.spot_price for s in samples if s.spot_price is not None]
     if not candidates or len(priced) < 3:
-        return None
+        return []
     s = candidates[-1]
     if s.spot_price is None:
-        return None
+        return []
     avg = sum(priced) / len(priced)
     threshold = avg * Decimal("0.0005")  # 5bps - a starting guess, tune once data exists
     deviation = s.spot_price - avg
     if deviation > threshold and s.down_quote is not None:
-        return "DOWN", s.down_quote  # spiked up -> bet it fades back down
+        return [("DOWN", s.down_quote, STAKE_USD)]  # spiked up -> bet it fades back down
     if deviation < -threshold and s.up_quote is not None:
-        return "UP", s.up_quote  # spiked down -> bet it fades back up
-    return None
+        return [("UP", s.up_quote, STAKE_USD)]  # spiked down -> bet it fades back up
+    return []
 
 
-def strategy_d_cheap_blind(samples: list[Sample]) -> tuple[str, Decimal] | None:
+def strategy_d_cheap_blind(samples: list[Sample]) -> list[tuple[str, Decimal, Decimal]]:
     candidates = [s for s in samples if 20 <= s.seconds_to_close <= 40]
     if not candidates:
-        return None
+        return []
     s = candidates[-1]
     threshold = Decimal("0.15")
     if s.up_quote is not None and s.up_quote < threshold:
-        return "UP", s.up_quote
+        return [("UP", s.up_quote, STAKE_USD)]
     if s.down_quote is not None and s.down_quote < threshold:
-        return "DOWN", s.down_quote
-    return None
+        return [("DOWN", s.down_quote, STAKE_USD)]
+    return []
+
+
+def strategy_e_scaling_replicator(samples: list[Sample]) -> list[tuple[str, Decimal, Decimal]]:
+    """Scales into whichever side spot currently favors, roughly every
+    25s through the back half of the window (seconds_to_close <= 150) -
+    can make several small entries, and can flip sides entirely if spot
+    crosses back over target mid-window, same as the real bot's observed
+    behavior. See module docstring for the confirmed trade sequence this
+    is modeled on."""
+    entries: list[tuple[str, Decimal, Decimal]] = []
+    last_entry_at: float | None = None
+    for s in samples:
+        if s.seconds_to_close > 150:
+            continue
+        if s.spot_price is None or s.target_price is None:
+            continue
+        if last_entry_at is not None and (last_entry_at - s.seconds_to_close) < 25:
+            continue
+        if s.spot_price > s.target_price:
+            direction, quote = "UP", s.up_quote
+        elif s.spot_price < s.target_price:
+            direction, quote = "DOWN", s.down_quote
+        else:
+            continue
+        if quote is None or quote <= 0 or quote >= 1:
+            continue
+        entries.append((direction, quote, STAKE_USD_SCALED_ENTRY))
+        last_entry_at = s.seconds_to_close
+    return entries
 
 
 STRATEGIES = {
@@ -282,6 +331,7 @@ STRATEGIES = {
     "B_momentum": strategy_b_momentum,
     "C_spike_fade": strategy_c_spike_fade,
     "D_cheap_blind": strategy_d_cheap_blind,
+    "E_scaling_replicator": strategy_e_scaling_replicator,
 }
 
 
@@ -329,33 +379,29 @@ def evaluate_and_log(market: MarketInfo, samples: list[Sample]) -> None:
     if priced:
         final = priced[-1]
         winner = "UP" if final.spot_price >= final.target_price else "DOWN"
-    for name, fn in STRATEGIES.items():
-        result = fn(samples)
-        if result is None:
-            continue
-        direction, entry_price = result
-        if winner is None:
-            continue  # can't score a strategy without knowing who won
-        won = direction == winner
-        pct_return = (
-            str((Decimal(1) / entry_price - 1) * 100) if won and entry_price > 0 else "-100"
-        )
-        rows.append(
-            {
-                "window_slug": market.slug,
-                "strategy": name,
-                "direction": direction,
-                "entry_price": str(entry_price),
-                "target_price": str(priced[-1].target_price) if priced else "",
-                "spot_price_at_entry": str(samples[0].spot_price) if samples[0].spot_price else "",
-                "spot_price_at_close": str(priced[-1].spot_price) if priced else "",
-                "stake_usd": str(STAKE_USD),
-                "status": "WIN" if won else "LOSS",
-                "pct_return": pct_return,
-                "date_opened": now,
-                "date_closed": now,
-            }
-        )
+    if winner is not None:
+        for name, fn in STRATEGIES.items():
+            for direction, entry_price, stake in fn(samples):
+                won = direction == winner
+                pct_return = (
+                    str((Decimal(1) / entry_price - 1) * 100) if won and entry_price > 0 else "-100"
+                )
+                rows.append(
+                    {
+                        "window_slug": market.slug,
+                        "strategy": name,
+                        "direction": direction,
+                        "entry_price": str(entry_price),
+                        "target_price": str(priced[-1].target_price) if priced else "",
+                        "spot_price_at_entry": str(samples[0].spot_price) if samples[0].spot_price else "",
+                        "spot_price_at_close": str(priced[-1].spot_price) if priced else "",
+                        "stake_usd": str(stake),
+                        "status": "WIN" if won else "LOSS",
+                        "pct_return": pct_return,
+                        "date_opened": now,
+                        "date_closed": now,
+                    }
+                )
     if rows:
         append_trade_log_rows(rows)
         print(f"btc5m: logged {len(rows)} strategy result(s) for {market.slug}")
