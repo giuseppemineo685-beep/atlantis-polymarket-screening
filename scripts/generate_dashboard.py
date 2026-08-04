@@ -967,7 +967,8 @@ footer a:hover {{ text-decoration: underline; }}
   </header>
 
   <div class="tabs">
-    <button class="tab-btn active" data-tab="btc5m">BTC 5m</button>
+    <button class="tab-btn active" data-tab="btc5m">BTC 5m (Paper)</button>
+    <button class="tab-btn" data-tab="btc5m-real">BTC 5m (Real)</button>
     <button class="tab-btn" data-tab="sports">Deportes</button>
     <button class="tab-btn" data-tab="esports-reviewed">Esports</button>
   </div>
@@ -1250,7 +1251,7 @@ footer a:hover {{ text-decoration: underline; }}
 
   <section>
     <div class="section-head">
-      <h2>BTC "Up or Down 5m" — 5 estrategias (paper)</h2>
+      <h2>BTC "Up or Down 5m" — 5 estrategias (paper trading, sin dinero real)</h2>
       <span class="section-note">A-D: $1 por señal (una entrada) · E: $0.20 por entrada, varias por ventana, inspirada en una wallet real que opera estos mercados · cada ventana abre y resuelve en el mismo ciclo · sin relación con deportes/esports ni con dinero real</span>
     </div>
     <div class="table-scroll">
@@ -1291,6 +1292,20 @@ footer a:hover {{ text-decoration: underline; }}
       </table>
     </div>
     {f'<button class="tab-btn" id="toggle-history-btn-btc5m" data-count="{len(btc5m_rows)}" data-label="Ver todas">Ver todas ({len(btc5m_rows)})</button>' if btc5m_hidden else ''}
+  </section>
+
+  </div>
+
+  <div class="tab-panel" data-tab-panel="btc5m-real">
+
+  <section>
+    <div class="section-head">
+      <h2>BTC "Up or Down 5m" — dinero real (solo Estrategia E)</h2>
+      <span class="section-note">Todavía NO está conectado a dinero real — esta pestaña queda lista para cuando terminemos de diseñar y probar la ejecución real de forma segura.</span>
+    </div>
+    <div class="empty" style="padding: 24px 0;">
+      Sin operaciones reales todavía. La Estrategia E sigue corriendo en papel en la otra pestaña mientras se diseña la ejecución real con las mismas protecciones que ya usamos en deportes (confirmación de fill vía /trades, sin reintentos en falso, kill switch, etc.).
+    </div>
   </section>
 
   </div>
