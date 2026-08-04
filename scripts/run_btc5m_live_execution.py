@@ -74,6 +74,14 @@ from run_btc5m_paper_trading import (  # noqa: E402
 
 LIVE_WINDOW_STATE_PATH = ROOT / "state" / "btc5m_live_window.json"
 
+# Wider than the shared 3% default in clob_client.py (sports keeps using
+# that default, unaffected) - every real BTC5m attempt so far has failed
+# with FOK "couldn't be fully filled" (thin order-book liquidity at the
+# instant of the attempt), not a price/format issue. A wider tolerance
+# lets the BUY limit price reach further into the book to find a match,
+# at the cost of a worse average fill price when it works.
+BTC5M_MAX_SLIPPAGE_PCT = Decimal("8")
+
 BTC5M_LIVE_FIELDS = [
     "entry_key",
     "condition_id",
@@ -263,7 +271,9 @@ def main() -> None:
         token_id = market.up_token_id if direction == "UP" else market.down_token_id
         order_ts = int(datetime.now(timezone.utc).timestamp())
         try:
-            result = client.place_market_buy(token_id, Decimal(str(settings.stake_per_signal_usd)))
+            result = client.place_market_buy(
+                token_id, Decimal(str(settings.stake_per_signal_usd)), max_slippage_pct=BTC5M_MAX_SLIPPAGE_PCT
+            )
         except Exception as exc:
             log[entry_key] = {
                 "entry_key": entry_key,
