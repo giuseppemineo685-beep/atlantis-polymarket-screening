@@ -74,6 +74,21 @@ from run_btc5m_paper_trading import (  # noqa: E402
 
 LIVE_WINDOW_STATE_PATH = ROOT / "state" / "btc5m_live_window.json"
 
+# One-shot diagnostic (owner's request, 2026-08-04): Strategy E's real
+# entries always buy the FAVORED side late in the window, which stacks
+# TWO independent things that can each cause a failed order - our own
+# size-vs-min_order_size math, and genuine liquidity at that specific
+# price/moment. This test isolates just "can we execute a real order at
+# all" by placing exactly ONE minimal ($1) FAK buy on whichever side is
+# CHEAP enough for $1 to clear the exchange's real min_order_size floor
+# (confirmed live 2026-08-04: 5 shares) - buying the expensive/favored
+# side with $1 would fail our own pre-flight check before ever reaching
+# the exchange, telling us nothing. Logs into the SAME real trade log as
+# Strategy E (distinct "TEST_SINGLE_ORDER_" entry_key prefix, never
+# collides with E's "{slug}#{i}" keys) so the result is visible via the
+# normal git sync, without needing a separate untracked state file.
+SINGLE_ORDER_TEST_KEY_PREFIX = "TEST_SINGLE_ORDER_"
+
 # Wider than the shared 3% default in clob_client.py (sports keeps using
 # that default, unaffected) - every real BTC5m attempt so far has failed
 # with FOK "couldn't be fully filled" (thin order-book liquidity at the
@@ -180,6 +195,118 @@ def check_kill_switch(settings) -> None:
         print("btc5m-live: KILL SWITCH disparado, trading real pausado")
 
 
+def run_single_order_test(settings, state: dict, slug: str, seconds_left: float) -> None:
+    log = load_log(settings.live_trade_log_path)
+    if any(key.startswith(SINGLE_ORDER_TEST_KEY_PREFIX) for key in log):
+        return  # already attempted once, ever - never repeat
+    if not (10 < seconds_left <= 90):
+        return
+
+    from atlantis.polymarket.clob_client import build_live_client
+    from py_clob_client_v2.clob_types import OrderType
+
+    client = build_live_client(settings)
+    up_price = client.get_price(state["up_token_id"], "BUY")
+    down_price = client.get_price(state["down_token_id"], "BUY")
+
+    candidates = []
+    if up_price is not None:
+        candidates.append(("UP", state["up_token_id"], up_price))
+    if down_price is not None:
+        candidates.append(("DOWN", state["down_token_id"], down_price))
+
+    entry_key = f"{SINGLE_ORDER_TEST_KEY_PREFIX}{slug}"
+    title = "BTC5m TEST orden unica $1"
+
+    if not candidates:
+        log[entry_key] = {
+            "entry_key": entry_key,
+            "condition_id": state["condition_id"],
+            "asset": "",
+            "window_slug": slug,
+            "title": title,
+            "outcome": "",
+            "direction": "",
+            "fill_price_buy": "",
+            "stake_usd_requested": "1",
+            "stake_usd_actual": "",
+            "shares_held": "",
+            "order_id_buy": "",
+            "status": "ERROR",
+            "fill_price_sell": "",
+            "realized_pnl_usd": "",
+            "pct_return": "",
+            "date_opened": _now(),
+            "date_closed": _now(),
+            "last_updated": _now(),
+        }
+        save_log(settings.live_trade_log_path, log)
+        print("btc5m-test: sin precio disponible en ningun lado")
+        return
+
+    # Pick the CHEAPER side - $1 needs price <= ~0.20 to clear the real
+    # 5-share min_order_size floor, and Strategy E's failures were always
+    # on the expensive/favored side, so this deliberately tests the
+    # opposite case: can we execute AT ALL when our own size math is
+    # comfortably valid.
+    direction, token_id, price = min(candidates, key=lambda c: c[2])
+    order_ts = int(datetime.now(timezone.utc).timestamp())
+
+    try:
+        result = client.place_market_buy(
+            token_id,
+            Decimal("1"),
+            max_slippage_pct=BTC5M_MAX_SLIPPAGE_PCT,
+            order_type=OrderType.FAK,
+        )
+    except Exception as exc:
+        result = None
+        error_text = f"{type(exc).__name__}: {exc}"
+    else:
+        error_text = result.error
+
+    fill_price = fill_size = None
+    status_value = "ERROR"
+    order_id = ""
+    if result is not None and result.success:
+        fill_price, fill_size = result.avg_fill_price, result.filled_size
+        confirmed = get_confirmed_fill(
+            wallet_address=settings.funder_address,
+            condition_id=state["condition_id"],
+            asset=token_id,
+            side="BUY",
+            since_ts=order_ts - 30,
+        )
+        if confirmed:
+            fill_price, fill_size = confirmed
+        status_value = "EXECUTED"
+        order_id = result.order_id or ""
+
+    log[entry_key] = {
+        "entry_key": entry_key,
+        "condition_id": state["condition_id"],
+        "asset": token_id,
+        "window_slug": slug,
+        "title": title,
+        "outcome": direction,
+        "direction": direction,
+        "fill_price_buy": str(fill_price) if fill_price else "",
+        "stake_usd_requested": "1",
+        "stake_usd_actual": str(fill_price * fill_size) if (fill_price and fill_size) else "",
+        "shares_held": str(fill_size) if fill_size else "",
+        "order_id_buy": order_id,
+        "status": status_value,
+        "fill_price_sell": "",
+        "realized_pnl_usd": "",
+        "pct_return": "",
+        "date_opened": _now(),
+        "date_closed": "" if status_value == "EXECUTED" else _now(),
+        "last_updated": _now(),
+    }
+    save_log(settings.live_trade_log_path, log)
+    print(f"btc5m-test: intento unico $1 {direction} @ {price} -> status={status_value} error={error_text}")
+
+
 def main() -> None:
     settings = load_btc5m_live_settings()
     now = datetime.now(timezone.utc)
@@ -217,6 +344,9 @@ def main() -> None:
 
     close_at = window_start + timedelta(seconds=WINDOW_SECONDS)
     seconds_left = (close_at - now).total_seconds()
+
+    run_single_order_test(settings, state, slug, seconds_left)
+
     if seconds_left > LOOKAHEAD_SECONDS:
         return  # cheap no-op - most cron ticks land here
 
