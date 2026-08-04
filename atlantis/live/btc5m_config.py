@@ -22,15 +22,16 @@ def load_btc5m_live_settings() -> LiveSettings:
         ),
         funder_address=os.getenv("POLYMARKET_FUNDER_ADDRESS", ""),
         signature_type=int(os.getenv("POLYMARKET_SIGNATURE_TYPE", "1")),
-        # $1's original failure (2026-08-04) was actually the limit_price-
-        # above-$1 bug (fixed in clob_client.py) combined with a price
-        # right at that broken edge - not $1 being inherently too small.
-        # Back to $1 (owner's instruction) now that the price cap is fixed;
-        # the real remaining risk is FOK "couldn't be fully filled" (order-
-        # book liquidity), which is addressed via a wider slippage
-        # tolerance below, not stake size. Polymarket's stated 5-share
-        # order minimum is still untested against a real fill either way.
-        stake_per_signal_usd=float(os.getenv("BTC5M_STAKE_PER_SIGNAL_USD", "1")),
+        # $1 hit a THIRD real exchange constraint (2026-08-04): our own
+        # size math floors down to stay within budget, which for $1 at a
+        # price near the 0.99 cap computed exactly $0.99 of notional - the
+        # exchange rejected it outright ("invalid amount ... min size: 1",
+        # i.e. a real $1.00 minimum notional per order that our own floor-
+        # rounding can undercut by a cent). $2 clears this with margin.
+        # Settled on $2 (owner's decision) + the wider slippage tolerance
+        # below (BTC5M_MAX_SLIPPAGE_PCT) as the combination most likely to
+        # clear every sizing rule AND find a FOK match.
+        stake_per_signal_usd=float(os.getenv("BTC5M_STAKE_PER_SIGNAL_USD", "2")),
         # Pilot capital allocated to this vertical (2026-08-04, owner's
         # explicit instruction: "capital dispuesto 100usd, si se pierde
         # todo que se pause"). Not used by kill_switch.py (that module is
