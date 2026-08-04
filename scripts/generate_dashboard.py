@@ -171,7 +171,7 @@ STRATEGY_LABELS = {
 }
 
 
-def render_btc5m_row(r: dict, *, extra_class: str = "") -> str:
+def render_btc5m_row(r: dict, *, extra_class: str = "", show_strategy: bool = True) -> str:
     pct_return = r.get("pct_return", "")
     return_class = ""
     if pct_return not in (None, ""):
@@ -181,10 +181,15 @@ def render_btc5m_row(r: dict, *, extra_class: str = "") -> str:
             return_class = ""
     status = r.get("status", "")
     status_badge = f'<span class="pill pill-{"win" if status == "WIN" else "loss"}">{esc(status)}</span>'
+    strategy_cell = (
+        f"<td class=\"dim\">{esc(STRATEGY_LABELS.get(r.get('strategy'), r.get('strategy')))}</td>"
+        if show_strategy
+        else ""
+    )
     return f"""
     <tr class="{extra_class}">
       <td>{status_badge}</td>
-      <td class="dim">{esc(STRATEGY_LABELS.get(r.get('strategy'), r.get('strategy')))}</td>
+      {strategy_cell}
       <td class="title-cell">{esc(r.get('window_slug'))}</td>
       <td><b>{esc(r.get('direction'))}</b></td>
       <td class="num">{fmt_price(r.get('entry_price'))}</td>
@@ -205,6 +210,47 @@ def render_btc5m_strategy_row(name: str, stats: dict) -> str:
       <td class="num {'num-pos' if stats['pct_sum'] / n >= 0 else 'num-neg'}">{(stats['pct_sum'] / n if n else 0):+.1f}%</td>
       <td class="num {usd_class}">${stats['usd_sum']:+.2f}</td>
     </tr>"""
+
+
+def render_btc5m_strategy_section(strategy_key: str, stats: dict, rows: list[dict]) -> str:
+    label = STRATEGY_LABELS.get(strategy_key, strategy_key)
+    n = stats.get("n", 0)
+    win_rate = (stats["wins"] / n * 100) if n else 0
+    avg_pct = (stats["pct_sum"] / n) if n else 0
+    usd_sum = stats.get("usd_sum", 0.0)
+    avg_class = "num-pos" if avg_pct >= 0 else "num-neg"
+    usd_class = "num-pos" if usd_sum >= 0 else "num-neg"
+    visible = rows[:15]
+    hidden = rows[15:]
+    table_id = f"history-table-btc5m-{strategy_key}"
+    toggle_id = f"toggle-history-btn-btc5m-{strategy_key}"
+    toggle_btn = (
+        f'<button class="tab-btn" id="{toggle_id}" data-count="{len(rows)}" data-label="Ver todas">Ver todas ({len(rows)})</button>'
+        if hidden
+        else ""
+    )
+    return f"""
+  <section>
+    <div class="section-head">
+      <h2>{esc(label)}</h2>
+      <span class="section-note">{n} trades · win rate {win_rate:.1f}% · retorno promedio <span class="{avg_class}">{avg_pct:+.1f}%</span> · USD total <span class="{usd_class}">${usd_sum:+.2f}</span></span>
+    </div>
+    <div class="table-scroll">
+      <table id="{table_id}">
+        <thead>
+          <tr>
+            <th>Estado</th><th>Ventana</th><th>Dirección</th><th>Entrada</th><th>Retorno</th><th>Cerrado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {"".join(render_btc5m_row(r, show_strategy=False) for r in visible)}
+          {"".join(render_btc5m_row(r, extra_class="row-hidden", show_strategy=False) for r in hidden)}
+          {'<tr><td colspan="6" class="empty">Todavía no hay trades registrados</td></tr>' if not rows else ''}
+        </tbody>
+      </table>
+    </div>
+    {toggle_btn}
+  </section>"""
 
 
 def real_log_to_display_rows(raw_rows: list[dict]) -> list[dict]:
@@ -504,6 +550,9 @@ def main() -> None:
             d["wins"] += 1
     btc5m_visible = btc5m_rows[:20]
     btc5m_hidden = btc5m_rows[20:]
+    btc5m_rows_by_strategy: dict[str, list[dict]] = defaultdict(list)
+    for r in btc5m_rows:
+        btc5m_rows_by_strategy[r.get("strategy", "")].append(r)
 
     resolved = [r for r in log_rows if r.get("status") in ("WIN", "LOSS", "CLOSED")]
     open_trades = [r for r in log_rows if r.get("status") == "OPEN"]
@@ -1208,9 +1257,11 @@ footer a:hover {{ text-decoration: underline; }}
     </div>
   </section>
 
+  {"".join(render_btc5m_strategy_section(name, btc5m_by_strategy.get(name, {"n": 0, "wins": 0, "pct_sum": 0.0, "usd_sum": 0.0}), btc5m_rows_by_strategy.get(name, [])) for name in STRATEGY_LABELS)}
+
   <section>
     <div class="section-head">
-      <h2>Historial de trades — BTC 5m (paper)</h2>
+      <h2>Historial de trades — BTC 5m, todas las estrategias combinadas (paper)</h2>
       <span class="section-note">{len(btc5m_rows)} señales registradas · últimas 20 visibles · ordenado por fecha de cierre</span>
     </div>
     <div class="table-scroll">
@@ -1260,7 +1311,7 @@ function wireHistoryToggle(btnId, tableId) {{
 wireHistoryToggle('toggle-history-btn', 'history-table');
 wireHistoryToggle('toggle-history-btn-esports', 'history-table-esports');
 wireHistoryToggle('toggle-history-btn-btc5m', 'history-table-btc5m');
-wireHistoryToggle('toggle-performance-btn', 'performance-table');
+{"".join(f"wireHistoryToggle('toggle-history-btn-btc5m-{name}', 'history-table-btc5m-{name}');" + chr(10) for name in STRATEGY_LABELS)}wireHistoryToggle('toggle-performance-btn', 'performance-table');
 </script>
 </body>
 </html>

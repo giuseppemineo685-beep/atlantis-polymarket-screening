@@ -256,7 +256,7 @@ footer a:hover { text-decoration: underline; }
       <h1>ATLANTIS <span>SCREENING</span></h1>
       <div class="subtitle">Señales de consenso · Polymarket sports · 14 traders verificados</div>
     </div>
-    <div class="updated">Última corrida (UTC)<br><b>2026-08-04 10:16 UTC</b><br>Hora Zúrich<br><b>2026-08-04 12:16</b></div>
+    <div class="updated">Última corrida (UTC)<br><b>2026-08-04 10:35 UTC</b><br>Hora Zúrich<br><b>2026-08-04 12:35</b></div>
   </header>
 
   <div class="tabs">
@@ -2823,9 +2823,116 @@ footer a:hover { text-decoration: underline; }
     </div>
   </section>
 
+  
   <section>
     <div class="section-head">
-      <h2>Historial de trades — BTC 5m (paper)</h2>
+      <h2>A · Arbitraje de rezago</h2>
+      <span class="section-note">0 trades · win rate 0.0% · retorno promedio <span class="num-pos">+0.0%</span> · USD total <span class="num-pos">$+0.00</span></span>
+    </div>
+    <div class="table-scroll">
+      <table id="history-table-btc5m-A_lag_arbitrage">
+        <thead>
+          <tr>
+            <th>Estado</th><th>Ventana</th><th>Dirección</th><th>Entrada</th><th>Retorno</th><th>Cerrado</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          
+          <tr><td colspan="6" class="empty">Todavía no hay trades registrados</td></tr>
+        </tbody>
+      </table>
+    </div>
+    
+  </section>
+  <section>
+    <div class="section-head">
+      <h2>B · Momentum de cierre</h2>
+      <span class="section-note">0 trades · win rate 0.0% · retorno promedio <span class="num-pos">+0.0%</span> · USD total <span class="num-pos">$+0.00</span></span>
+    </div>
+    <div class="table-scroll">
+      <table id="history-table-btc5m-B_momentum">
+        <thead>
+          <tr>
+            <th>Estado</th><th>Ventana</th><th>Dirección</th><th>Entrada</th><th>Retorno</th><th>Cerrado</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          
+          <tr><td colspan="6" class="empty">Todavía no hay trades registrados</td></tr>
+        </tbody>
+      </table>
+    </div>
+    
+  </section>
+  <section>
+    <div class="section-head">
+      <h2>C · Fade de spike</h2>
+      <span class="section-note">0 trades · win rate 0.0% · retorno promedio <span class="num-pos">+0.0%</span> · USD total <span class="num-pos">$+0.00</span></span>
+    </div>
+    <div class="table-scroll">
+      <table id="history-table-btc5m-C_spike_fade">
+        <thead>
+          <tr>
+            <th>Estado</th><th>Ventana</th><th>Dirección</th><th>Entrada</th><th>Retorno</th><th>Cerrado</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          
+          <tr><td colspan="6" class="empty">Todavía no hay trades registrados</td></tr>
+        </tbody>
+      </table>
+    </div>
+    
+  </section>
+  <section>
+    <div class="section-head">
+      <h2>D · Barato sin filtro</h2>
+      <span class="section-note">0 trades · win rate 0.0% · retorno promedio <span class="num-pos">+0.0%</span> · USD total <span class="num-pos">$+0.00</span></span>
+    </div>
+    <div class="table-scroll">
+      <table id="history-table-btc5m-D_cheap_blind">
+        <thead>
+          <tr>
+            <th>Estado</th><th>Ventana</th><th>Dirección</th><th>Entrada</th><th>Retorno</th><th>Cerrado</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          
+          <tr><td colspan="6" class="empty">Todavía no hay trades registrados</td></tr>
+        </tbody>
+      </table>
+    </div>
+    
+  </section>
+  <section>
+    <div class="section-head">
+      <h2>E · Réplica de bot real (escalado)</h2>
+      <span class="section-note">0 trades · win rate 0.0% · retorno promedio <span class="num-pos">+0.0%</span> · USD total <span class="num-pos">$+0.00</span></span>
+    </div>
+    <div class="table-scroll">
+      <table id="history-table-btc5m-E_scaling_replicator">
+        <thead>
+          <tr>
+            <th>Estado</th><th>Ventana</th><th>Dirección</th><th>Entrada</th><th>Retorno</th><th>Cerrado</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          
+          <tr><td colspan="6" class="empty">Todavía no hay trades registrados</td></tr>
+        </tbody>
+      </table>
+    </div>
+    
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Historial de trades — BTC 5m, todas las estrategias combinadas (paper)</h2>
       <span class="section-note">0 señales registradas · últimas 20 visibles · ordenado por fecha de cierre</span>
     </div>
     <div class="table-scroll">
@@ -2875,6 +2982,11 @@ function wireHistoryToggle(btnId, tableId) {
 wireHistoryToggle('toggle-history-btn', 'history-table');
 wireHistoryToggle('toggle-history-btn-esports', 'history-table-esports');
 wireHistoryToggle('toggle-history-btn-btc5m', 'history-table-btc5m');
+wireHistoryToggle('toggle-history-btn-btc5m-A_lag_arbitrage', 'history-table-btc5m-A_lag_arbitrage');
+wireHistoryToggle('toggle-history-btn-btc5m-B_momentum', 'history-table-btc5m-B_momentum');
+wireHistoryToggle('toggle-history-btn-btc5m-C_spike_fade', 'history-table-btc5m-C_spike_fade');
+wireHistoryToggle('toggle-history-btn-btc5m-D_cheap_blind', 'history-table-btc5m-D_cheap_blind');
+wireHistoryToggle('toggle-history-btn-btc5m-E_scaling_replicator', 'history-table-btc5m-E_scaling_replicator');
 wireHistoryToggle('toggle-performance-btn', 'performance-table');
 </script>
 </body>
