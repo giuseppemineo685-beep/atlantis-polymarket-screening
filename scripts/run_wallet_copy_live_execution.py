@@ -82,7 +82,7 @@ POLL_INTERVAL_SECONDS = 0.5
 # How often (in poll iterations) to re-check the kill switch / reconcile
 # resolved positions / re-read the enabled flag - this process never
 # exits on its own, so these can't be "once at startup" like E/B.
-HOUSEKEEPING_EVERY_N_POLLS = 60  # ~30s at the poll interval above
+HOUSEKEEPING_INTERVAL_SECONDS = 30
 
 SEEN_TRADES_PATH = ROOT / "state" / "btc5m_copy_seen_trades.json"
 MAX_SEEN_TRADES = 500  # bounds the state file's size - only recent history matters for dedup
@@ -293,12 +293,21 @@ def main() -> None:
     established = SEEN_TRADES_PATH.exists()
     seen = load_seen_trades()
     enabled = False
-    poll_count = 0
+    last_housekeeping = 0.0
 
     print("btc5m-copy: proceso persistente arrancando")
 
     while True:
-        if poll_count % HOUSEKEEPING_EVERY_N_POLLS == 0:
+        # Wall-clock based, not a poll-count modulo - the idle branch
+        # below sleeps 5s/iteration while the active branch sleeps 0.5s/
+        # iteration, so counting iterations made this check fire every
+        # ~30s while active but every ~5 MINUTES while idle (60 iterations
+        # x 5s instead of x 0.5s). Confirmed live 2026-08-05: enabling
+        # copying took several minutes to be noticed because of exactly
+        # this - the status flag flip sat unread until the next
+        # housekeeping pass finally rolled around.
+        if time.time() - last_housekeeping >= HOUSEKEEPING_INTERVAL_SECONDS:
+            last_housekeeping = time.time()
             with log_lock:
                 log = load_log(settings.live_trade_log_path)
                 resolved_count, _notifications = reconcile_resolved_positions(log)
@@ -314,8 +323,8 @@ def main() -> None:
                 client = build_live_client(settings)
                 print("btc5m-copy: cliente real construido, activo")
             elif not enabled and client is not None:
+                client = None
                 print("btc5m-copy: trading real apagado - pausando copiado")
-        poll_count += 1
 
         if not enabled:
             time.sleep(5)  # coarser idle poll while off - no point hammering the API
