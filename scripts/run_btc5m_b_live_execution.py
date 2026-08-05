@@ -276,7 +276,38 @@ def main() -> None:
         time.sleep(SAMPLE_INTERVAL_SECONDS)
 
     if not reported:
-        print(f"btc5m-b-live: Strategy B no disparo para {slug}")
+        # Owner asked (2026-08-05, after 3 windows in a row with no
+        # signal - unusually low given B fires in ~97% of paper windows)
+        # for a diagnostic that tells apart the real possibilities:
+        # (a) sampling jitter skipped clean over the narrow 30-40s band
+        #     strategy_b_momentum requires (a slow network call inside
+        #     one loop iteration - fetch_spot_price/fetch_clob_quotes -
+        #     can make a single step cover >10s, jumping past it
+        #     entirely);
+        # (b) fetch_spot_price() failed on most samples (Coinbase flaky);
+        # (c) BTC genuinely didn't move net over the ~150s lookback -
+        #     the fully legitimate "no signal" case.
+        # Without this, all three looked identical: a silent "no disparo".
+        candidates = [s for s in samples if 30 <= s.seconds_to_close <= 40]
+        priced = [s for s in samples if s.spot_price is not None]
+        if not candidates:
+            print(
+                f"btc5m-b-live: Strategy B no disparo para {slug} - NINGUNA de las "
+                f"{len(samples)} muestras cayo en la ventana 30-40s antes del cierre "
+                f"(posible salto de muestreo por lentitud de red)"
+            )
+        elif len(priced) < 2:
+            print(
+                f"btc5m-b-live: Strategy B no disparo para {slug} - precio de BTC "
+                f"disponible en solo {len(priced)}/{len(samples)} muestras (fallo de "
+                f"Coinbase)"
+            )
+        else:
+            earliest, latest = priced[0], priced[-1]
+            print(
+                f"btc5m-b-live: Strategy B no disparo para {slug} - BTC sin cambio "
+                f"neto: {earliest.spot_price} -> {latest.spot_price}"
+            )
 
 
 if __name__ == "__main__":
