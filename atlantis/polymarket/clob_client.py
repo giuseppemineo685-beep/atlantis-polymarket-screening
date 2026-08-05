@@ -220,35 +220,22 @@ class LiveClobClient:
                         ),
                     )
                 size = Decimal(valid_size_cents) / 100
-                # The exchange enforces its own minimum ORDER SIZE in shares
-                # (confirmed live 2026-08-04: min_order_size=5 on BTC5m's
-                # UP/DOWN books) - separate from, and unrelated to, the
-                # dollar-notional checks above. Because size = amount /
-                # limit_price, a fixed dollar stake produces fewer shares as
-                # price rises - Strategy E specifically buys the "favored"
-                # side late in the window, i.e. exactly when price is high
-                # (often >0.90), so a stake sized only against the dollar
-                # rules above can still be genuinely too small in shares.
-                # This was the real cause behind every BTC5m FOK/FAK order
-                # failing with "no orders found to match"/"couldn't be fully
-                # filled" even after the earlier dollar-notional fixes - our
-                # own order never met the exchange's real size floor, so it
-                # was invalid before any counterparty was even considered.
-                min_order_size = self.get_min_order_size(token_id)
-                if min_order_size is not None and size < min_order_size:
-                    return OrderResult(
-                        success=False,
-                        order_id=None,
-                        status="ERROR",
-                        filled_size=None,
-                        avg_fill_price=None,
-                        raw_response=None,
-                        error=(
-                            f"amount produce {size} shares a precio {limit_price}, "
-                            f"por debajo del minimo real del mercado ({min_order_size} shares) - "
-                            f"subir el monto en USD para esta entrada"
-                        ),
-                    )
+                # NOTE: a previous version of this method also rejected
+                # orders below the order book's own `min_order_size` field
+                # (read via get_min_order_size), on the theory that the
+                # exchange enforced a hard 5-share floor even for
+                # marketable orders. That was wrong - confirmed 2026-08-05
+                # by the owner directly on Polymarket's own UI: a $1
+                # marketable BUY (~1 share at a 96c price) placed with no
+                # complaint, with ~1:30 left on the window. Every real
+                # BTC5m order failure that looked like a size problem was
+                # actually the batching-timing bug (see
+                # run_btc5m_live_execution.py) placing every order at
+                # ~0-2s before close, not an exchange-side size floor.
+                # `min_order_size` most likely only constrains RESTING
+                # limit/maker orders, not marketable taker orders like the
+                # ones this method builds - removed the check rather than
+                # leave a rejection based on a disproven assumption.
             else:
                 raw_price = current_price * (1 - max_slippage_pct / 100)
                 # Round DOWN - never round up above the floor we intend to accept.
