@@ -55,3 +55,32 @@ def load_btc5m_live_settings() -> LiveSettings:
         # concept, these markets resolve on their own within 5 minutes).
         intents_queue_path=Path("state/live_intents_queue_btc5m_unused.jsonl"),
     )
+
+
+def load_btc5m_copy_live_settings() -> LiveSettings:
+    """Own pool, separate from Strategy E/B's shared $100 - owner's
+    request 2026-08-05: directly mirror wallet 0x3048...e7537's real
+    trades instead of guessing direction/timing (the source of every real
+    bug hit building E and B). A fresh, untested mechanism gets its own
+    smaller bucket rather than mixing into the existing pool's accounting.
+    Same real account/credentials as everything else."""
+    return LiveSettings(
+        clob_host=os.getenv("POLYMARKET_CLOB_HOST", "https://clob.polymarket.com"),
+        chain_id=int(os.getenv("POLYMARKET_CHAIN_ID", "137")),
+        private_key_path=Path(
+            os.getenv("POLYMARKET_PRIVATE_KEY_PATH", "/root/.atlantis_secrets/polymarket_private_key")
+        ),
+        funder_address=os.getenv("POLYMARKET_FUNDER_ADDRESS", ""),
+        signature_type=int(os.getenv("POLYMARKET_SIGNATURE_TYPE", "1")),
+        stake_per_signal_usd=float(os.getenv("BTC5M_COPY_STAKE_PER_SIGNAL_USD", "2")),
+        initial_bankroll_usd=float(os.getenv("BTC5M_COPY_CAPITAL_USD", "50")),
+        kill_switch_loss_pct=100.0,
+        status_path=Path(os.getenv("BTC5M_COPY_LIVE_STATUS_PATH", "state/live_trading_status_btc5m_copy.json")),
+        live_trade_log_path=Path(
+            os.getenv("BTC5M_COPY_LIVE_TRADE_LOG_PATH", "outputs/live_trade_log_btc5m_copy.csv")
+        ),
+        dryrun_trade_log_path=Path(
+            os.getenv("BTC5M_COPY_DRYRUN_TRADE_LOG_PATH", "outputs/live_trade_log_btc5m_copy_dryrun.csv")
+        ),
+        intents_queue_path=Path("state/live_intents_queue_btc5m_copy_unused.jsonl"),
+    )
