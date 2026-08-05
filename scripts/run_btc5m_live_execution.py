@@ -259,13 +259,25 @@ def main() -> None:
     title = title_for_slug(slug)
 
     e_enabled = strategy_e_enabled()
+    if not e_enabled:
+        # Bail out BEFORE the ~148s blocking sampling loop below, not just
+        # skip placing orders - run_btc5m_b_live_execution.py runs right
+        # after this script in the SAME cron invocation/flock (they share
+        # the real trade log, see that module's docstring), so if E burns
+        # the entire window sampling (just to compute signals it'll never
+        # act on), B never gets a real chance to sample before the window
+        # closes. Confirmed live 2026-08-05: every B window showed exactly
+        # 1 sample once E was paused this way - E's loop was eating the
+        # whole window before B's script even started.
+        if status.get("enabled"):
+            print(f"btc5m-live: Estrategia E pausada especificamente (state/{STRATEGY_E_ENABLED_PATH.name}) - nada ejecutado")
+        return
+
     client = None
-    if status.get("enabled") and e_enabled:
+    if status.get("enabled"):
         from atlantis.polymarket.clob_client import build_live_client
 
         client = build_live_client(settings)
-    elif status.get("enabled") and not e_enabled:
-        print(f"btc5m-live: Estrategia E pausada especificamente (state/{STRATEGY_E_ENABLED_PATH.name}) - nada ejecutado")
 
     from py_clob_client_v2.clob_types import OrderType
 
