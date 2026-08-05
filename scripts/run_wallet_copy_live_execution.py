@@ -120,6 +120,10 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
+def _log(msg: str) -> None:
+    print(f"[{_now()}] {msg}")
+
+
 def load_log(path: Path) -> dict[str, dict]:
     if not path.exists():
         return {}
@@ -249,7 +253,7 @@ def copy_trade(settings, client, trade: dict) -> None:
                 "date_closed": "",
             }
             save_log(settings.live_trade_log_path, log)
-        print(f"btc5m-copy: EXCEPTION copiando {entry_key}: {exc}")
+        _log(f"btc5m-copy: EXCEPTION copiando {entry_key}: {exc}")
         return
 
     # Use whatever price/size the order response itself already parsed
@@ -276,10 +280,10 @@ def copy_trade(settings, client, trade: dict) -> None:
         save_log(settings.live_trade_log_path, log)
 
     if not result.success:
-        print(f"btc5m-copy: ORDEN FALLIDA {outcome} {entry_key}: {result.error}")
+        _log(f"btc5m-copy: ORDEN FALLIDA {outcome} {entry_key}: {result.error}")
         return
 
-    print(f"btc5m-copy: EJECUTADO {outcome} {entry_key} @ {fill_price}, stake ${log[entry_key]['stake_usd_actual']}")
+    _log(f"btc5m-copy: EJECUTADO {outcome} {entry_key} @ {fill_price}, stake ${log[entry_key]['stake_usd_actual']}")
     threading.Thread(
         target=_confirm_fill_later,
         args=(settings, condition_id, token_id, order_ts, entry_key),
@@ -295,7 +299,7 @@ def main() -> None:
     enabled = False
     last_housekeeping = 0.0
 
-    print("btc5m-copy: proceso persistente arrancando")
+    _log("btc5m-copy: proceso persistente arrancando")
 
     while True:
         # Wall-clock based, not a poll-count modulo - the idle branch
@@ -313,7 +317,7 @@ def main() -> None:
                 resolved_count, _notifications = reconcile_resolved_positions(log)
                 if resolved_count:
                     save_log(settings.live_trade_log_path, log)
-                    print(f"btc5m-copy: reconciled {resolved_count} position(s)")
+                    _log(f"btc5m-copy: reconciled {resolved_count} position(s)")
             check_kill_switch(settings)
             status = read_status_flag(settings)
             enabled = bool(status.get("enabled"))
@@ -321,10 +325,10 @@ def main() -> None:
                 from atlantis.polymarket.clob_client import build_live_client
 
                 client = build_live_client(settings)
-                print("btc5m-copy: cliente real construido, activo")
+                _log("btc5m-copy: cliente real construido, activo")
             elif not enabled and client is not None:
                 client = None
-                print("btc5m-copy: trading real apagado - pausando copiado")
+                _log("btc5m-copy: trading real apagado - pausando copiado")
 
         if not enabled:
             time.sleep(5)  # coarser idle poll while off - no point hammering the API
@@ -343,7 +347,19 @@ def main() -> None:
         for t in candidates:
             seen.add(str(t["transactionHash"]))
             if established:
-                copy_trade(settings, client, t)
+                # Dispatched, not called inline - copy_trade does several
+                # sequential network calls (best-price/order-book lookup,
+                # tick size, the order POST itself), each of which can be
+                # slow under the network flakiness this whole session has
+                # seen repeatedly. Calling it inline here blocks detection
+                # of NEWER trades until it returns; if several of the
+                # wallet's trades land in one poll (it trades several
+                # times a second sometimes) a single slow one backs up
+                # everything behind it. Confirmed live 2026-08-05: two
+                # real copies landed 208s and 307s after the wallet's own
+                # trade - far more than the polling interval could
+                # explain on its own.
+                threading.Thread(target=copy_trade, args=(settings, client, t), daemon=True).start()
         if candidates:
             save_seen_trades(seen)
         established = True
