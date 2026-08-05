@@ -198,6 +198,25 @@ def _confirm_fill_later(settings, condition_id: str, token_id: str, order_ts: in
         save_log(settings.live_trade_log_path, log)
 
 
+WINDOW_SECONDS = 5 * 60
+# Owner caught this live 2026-08-05: a copy landed in an ALREADY-CLOSED
+# window (bought "Down" at 0.1c, essentially a dead/decided market),
+# spending real money on a token that was already worthless. copy_trade
+# never checked whether the window it was copying into had already
+# closed - a stale/delayed detection could slip through and "buy" into
+# a market that's over. Require at least this much real time left before
+# even trying.
+MIN_SECONDS_LEFT_TO_COPY = 10
+
+
+def _window_close_ts(slug: str) -> int | None:
+    try:
+        window_start_ts = int(slug.rsplit("-", 1)[-1])
+    except (ValueError, IndexError):
+        return None
+    return window_start_ts + WINDOW_SECONDS
+
+
 def copy_trade(settings, client, trade: dict) -> None:
     tx_hash = str(trade.get("transactionHash", ""))
     entry_key = f"COPY_{tx_hash}"
@@ -214,6 +233,41 @@ def copy_trade(settings, client, trade: dict) -> None:
     outcome = str(trade.get("outcome", ""))
     slug = str(trade.get("slug", ""))
     order_ts = int(datetime.now(timezone.utc).timestamp())
+
+    close_ts = _window_close_ts(slug)
+    seconds_left = (close_ts - order_ts) if close_ts is not None else None
+    if seconds_left is None or seconds_left < MIN_SECONDS_LEFT_TO_COPY:
+        with log_lock:
+            log = load_log(settings.live_trade_log_path)
+            log[entry_key] = {
+                "entry_key": entry_key,
+                "condition_id": condition_id,
+                "asset": token_id,
+                "window_slug": slug,
+                "title": title,
+                "outcome": outcome,
+                "source_price": str(trade.get("price", "")),
+                "source_size": str(trade.get("size", "")),
+                "source_timestamp": str(trade.get("timestamp", "")),
+                "fill_price_buy": "",
+                "stake_usd_requested": str(settings.stake_per_signal_usd),
+                "stake_usd_actual": "",
+                "shares_held": "",
+                "order_id_buy": "",
+                "status": "SKIPPED_CLOSED",
+                "fill_price_sell": "",
+                "realized_pnl_usd": "",
+                "pct_return": "",
+                "date_opened": _now(),
+                "date_closed": _now(),
+                "last_updated": _now(),
+            }
+            save_log(settings.live_trade_log_path, log)
+        _log(
+            f"btc5m-copy: SALTEADO {entry_key} - ventana {slug} ya cerrada o por cerrar "
+            f"(quedan {seconds_left}s)"
+        )
+        return
 
     base_row = {
         "entry_key": entry_key,
