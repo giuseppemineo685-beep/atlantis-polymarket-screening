@@ -76,7 +76,16 @@ from atlantis.services.live_execution import get_confirmed_fill, reconcile_resol
 from run_btc5m_live_execution import check_kill_switch  # noqa: E402 - fully generic, parametrized by settings
 
 TARGET_WALLET = "0x3048d65321be3497164cdfc2996f94f98a2e7537"
-TRADES_API_URL = f"https://data-api.polymarket.com/trades?user={TARGET_WALLET}&limit=20"
+# limit=20 was confirmed live 2026-08-05 to silently drop the vast
+# majority of this wallet's real activity: it made 41-42 real BUY trades
+# in single 5-minute windows (confirmed via a direct limit=100 fetch),
+# far more than 20 - the OLDEST trades in a burst that size get pushed
+# out of a 20-item window before we ever see them, not "detected late",
+# genuinely never visible again at this endpoint (each poll re-fetches
+# only the most recent N, it isn't a durable per-trade feed). One window
+# with 42 real trades produced only 7 detections on our side, and all 7
+# were already past window-close by the time we got to them.
+TRADES_API_URL = f"https://data-api.polymarket.com/trades?user={TARGET_WALLET}&limit=100"
 
 POLL_INTERVAL_SECONDS = 0.5
 # How often (in poll iterations) to re-check the kill switch / reconcile
