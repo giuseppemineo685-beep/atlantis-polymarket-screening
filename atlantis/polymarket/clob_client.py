@@ -63,6 +63,33 @@ class LiveClobClient:
         price = result.get("price") if isinstance(result, dict) else result
         return Decimal(str(price)) if price is not None else None
 
+    def get_best_price(self, token_id: str, side: str) -> Decimal | None:
+        """The real, current top-of-book price for `side` - BUY reads the
+        lowest ASK (what a marketable buy actually has to pay right now),
+        SELL reads the highest BID. NOT the same as get_price(): confirmed
+        live 2026-08-05 (BTC5m wallet-copy debugging) that get_price() can
+        return a price BELOW the real best ask (observed: get_price said
+        0.03 while the order book's actual lowest ask was already 0.04) -
+        likely a lagging/cached reference rather than a live top-of-book
+        read. Our slippage buffer was being computed on top of that stale
+        number, so it sometimes fell short of the real ask even with an
+        8% cushion, and a FAK order failed to match anything that was
+        genuinely there. Reading the book directly removes that gap."""
+        try:
+            book = self._client.get_order_book(token_id)
+        except Exception:
+            return None
+        levels = (book.get("asks") if side.upper() == "BUY" else book.get("bids")) or []
+        prices = []
+        for level in levels:
+            try:
+                prices.append(Decimal(str(level["price"])))
+            except (KeyError, InvalidOperation, TypeError):
+                continue
+        if not prices:
+            return None
+        return min(prices) if side.upper() == "BUY" else max(prices)
+
     def get_tick_size(self, token_id: str) -> Decimal | None:
         try:
             return Decimal(str(self._client.get_tick_size(token_id)))
@@ -158,7 +185,13 @@ class LiveClobClient:
         clob_side = BUY if side == "BUY" else SELL
 
         try:
-            current_price = self.get_price(token_id, side)
+            # get_best_price (real top-of-book) first, falling back to
+            # get_price only if the order book fetch itself fails - see
+            # get_best_price's docstring for why the book is the correct
+            # source, not get_price's own reference.
+            current_price = self.get_best_price(token_id, side)
+            if current_price is None or current_price <= 0:
+                current_price = self.get_price(token_id, side)
             if current_price is None or current_price <= 0:
                 return OrderResult(
                     success=False,
