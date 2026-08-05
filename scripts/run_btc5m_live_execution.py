@@ -74,6 +74,29 @@ from run_btc5m_paper_trading import (  # noqa: E402
 
 LIVE_WINDOW_STATE_PATH = ROOT / "state" / "btc5m_live_window.json"
 
+# Strategy-specific pause, independent of the shared kill-switch/enabled
+# flag in state/live_trading_status_btc5m.json - that flag gates the
+# WHOLE shared $100 pool (E and B both read it), so it can't express
+# "pause E but let B keep trading" on its own. Owner's decision,
+# 2026-08-05, after E's kill switch tripped (-$111 realized): E's math
+# needs a ~69% win rate to break even (average entry price ~0.87) and
+# real execution came in at 63.8% - keep E off while B (breakeven ~50%,
+# real entries near 0.50, 73.4% win rate in paper) gets a real trial.
+# Defaults to enabled if the file is missing, so nothing changes for any
+# environment that never sets it.
+STRATEGY_E_ENABLED_PATH = ROOT / "state" / "btc5m_e_live_enabled.json"
+
+
+def strategy_e_enabled() -> bool:
+    if not STRATEGY_E_ENABLED_PATH.exists():
+        return True
+    try:
+        import json
+
+        return bool(json.loads(STRATEGY_E_ENABLED_PATH.read_text()).get("enabled", True))
+    except (ValueError, OSError):
+        return True
+
 # Wider than the shared 3% default in clob_client.py (sports keeps using
 # that default, unaffected) - every real BTC5m attempt so far has failed
 # with FOK "couldn't be fully filled" (thin order-book liquidity at the
@@ -235,11 +258,14 @@ def main() -> None:
     log = load_log(settings.live_trade_log_path)  # reload - reconciliation above may have changed it
     title = title_for_slug(slug)
 
+    e_enabled = strategy_e_enabled()
     client = None
-    if status.get("enabled"):
+    if status.get("enabled") and e_enabled:
         from atlantis.polymarket.clob_client import build_live_client
 
         client = build_live_client(settings)
+    elif status.get("enabled") and not e_enabled:
+        print(f"btc5m-live: Estrategia E pausada especificamente (state/{STRATEGY_E_ENABLED_PATH.name}) - nada ejecutado")
 
     from py_clob_client_v2.clob_types import OrderType
 
