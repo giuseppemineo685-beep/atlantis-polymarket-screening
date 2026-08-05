@@ -73,7 +73,7 @@ def load_btc5m_copy_live_settings() -> LiveSettings:
         funder_address=os.getenv("POLYMARKET_FUNDER_ADDRESS", ""),
         signature_type=int(os.getenv("POLYMARKET_SIGNATURE_TYPE", "1")),
         stake_per_signal_usd=float(os.getenv("BTC5M_COPY_STAKE_PER_SIGNAL_USD", "2")),
-        initial_bankroll_usd=float(os.getenv("BTC5M_COPY_CAPITAL_USD", "50")),
+        initial_bankroll_usd=float(os.getenv("BTC5M_COPY_CAPITAL_USD", "100")),
         kill_switch_loss_pct=100.0,
         status_path=Path(os.getenv("BTC5M_COPY_LIVE_STATUS_PATH", "state/live_trading_status_btc5m_copy.json")),
         live_trade_log_path=Path(
