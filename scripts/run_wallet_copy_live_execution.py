@@ -354,13 +354,56 @@ def copy_trade(settings, client, trade: dict) -> None:
     ).start()
 
 
+def _run_housekeeping(settings, state_box: dict) -> None:
+    """Runs in its own background thread - see module docstring/commit
+    history. reconcile_resolved_positions() calls get_market_resolution()
+    (a network request) ONCE PER OPEN POSITION - confirmed live
+    2026-08-05 that with 20-30+ open positions accumulated, this alone
+    can take minutes. It used to run inline, holding log_lock the whole
+    time, which blocked every copy_trade thread's log write (they all
+    need the same lock) until it finished - trades were being PLACED on
+    time but their results piled up unwritten, then flushed all at once
+    when reconciliation finally released the lock, by which point their
+    windows had closed. The network-heavy part now runs with NO lock
+    held; only the final log write briefly reacquires it. state_box
+    (enabled/client) exists because a background thread can't reassign a
+    variable in main()'s scope, only mutate a shared container."""
+    with log_lock:
+        log = load_log(settings.live_trade_log_path)
+    resolved_count, _notifications = reconcile_resolved_positions(log)  # slow, network-bound, no lock held
+    if resolved_count:
+        with log_lock:
+            # Merge onto a FRESH read, not overwrite with our (possibly
+            # now-stale) snapshot - copy_trade threads have been writing
+            # new rows the whole time this was running.
+            fresh_log = load_log(settings.live_trade_log_path)
+            for key, row in log.items():
+                if row.get("status") in ("WON_UNREDEEMED", "LOST", "CLOSED") and key in fresh_log:
+                    fresh_log[key] = row
+            save_log(settings.live_trade_log_path, fresh_log)
+        _log(f"btc5m-copy: reconciled {resolved_count} position(s)")
+
+    check_kill_switch(settings)
+    status = read_status_flag(settings)
+    new_enabled = bool(status.get("enabled"))
+    if new_enabled and state_box["client"] is None:
+        from atlantis.polymarket.clob_client import build_live_client
+
+        state_box["client"] = build_live_client(settings)
+        _log("btc5m-copy: cliente real construido, activo")
+    elif not new_enabled and state_box["client"] is not None:
+        state_box["client"] = None
+        _log("btc5m-copy: trading real apagado - pausando copiado")
+    state_box["enabled"] = new_enabled
+
+
 def main() -> None:
     settings = load_btc5m_copy_live_settings()
-    client = None
+    state_box: dict = {"enabled": False, "client": None}
     established = SEEN_TRADES_PATH.exists()
     seen = load_seen_trades()
-    enabled = False
     last_housekeeping = 0.0
+    housekeeping_thread: threading.Thread | None = None
 
     _log("btc5m-copy: proceso persistente arrancando")
 
@@ -373,25 +416,17 @@ def main() -> None:
         # copying took several minutes to be noticed because of exactly
         # this - the status flag flip sat unread until the next
         # housekeeping pass finally rolled around.
-        if time.time() - last_housekeeping >= HOUSEKEEPING_INTERVAL_SECONDS:
+        if time.time() - last_housekeeping >= HOUSEKEEPING_INTERVAL_SECONDS and (
+            housekeeping_thread is None or not housekeeping_thread.is_alive()
+        ):
             last_housekeeping = time.time()
-            with log_lock:
-                log = load_log(settings.live_trade_log_path)
-                resolved_count, _notifications = reconcile_resolved_positions(log)
-                if resolved_count:
-                    save_log(settings.live_trade_log_path, log)
-                    _log(f"btc5m-copy: reconciled {resolved_count} position(s)")
-            check_kill_switch(settings)
-            status = read_status_flag(settings)
-            enabled = bool(status.get("enabled"))
-            if enabled and client is None:
-                from atlantis.polymarket.clob_client import build_live_client
+            housekeeping_thread = threading.Thread(
+                target=_run_housekeeping, args=(settings, state_box), daemon=True
+            )
+            housekeeping_thread.start()
 
-                client = build_live_client(settings)
-                _log("btc5m-copy: cliente real construido, activo")
-            elif not enabled and client is not None:
-                client = None
-                _log("btc5m-copy: trading real apagado - pausando copiado")
+        enabled = state_box["enabled"]
+        client = state_box["client"]
 
         if not enabled:
             time.sleep(5)  # coarser idle poll while off - no point hammering the API
