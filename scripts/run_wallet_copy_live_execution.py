@@ -9,18 +9,33 @@ asset (token_id) it buys, immediately. No window-tracking, no opening-
 price capture, no sampling loop, no direction logic at all - the
 wallet's trade tells us everything we need (asset, side, price, slug).
 
-Runs on the FINLAND VPS ONLY (order placement geoblocked from Germany).
-Deliberately its OWN cron entry/lockfile (run_btc5m_copy_cron.sh,
-untracked, Finland-only), separate from run_btc5m_live_cron.sh (E+B) -
-E's ~148s blocking sampling loop already once starved B of its own
-sampling time by running first in the same cron invocation (fixed
-2026-08-05); mixing this script's tight ~2s polling loop into that same
-wrapper would risk the identical problem in reverse.
+Runs on the FINLAND VPS ONLY (order placement geoblocked from Germany),
+as a PERSISTENT process under systemd (atlantis-btc5m-copy.service,
+Restart=always) - NOT cron. Owner asked (2026-08-05) to cut copy latency
+as much as possible; the original cron-every-60s design (build a fresh
+CLOB client and re-derive API creds every invocation, then exit and sit
+idle for ~5s before the next tick) wasted real time on process/client
+startup and left a dead gap between invocations where the wallet's
+trades went unwatched entirely. A persistent process builds the client
+ONCE and never stops polling. Because this process is long-lived, a code
+change here needs `systemctl restart atlantis-btc5m-copy` to take effect -
+git pull alone does not reload a running process's already-imported
+code. Git sync of the STATE/LOG files (not the code) is handled by a
+separate, lightweight cron entry that only runs git commands.
 
 Polls data-api.polymarket.com/trades (same endpoint already used for
-fill confirmation elsewhere in this repo) for up to ~55s per cron
-invocation, every ~2s - near-continuous coverage without a persistent
-daemon process, which nothing else in this repo uses either.
+fill confirmation elsewhere in this repo) every ~0.5s.
+
+Order placement and fill-confirmation are decoupled: place_market_buy
+returns almost immediately (the order response itself already carries a
+parsed price/size in the common case - see clob_client.py's
+_parse_order_response), so the row is logged and the polling loop moves
+on to the NEXT candidate trade right away. The extra get_confirmed_fill
+safety check (added after a real incident where a raw response's fields
+were unparseable and the fill went unconfirmed) runs in a background
+thread instead of blocking the loop, and updates the same row once
+confirmed. A lock serializes writes to the shared CSV between the main
+loop and these background threads.
 
 Own $50 capital pool (see atlantis.live.btc5m_config.load_btc5m_copy_live_settings)
 and own trade log (outputs/live_trade_log_btc5m_copy.csv) - kept
@@ -29,13 +44,12 @@ mechanism, not because it needs different credentials (same real
 account/funder as everything else).
 
 Real-money safety carried over from this session's hard-won lessons:
-- Never trust the raw order-post response for fill price/size - confirm
-  via get_confirmed_fill() (queries /trades directly), same as E/B.
 - First-ever run establishes a "seen trades" baseline WITHOUT copying
   anything - otherwise the very first invocation would try to copy the
   wallet's entire recent trade history from already-resolved windows.
 - Dedicated kill switch, same mechanics as E/B (auto-pause if realized
-  losses reach the full allocated capital).
+  losses reach the full allocated capital) - re-checked periodically,
+  not just once at startup, since this process never exits on its own.
 """
 
 from __future__ import annotations
@@ -43,6 +57,7 @@ from __future__ import annotations
 import csv
 import json
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -63,11 +78,11 @@ from run_btc5m_live_execution import check_kill_switch  # noqa: E402 - fully gen
 TARGET_WALLET = "0x3048d65321be3497164cdfc2996f94f98a2e7537"
 TRADES_API_URL = f"https://data-api.polymarket.com/trades?user={TARGET_WALLET}&limit=20"
 
-POLL_INTERVAL_SECONDS = 2
-# Cron fires every 60s with its own flock - stop with a buffer before the
-# next tick so this invocation reliably exits before the next one tries
-# to start, rather than relying on flock -n to just skip a late overlap.
-POLL_DURATION_SECONDS = 55
+POLL_INTERVAL_SECONDS = 0.5
+# How often (in poll iterations) to re-check the kill switch / reconcile
+# resolved positions / re-read the enabled flag - this process never
+# exits on its own, so these can't be "once at startup" like E/B.
+HOUSEKEEPING_EVERY_N_POLLS = 60  # ~30s at the poll interval above
 
 SEEN_TRADES_PATH = ROOT / "state" / "btc5m_copy_seen_trades.json"
 MAX_SEEN_TRADES = 500  # bounds the state file's size - only recent history matters for dedup
@@ -97,6 +112,8 @@ COPY_LIVE_FIELDS = [
     "date_closed",
     "last_updated",
 ]
+
+log_lock = threading.Lock()
 
 
 def _now() -> str:
@@ -146,11 +163,44 @@ def fetch_wallet_trades() -> list[dict]:
     return data if isinstance(data, list) else []
 
 
-def copy_trade(settings, client, trade: dict, log: dict) -> None:
+def _confirm_fill_later(settings, condition_id: str, token_id: str, order_ts: int, entry_key: str) -> None:
+    """Runs in a background thread - see module docstring. Re-checks
+    /trades directly (the known-safe source of truth) and corrects the
+    already-logged row if the order response's own parsed price/size
+    turns out to have been missing or wrong. Reloads the log fresh under
+    the lock rather than reusing a dict captured earlier - the main loop
+    may have added/modified other rows (or another background thread may
+    have) since this thread started, and writing a stale snapshot back
+    would silently erase those."""
+    confirmed = get_confirmed_fill(
+        wallet_address=settings.funder_address,
+        condition_id=condition_id,
+        asset=token_id,
+        side="BUY",
+        since_ts=order_ts - 30,
+    )
+    if not confirmed:
+        return
+    fill_price, fill_size = confirmed
+    with log_lock:
+        log = load_log(settings.live_trade_log_path)
+        row = log.get(entry_key)
+        if row is None:
+            return
+        row["fill_price_buy"] = str(fill_price)
+        row["stake_usd_actual"] = str(fill_price * fill_size)
+        row["shares_held"] = str(fill_size)
+        row["last_updated"] = _now()
+        save_log(settings.live_trade_log_path, log)
+
+
+def copy_trade(settings, client, trade: dict) -> None:
     tx_hash = str(trade.get("transactionHash", ""))
     entry_key = f"COPY_{tx_hash}"
-    if entry_key in log:
-        return  # transactionHash is unique per trade - never re-attempt one already logged
+    with log_lock:
+        log = load_log(settings.live_trade_log_path)
+        if entry_key in log:
+            return  # transactionHash is unique per trade - never re-attempt one already logged
 
     from py_clob_client_v2.clob_types import OrderType
 
@@ -184,89 +234,93 @@ def copy_trade(settings, client, trade: dict, log: dict) -> None:
             order_type=OrderType.FAK,
         )
     except Exception as exc:
+        with log_lock:
+            log = load_log(settings.live_trade_log_path)
+            log[entry_key] = {
+                **base_row,
+                "fill_price_buy": "",
+                "stake_usd_actual": "",
+                "shares_held": "",
+                "order_id_buy": "",
+                "status": "ERROR",
+                "fill_price_sell": "",
+                "realized_pnl_usd": "",
+                "pct_return": "",
+                "date_closed": "",
+            }
+            save_log(settings.live_trade_log_path, log)
+        print(f"btc5m-copy: EXCEPTION copiando {entry_key}: {exc}")
+        return
+
+    # Use whatever price/size the order response itself already parsed
+    # (see clob_client.py's _parse_order_response) - log right away and
+    # let the loop move on to the next candidate immediately. The
+    # background thread below re-verifies against /trades and corrects
+    # this row if the raw response turns out to have been missing/wrong.
+    fill_price, fill_size = result.avg_fill_price, result.filled_size
+    status_value = "EXECUTED" if result.success else "ERROR"
+    with log_lock:
+        log = load_log(settings.live_trade_log_path)
         log[entry_key] = {
             **base_row,
-            "fill_price_buy": "",
-            "stake_usd_actual": "",
-            "shares_held": "",
-            "order_id_buy": "",
-            "status": "ERROR",
+            "fill_price_buy": str(fill_price) if fill_price else "",
+            "stake_usd_actual": str(fill_price * fill_size) if (fill_price and fill_size) else "",
+            "shares_held": str(fill_size) if fill_size else "",
+            "order_id_buy": result.order_id or "",
+            "status": status_value,
             "fill_price_sell": "",
             "realized_pnl_usd": "",
             "pct_return": "",
             "date_closed": "",
         }
         save_log(settings.live_trade_log_path, log)
-        print(f"btc5m-copy: EXCEPTION copiando {entry_key}: {exc}")
-        return
-
-    fill_price, fill_size = result.avg_fill_price, result.filled_size
-    if result.success:
-        confirmed = get_confirmed_fill(
-            wallet_address=settings.funder_address,
-            condition_id=condition_id,
-            asset=token_id,
-            side="BUY",
-            since_ts=order_ts - 30,
-        )
-        if confirmed:
-            fill_price, fill_size = confirmed
-
-    status_value = "EXECUTED" if result.success else "ERROR"
-    log[entry_key] = {
-        **base_row,
-        "fill_price_buy": str(fill_price) if fill_price else "",
-        "stake_usd_actual": str(fill_price * fill_size) if (fill_price and fill_size) else "",
-        "shares_held": str(fill_size) if fill_size else "",
-        "order_id_buy": result.order_id or "",
-        "status": status_value,
-        "fill_price_sell": "",
-        "realized_pnl_usd": "",
-        "pct_return": "",
-        "date_closed": "",
-    }
-    save_log(settings.live_trade_log_path, log)
 
     if not result.success:
         print(f"btc5m-copy: ORDEN FALLIDA {outcome} {entry_key}: {result.error}")
-    elif fill_price is None or fill_size is None:
-        print(f"btc5m-copy: REVISAR MANUALMENTE {entry_key} - exito pero sin fill confirmado. error={result.error}")
-    else:
-        print(f"btc5m-copy: EJECUTADO {outcome} {entry_key} @ {fill_price}, stake ${log[entry_key]['stake_usd_actual']}")
+        return
+
+    print(f"btc5m-copy: EJECUTADO {outcome} {entry_key} @ {fill_price}, stake ${log[entry_key]['stake_usd_actual']}")
+    threading.Thread(
+        target=_confirm_fill_later,
+        args=(settings, condition_id, token_id, order_ts, entry_key),
+        daemon=True,
+    ).start()
 
 
 def main() -> None:
     settings = load_btc5m_copy_live_settings()
-
-    log = load_log(settings.live_trade_log_path)
-    resolved_count, _notifications = reconcile_resolved_positions(log)
-    if resolved_count:
-        save_log(settings.live_trade_log_path, log)
-        print(f"btc5m-copy: reconciled {resolved_count} position(s)")
-
-    check_kill_switch(settings)
-
-    status = read_status_flag(settings)
-    if not status.get("enabled"):
-        print("btc5m-copy: trading real apagado - nada que hacer")
-        return
-
-    from atlantis.polymarket.clob_client import build_live_client
-
-    client = build_live_client(settings)
-
-    # established=False only for the very first poll of the very first
-    # invocation this state file has ever seen - that pass marks whatever
-    # trades are currently visible as "seen" WITHOUT copying them, so we
-    # never try to mass-copy the wallet's entire recent history on
-    # startup. Every poll after that (including later in this same
-    # invocation) copies normally.
+    client = None
     established = SEEN_TRADES_PATH.exists()
     seen = load_seen_trades()
+    enabled = False
+    poll_count = 0
 
-    deadline = time.time() + POLL_DURATION_SECONDS
-    copied_this_run = 0
-    while time.time() < deadline:
+    print("btc5m-copy: proceso persistente arrancando")
+
+    while True:
+        if poll_count % HOUSEKEEPING_EVERY_N_POLLS == 0:
+            with log_lock:
+                log = load_log(settings.live_trade_log_path)
+                resolved_count, _notifications = reconcile_resolved_positions(log)
+                if resolved_count:
+                    save_log(settings.live_trade_log_path, log)
+                    print(f"btc5m-copy: reconciled {resolved_count} position(s)")
+            check_kill_switch(settings)
+            status = read_status_flag(settings)
+            enabled = bool(status.get("enabled"))
+            if enabled and client is None:
+                from atlantis.polymarket.clob_client import build_live_client
+
+                client = build_live_client(settings)
+                print("btc5m-copy: cliente real construido, activo")
+            elif not enabled and client is not None:
+                print("btc5m-copy: trading real apagado - pausando copiado")
+        poll_count += 1
+
+        if not enabled:
+            time.sleep(5)  # coarser idle poll while off - no point hammering the API
+            continue
+
         trades = fetch_wallet_trades()
         candidates = [
             t
@@ -280,15 +334,12 @@ def main() -> None:
         for t in candidates:
             seen.add(str(t["transactionHash"]))
             if established:
-                copy_trade(settings, client, t, log)
-                copied_this_run += 1
+                copy_trade(settings, client, t)
         if candidates:
             save_seen_trades(seen)
         established = True
-        time.sleep(POLL_INTERVAL_SECONDS)
 
-    if copied_this_run:
-        print(f"btc5m-copy: {copied_this_run} trade(s) copiado(s) este ciclo")
+        time.sleep(POLL_INTERVAL_SECONDS)
 
 
 if __name__ == "__main__":
