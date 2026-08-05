@@ -99,6 +99,8 @@ BTC5M_LIVE_FIELDS = [
     "fill_price_sell",
     "realized_pnl_usd",
     "pct_return",
+    "spot_price_at_entry",
+    "target_price",
     "date_opened",
     "date_closed",
     "last_updated",
@@ -202,7 +204,7 @@ def main() -> None:
             "target_price": str(target_price) if target_price is not None else "",
         }
         save_window_state(state)
-        print(f"btc5m-live: tracking new window {slug}")
+        print(f"btc5m-live: tracking new window {slug}, opening reference price {target_price}")
 
     # Reconciliation and the kill-switch check run every cycle regardless
     # of how close we are to a window close, so a resolved position gets
@@ -241,10 +243,21 @@ def main() -> None:
 
     from py_clob_client_v2.clob_types import OrderType
 
-    def place_entry(i: int, direction: str) -> None:
+    def place_entry(i: int, direction: str, spot_price: Decimal | None) -> None:
         entry_key = f"{slug}#{i}"
         if entry_key in log and log[entry_key].get("status") != "ERROR":
             return  # already placed - retry-safety, mirrors the sports invariant
+
+        # Logged mainly to diagnose divergence between our reference price
+        # (Coinbase, a PROXY for Polymarket's actual Chainlink resolution
+        # source - see module docstring on run_btc5m_paper_trading.py) and
+        # Polymarket's own "price to beat" - a real window (2026-08-04,
+        # ~21:45 UTC) bought UP four times in a row while the market's own
+        # quote for UP kept dropping toward $0.03, strongly suggesting our
+        # target_price for that window was off. Without this, there was no
+        # way to confirm it after the fact.
+        spot_str = str(spot_price) if spot_price is not None else ""
+        target_str = str(target_price) if target_price is not None else ""
 
         token_id = market.up_token_id if direction == "UP" else market.down_token_id
         order_ts = int(datetime.now(timezone.utc).timestamp())
@@ -277,6 +290,8 @@ def main() -> None:
                 "fill_price_sell": "",
                 "realized_pnl_usd": "",
                 "pct_return": "",
+                "spot_price_at_entry": spot_str,
+                "target_price": target_str,
                 "date_opened": _now(),
                 "date_closed": "",
                 "last_updated": _now(),
@@ -315,6 +330,8 @@ def main() -> None:
             "fill_price_sell": "",
             "realized_pnl_usd": "",
             "pct_return": "",
+            "spot_price_at_entry": spot_str,
+            "target_price": target_str,
             "date_opened": _now(),
             "date_closed": "",
             "last_updated": _now(),
@@ -367,7 +384,7 @@ def main() -> None:
         if client is not None:
             for i in range(entries_seen, len(entries)):
                 direction, _paper_entry_price, _paper_stake = entries[i]
-                place_entry(i, direction)
+                place_entry(i, direction, samples[-1].spot_price)
         elif len(entries) > entries_seen:
             print(
                 f"btc5m-live: {len(entries) - entries_seen} señal(es) nueva(s) de E en "

@@ -142,9 +142,16 @@ def main() -> None:
 
         client = build_live_client(settings)
 
-    def place_entry(direction: str) -> None:
+    def place_entry(direction: str, spot_price: Decimal | None) -> None:
         if entry_key in log and log[entry_key].get("status") != "ERROR":
             return  # already placed successfully - retry-safety, mirrors E's invariant
+
+        # See run_btc5m_live_execution.py's place_entry for why this is
+        # logged: our target_price is a Coinbase proxy for Polymarket's
+        # real resolution feed, and a real window on 2026-08-04 showed
+        # direct evidence they can diverge for an entire window.
+        spot_str = str(spot_price) if spot_price is not None else ""
+        target_str = str(target_price) if target_price is not None else ""
 
         token_id = market.up_token_id if direction == "UP" else market.down_token_id
         order_ts = int(datetime.now(timezone.utc).timestamp())
@@ -173,6 +180,8 @@ def main() -> None:
                 "fill_price_sell": "",
                 "realized_pnl_usd": "",
                 "pct_return": "",
+                "spot_price_at_entry": spot_str,
+                "target_price": target_str,
                 "date_opened": _now(),
                 "date_closed": "",
                 "last_updated": _now(),
@@ -211,6 +220,8 @@ def main() -> None:
             "fill_price_sell": "",
             "realized_pnl_usd": "",
             "pct_return": "",
+            "spot_price_at_entry": spot_str,
+            "target_price": target_str,
             "date_opened": _now(),
             "date_closed": "",
             "last_updated": _now(),
@@ -252,7 +263,7 @@ def main() -> None:
             if entries:
                 direction, _paper_entry_price, _paper_stake = entries[0]
                 if client is not None:
-                    place_entry(direction)
+                    place_entry(direction, samples[-1].spot_price)
                 else:
                     print(
                         f"btc5m-b-live: señal de B en {slug}, pero trading real "
