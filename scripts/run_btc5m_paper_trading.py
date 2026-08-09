@@ -94,8 +94,15 @@ LOOKAHEAD_SECONDS = 150
 STALE_START_SECONDS = 90  # if we first see a window this late into it, its target price is unusable
 SAMPLE_INTERVAL_SECONDS = 4
 SPOT_PRICE_URL = "https://api.coinbase.com/v2/prices/BTC-USD/spot"
+BINANCE_PRICE_URL = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
+KRAKEN_PRICE_URL = "https://api.kraken.com/0/public/Ticker?pair=XBTUSD"
 GAMMA_API_BASE = "https://gamma-api.polymarket.com"
 CLOB_API_BASE = "https://clob.polymarket.com"
+# How far apart two exchanges' spot prices were confirmed to drift
+# live 2026-08-08 (Binance vs Coinbase/Kraken, sustained ~$31 for at
+# least 20+ seconds, not a one-tick blip) - single-exchange spot is not
+# always a safe proxy for anything, let alone a 30s TWAP.
+TWAP_WINDOW_SECONDS = 30
 
 
 def _now() -> str:
@@ -147,6 +154,100 @@ def fetch_spot_price() -> Decimal | None:
         return Decimal(str(data["data"]["amount"]))
     except (urllib.error.URLError, TimeoutError, OSError, ValueError, KeyError, InvalidOperation):
         return None
+
+
+def fetch_binance_price() -> Decimal | None:
+    req = urllib.request.Request(
+        BINANCE_PRICE_URL, headers={"Accept": "application/json", "User-Agent": "atlantis-btc5m/0.1"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            data = json.loads(resp.read())
+        return Decimal(str(data["price"]))
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError, KeyError, InvalidOperation):
+        return None
+
+
+def fetch_kraken_price() -> Decimal | None:
+    req = urllib.request.Request(
+        KRAKEN_PRICE_URL, headers={"Accept": "application/json", "User-Agent": "atlantis-btc5m/0.1"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            data = json.loads(resp.read())
+        if data.get("error"):
+            return None
+        pair_data = next(iter(data["result"].values()))
+        return Decimal(str(pair_data["c"][0]))  # "c" = last trade [price, lot volume]
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError, KeyError, StopIteration, InvalidOperation):
+        return None
+
+
+def fetch_multi_exchange_price() -> Decimal | None:
+    """Simple mean of whichever of Coinbase/Binance/Kraken respond right
+    now - NOT a TWAP by itself (that needs samples over time, see
+    RollingTwap below), just a single instant's cross-exchange average.
+    Confirmed live 2026-08-08: Binance can sit ~$30 away from Coinbase/
+    Kraken for 20+ seconds at a time, so averaging 3 sources is already
+    more representative of "the real price" than trusting any single
+    exchange, even before adding the time dimension."""
+    prices = [p for p in (fetch_spot_price(), fetch_binance_price(), fetch_kraken_price()) if p is not None]
+    if not prices:
+        return None
+    return sum(prices) / len(prices)
+
+
+@dataclass
+class RollingTwap:
+    """Homegrown approximation of Chainlink's paid 30s BTC/USD TWAP
+    stream (data.chain.link/streams/btc-usd-twap-30s-streams, $150/mo to
+    access directly) - Polymarket's OWN resolution source for these
+    markets (confirmed via the event description 2026-08-08), not
+    instantaneous spot from any single exchange. Since Chainlink's own
+    feed is itself an aggregate across multiple venues, averaging our own
+    multi-exchange samples over a rolling time window should track it far
+    more closely than a single Coinbase spot tick ever could - not an
+    exact match (different exchange set, different weighting, no
+    guarantee of the same 30s alignment), but a meaningfully better proxy
+    for what actually decides these markets.
+
+    Time-weighted, not just an arithmetic mean of samples: each sample's
+    price is assumed to hold from when it was taken until the NEXT
+    sample (or until `now`, for the most recent one), so uneven polling
+    intervals (a slow network response, a GC pause) don't silently over-
+    or under-weight a price that happened to get sampled more or less
+    often.
+    """
+
+    window_seconds: float = TWAP_WINDOW_SECONDS
+    _samples: list[tuple[float, Decimal]] = field(default_factory=list)
+
+    def record(self, timestamp: float, price: Decimal) -> None:
+        self._samples.append((timestamp, price))
+        cutoff = timestamp - self.window_seconds
+        self._samples = [(t, p) for t, p in self._samples if t >= cutoff]
+
+    def value(self, now: float | None = None) -> Decimal | None:
+        if not self._samples:
+            return None
+        now = now if now is not None else self._samples[-1][0]
+        cutoff = now - self.window_seconds
+        relevant = [(t, p) for t, p in self._samples if t >= cutoff]
+        if not relevant:
+            return None
+        if len(relevant) == 1:
+            return relevant[0][1]
+
+        weighted_sum = Decimal(0)
+        total_duration = Decimal(0)
+        for i, (t, p) in enumerate(relevant):
+            next_t = relevant[i + 1][0] if i + 1 < len(relevant) else now
+            duration = Decimal(str(max(next_t - t, 0)))
+            weighted_sum += p * duration
+            total_duration += duration
+        if total_duration <= 0:
+            return relevant[-1][1]
+        return weighted_sum / total_duration
 
 
 def fetch_market_by_slug(slug: str) -> MarketInfo | None:
@@ -266,24 +367,6 @@ def strategy_b_momentum(samples: list[Sample]) -> list[tuple[str, Decimal, Decim
     return []
 
 
-def strategy_c_spike_fade(samples: list[Sample]) -> list[tuple[str, Decimal, Decimal]]:
-    candidates = [s for s in samples if s.seconds_to_close <= 15]
-    priced = [s.spot_price for s in samples if s.spot_price is not None]
-    if not candidates or len(priced) < 3:
-        return []
-    s = candidates[-1]
-    if s.spot_price is None:
-        return []
-    avg = sum(priced) / len(priced)
-    threshold = avg * Decimal("0.0005")  # 5bps - a starting guess, tune once data exists
-    deviation = s.spot_price - avg
-    if deviation > threshold and s.down_quote is not None:
-        return [("DOWN", s.down_quote, STAKE_USD)]  # spiked up -> bet it fades back down
-    if deviation < -threshold and s.up_quote is not None:
-        return [("UP", s.up_quote, STAKE_USD)]  # spiked down -> bet it fades back up
-    return []
-
-
 def strategy_d_cheap_blind(samples: list[Sample]) -> list[tuple[str, Decimal, Decimal]]:
     candidates = [s for s in samples if 20 <= s.seconds_to_close <= 40]
     if not candidates:
@@ -329,7 +412,6 @@ def strategy_e_scaling_replicator(samples: list[Sample]) -> list[tuple[str, Deci
 STRATEGIES = {
     "A_lag_arbitrage": strategy_a_lag_arbitrage,
     "B_momentum": strategy_b_momentum,
-    "C_spike_fade": strategy_c_spike_fade,
     "D_cheap_blind": strategy_d_cheap_blind,
     "E_scaling_replicator": strategy_e_scaling_replicator,
 }

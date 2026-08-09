@@ -4,8 +4,6 @@ import base64
 import csv
 import html
 import json
-import urllib.error
-import urllib.request
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,53 +11,15 @@ from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
 FONTS = Path(__file__).resolve().parent / "fonts"
-TRADE_LOG = ROOT / "outputs" / "trade_log.csv"
-LIVE_TRADE_LOG = ROOT / "outputs" / "live_trade_log.csv"
-SIGNALS = ROOT / "outputs" / "active_portfolio_signals.csv"
-TRADERS = ROOT / "outputs" / "traders.csv"
-PERFORMANCE = ROOT / "outputs" / "trader_performance.csv"
-ESPORTS_REVIEWED = ROOT / "outputs" / "esports_reviewed.csv"
-ESPORTS_SIGNALS = ROOT / "outputs" / "active_portfolio_signals_esports.csv"
-ESPORTS_TRADE_LOG = ROOT / "outputs" / "trade_log_esports.csv"
 BTC5M_TRADE_LOG = ROOT / "outputs" / "trade_log_btc5m.csv"
 BTC5M_LIVE_TRADE_LOG = ROOT / "outputs" / "live_trade_log_btc5m.csv"
 BTC5M_LIVE_STATUS_PATH = ROOT / "state" / "live_trading_status_btc5m.json"
 BTC5M_PILOT_CAPITAL_USD = 100.0
+BTC5M_HEDGE_DECISIONS = ROOT / "outputs" / "btc5m_hedge_paper_decisions.csv"
+BTC5M_HEDGE_WINDOW_SUMMARY = ROOT / "outputs" / "btc5m_hedge_paper_window_summary.csv"
 OUT_PATH = ROOT / "docs" / "index.html"
 
-PROFILE_URL = "https://polymarket.com/profile/{wallet}"
-MARKET_URL = "https://polymarket.com/market/{slug}"
-
-# Cuenta real usada para ejecutar (ver README, seccion "Donde vive cada cosa").
-LIVE_ACCOUNT_WALLET = "0x25f745698cce689188fbfba7b8614981c028680b"
-
-ACTION_ORDER = {"COPY": 0, "WAIT": 1, "CONFLICT": 2, "IGNORE": 3}
-STATUS_ORDER = {"OPEN": 0, "CLOSED": 1, "WIN": 2, "LOSS": 3}
 ZURICH = ZoneInfo("Europe/Zurich")
-
-
-def parse_utc(date_str: str) -> datetime | None:
-    """Parse our "YYYY-MM-DD HH:MM[:SS] UTC" timestamps into an aware
-    datetime. The paper log writes minute precision; live_trade_log.csv
-    (real trades) writes seconds too - trying minute-only first silently
-    failed on every real-log row (ValueError -> None -> "?" day bucket),
-    which is why the per-day breakdown looked empty for real trading."""
-    if not date_str:
-        return None
-    stripped = date_str.replace(" UTC", "")
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
-        try:
-            return datetime.strptime(stripped, fmt).replace(tzinfo=timezone.utc)
-        except ValueError:
-            continue
-    return None
-
-
-def zurich_day(date_str: str) -> str:
-    dt = parse_utc(date_str)
-    if dt is None:
-        return "?"
-    return dt.astimezone(ZURICH).strftime("%Y-%m-%d")
 
 
 def font_b64(name: str) -> str:
@@ -77,98 +37,9 @@ def esc(value) -> str:
     return html.escape(str(value if value is not None else ""))
 
 
-REAL_STATUS_MAP = {"EXECUTED": "OPEN", "WON_UNREDEEMED": "WIN", "LOST": "LOSS", "CLOSED": "CLOSED"}
-
-
-def fetch_live_price(condition_id: str, asset: str) -> str | None:
-    """Current price for one token, same CLOB endpoint already used
-    elsewhere in this codebase for resolution checks (get_market_price_info
-    in run_screening_and_notify.py / live_execution.py) - returns None on
-    any failure so a slow/broken network call never breaks dashboard
-    generation, it just falls back to showing an estimate instead."""
-    url = f"https://clob.polymarket.com/markets/{condition_id}"
-    req = urllib.request.Request(
-        url, headers={"Accept": "application/json", "User-Agent": "atlantis-dashboard/0.1"}
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            market = json.loads(resp.read())
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
-        return None
-    if not market:
-        return None
-    for token in market.get("tokens", []):
-        if token.get("token_id") == asset:
-            return str(token.get("price")) if token.get("price") is not None else None
-    return None
-
-
-def fetch_account_positions(wallet_address: str) -> list[dict]:
-    """Live positions straight from the exchange's own record of the
-    account (data-api.polymarket.com/positions, same endpoint/fields used
-    throughout atlantis/services/*.py for other wallets) instead of
-    deriving "what's open" from our own live_trade_log.csv. Our log can
-    only show a position if our own pipeline detected the signal, queued
-    the intent, and correctly parsed the fill - each of those has had a
-    real bug this session. Querying the account directly sidesteps all of
-    that: whatever's actually open on Polymarket is what shows up here,
-    with curPrice/percentPnl computed by the exchange itself, live, no
-    guessing on our side. Returns [] on any failure (never breaks
-    dashboard generation)."""
-    url = (
-        f"https://data-api.polymarket.com/positions?user={wallet_address}"
-        "&sizeThreshold=0&sortBy=CURRENT&sortDirection=DESC&limit=100"
-    )
-    req = urllib.request.Request(
-        url, headers={"Accept": "application/json", "User-Agent": "atlantis-dashboard/0.1"}
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            positions = json.loads(resp.read())
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
-        return []
-    if not isinstance(positions, list):
-        return []
-
-    # /positions never drops a position that resolved to $0 until it's
-    # redeemed/merged on-chain (same gotcha already known for other
-    # wallets' closed-positions data) - a market lost months ago can sit
-    # here forever showing curPrice=0/-100% even though Polymarket's own
-    # "open positions" view doesn't show it as open anymore. currentValue
-    # is 0 for exactly those; a genuinely open or won-unredeemed position
-    # is always worth something.
-    def _value(p: dict) -> float:
-        try:
-            return float(p.get("currentValue") or 0)
-        except (TypeError, ValueError):
-            return 0.0
-
-    return [p for p in positions if _value(p) > 0]
-
-
-def render_account_position_row(p: dict) -> str:
-    pct = p.get("percentPnl")
-    pct_class = ""
-    if pct is not None:
-        try:
-            pct_class = "num-pos" if float(pct) >= 0 else "num-neg"
-        except (TypeError, ValueError):
-            pct_class = ""
-    return f"""
-    <tr>
-      <td class="title-cell">{market_link(p.get('title'), p.get('slug'))}</td>
-      <td><b>{esc(p.get('outcome'))}</b></td>
-      <td class="num">{fmt_price(p.get('avgPrice'))}</td>
-      <td class="num">{fmt_price(p.get('curPrice'))}</td>
-      <td class="num {pct_class}">{fmt_pct(pct)}</td>
-      <td class="num">${fmt_money(p.get('currentValue'))}</td>
-    </tr>"""
-
-
 STRATEGY_LABELS = {
     "A_lag_arbitrage": "A · Arbitraje de rezago",
     "B_momentum": "B · Momentum de cierre",
-    "C_spike_fade": "C · Fade de spike",
     "D_cheap_blind": "D · Barato sin filtro",
     "E_scaling_replicator": "E · Réplica de bot real (escalado)",
 }
@@ -176,7 +47,6 @@ STRATEGY_LABELS = {
 STRATEGY_DESCRIPTIONS = {
     "A_lag_arbitrage": "Compra el lado que el precio de BTC ya favorece, pero solo si esa cuota sigue barata (&lt;20¢) — apuesta a que el libro de órdenes todavía no se re-precio.",
     "B_momentum": "Mira hacia dónde viene la tendencia del precio en el último minuto y compra ese lado, sin importar si la cuota está cara o barata.",
-    "C_spike_fade": "Si el precio pega un salto brusco en los últimos segundos, apuesta a que revierte antes del cierre — lo opuesto a A, acá apuesta a un cambio que todavía no pasó.",
     "D_cheap_blind": "Compra cualquier lado que esté por debajo de 15¢ cerca del cierre, sin mirar hacia dónde va el precio — sirve de comparación para saber si las otras 4 realmente le ganan a comprar barato a ciegas.",
     "E_scaling_replicator": "Va comprando de a poco (cada ~25 seg) del lado que el precio favorece en cada momento, pudiendo cambiar de lado si se da vuelta — inspirada en el patrón real de una wallet que opera estos mercados con ~78% de acierto.",
 }
@@ -387,62 +257,141 @@ def render_btc5m_live_strategy_section(strategy_key: str, rows: list[dict]) -> s
   </section>"""
 
 
-def real_log_to_display_rows(raw_rows: list[dict]) -> list[dict]:
-    """Adapt live_trade_log.csv (real money) into the same field shape as
-    the paper trade_log.csv, so the existing scoreboard/history rendering
-    (built for the paper schema) can be reused unchanged. Only rows that
-    reflect an actual real-money state make it through - ERROR (order never
-    placed), DRY_RUN (kill switch was off, no money moved) and
-    MISSED_MARKET_CLOSED (signal arrived too late to act on) are excluded
-    entirely rather than shown as if they were real trades."""
-    out = []
-    for r in raw_rows:
-        status = REAL_STATUS_MAP.get(r.get("status", ""))
-        if status is None:
-            continue
-        # No live mark-to-market price is tracked for an open real position
-        # (live_trade_log.csv only records the buy fill) - fall back to the
-        # entry price itself so the dashboard shows a flat 0% (clearly
-        # marked as an estimate) instead of fabricating a -100% loss from a
-        # blank/zero current price.
-        current_price = r.get("fill_price_sell") or r.get("fill_price_buy") or ""
+def btc5m_hedge_signal_for_row(r: dict | None) -> str:
+    """Same vocabulary the live script prints (BUY UP / BUY DOWN / WAIT /
+    LOCKED PROFIT), derived from the decision log's own `action`/`side`
+    columns so the dashboard can never drift from what the bot actually
+    logged."""
+    if r is None:
+        return "SIN DATOS"
+    action = r.get("action", "")
+    if action == "BUY":
+        return f"BUY {r.get('side', '')}"
+    if action == "LOCKED_PROFIT":
+        return "LOCKED PROFIT"
+    return "WAIT"
 
-        # WON_UNREDEEMED never gets a pct_return written (it's genuinely not
-        # realized until the user redeems on-chain), but leaving it blank
-        # here silently dropped all of these from the scoreboard's average -
-        # only LOST (-100%) and CLOSED rows have a stored pct_return, so the
-        # average looked like a huge loss even when the account is net up.
-        # Estimate it the same way render_log_row's own per-row fallback
-        # would, so the aggregate stats and the table agree.
-        pct_return = r.get("pct_return", "")
-        if not pct_return and status == "WIN":
-            try:
-                entry = float(r.get("fill_price_buy") or 0)
-                if entry > 0:
-                    pct_return = f"{(1 / entry - 1) * 100:.2f}"
-            except ValueError:
-                pass
 
-        out.append(
-            {
-                "condition_id": r.get("condition_id", ""),
-                "asset": r.get("asset", ""),
-                "title": r.get("title", ""),
-                "slug": r.get("slug", ""),
-                "outcome": r.get("outcome", ""),
-                "traders": r.get("traders", ""),
-                "date_first_seen": r.get("date_first_seen", ""),
-                "entry_price": r.get("fill_price_buy", ""),
-                "current_price": current_price,
-                "consensus_active": "yes" if status == "OPEN" else "no",
-                "status": status,
-                "exit_price": r.get("fill_price_sell", ""),
-                "pct_return": pct_return,
-                "stake_usd_actual": r.get("stake_usd_actual", ""),
-                "last_updated": r.get("last_updated", ""),
-            }
-        )
-    return out
+def market_name_for_hedge_slug(slug: str | None) -> str:
+    """"BTC 5min · HH:MM UTC" instead of the raw "btc-updown-5m-<epoch>"
+    slug - the epoch is the window's own opening instant (see
+    market_data.slug_for_window), so this needs no extra lookup."""
+    if not slug:
+        return "—"
+    try:
+        ts = int(slug.rsplit("-", 1)[-1])
+        dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+        return f"BTC 5min · {dt.strftime('%H:%M')} UTC"
+    except (ValueError, IndexError):
+        return slug
+
+
+def render_btc5m_hedge_live_row(r: dict | None) -> str:
+    if r is None:
+        return '<tr><td colspan="8" class="empty">El bot todavia no ha corrido</td></tr>'
+
+    def f(key: str) -> float:
+        try:
+            return float(r.get(key) or 0)
+        except ValueError:
+            return 0.0
+
+    profit_up, profit_down, guaranteed = f("profit_up_after"), f("profit_down_after"), f("guaranteed_profit_after")
+    return f"""
+    <tr>
+      <td class="title-cell">{esc(market_name_for_hedge_slug(r.get('window_slug')))}</td>
+      <td class="num">{f('up_shares_after'):.2f}</td>
+      <td class="num">{f('down_shares_after'):.2f}</td>
+      <td class="num">${f('cost_after'):.2f}</td>
+      <td class="num {'num-pos' if profit_up >= 0 else 'num-neg'}">${profit_up:+.2f}</td>
+      <td class="num {'num-pos' if profit_down >= 0 else 'num-neg'}">${profit_down:+.2f}</td>
+      <td class="num {'num-pos' if guaranteed >= 0 else 'num-neg'}">${guaranteed:+.4f}</td>
+      <td class="dim">{esc(r.get('hedge_mode', ''))}</td>
+    </tr>"""
+
+
+def render_btc5m_hedge_order_row(o: dict) -> str:
+    def f(key: str) -> float:
+        try:
+            return float(o.get(key) or 0)
+        except ValueError:
+            return 0.0
+
+    timestamp = o.get("timestamp", "")
+    time_only = timestamp.split(" ")[1] if " " in timestamp else timestamp
+    side = o.get("side", "")
+    try:
+        qty_str = f"{float(o.get('quantity') or 0):.2f}"
+    except ValueError:
+        qty_str = esc(o.get("quantity", ""))
+    try:
+        price_str = f"${float(o.get('execution_price') or 0):.3f}"
+    except ValueError:
+        price_str = esc(o.get("execution_price", ""))
+
+    order_cost = f("cost_after") - f("cost_before")
+    cumulative_cost = f("cost_after")
+    guaranteed_after = f("guaranteed_profit_after")
+
+    return f"""
+        <tr>
+          <td class="dim">{esc(time_only)}</td>
+          <td><b>{esc(side)}</b></td>
+          <td class="num">{qty_str}</td>
+          <td class="num">{price_str}</td>
+          <td class="num">${order_cost:.2f}</td>
+          <td class="num">${cumulative_cost:.2f}</td>
+          <td class="num {'num-pos' if guaranteed_after >= 0 else 'num-neg'}">${guaranteed_after:+.2f}</td>
+          <td class="dim">{esc(o.get('hedge_mode', ''))}</td>
+        </tr>"""
+
+
+def render_btc5m_hedge_window_row(r: dict, orders: list[dict], *, extra_class: str = "") -> str:
+    def f(key: str) -> float:
+        try:
+            return float(r.get(key) or 0)
+        except ValueError:
+            return 0.0
+
+    guaranteed = f("guaranteed_profit")
+    realized_raw = r.get("realized_profit")
+    realized_cell = "—"
+    realized_class = ""
+    if realized_raw not in (None, ""):
+        realized = f("realized_profit")
+        realized_class = "num-pos" if realized >= 0 else "num-neg"
+        realized_cell = f"${realized:+.2f}"
+    outcome = r.get("realized_outcome") or "?"
+
+    orders_table = (
+        "".join(render_btc5m_hedge_order_row(o) for o in orders)
+        if orders
+        else '<tr><td colspan="8" class="empty">Sin ordenes en esta ventana</td></tr>'
+    )
+
+    return f"""
+    <tr class="{extra_class}">
+      <td class="title-cell">{esc(market_name_for_hedge_slug(r.get('window_slug')))}</td>
+      <td class="num">${f('total_cost'):.2f}</td>
+      <td class="num">{f('up_shares'):.2f}</td>
+      <td class="num">{f('down_shares'):.2f}</td>
+      <td class="num {'num-pos' if guaranteed >= 0 else 'num-neg'}">${guaranteed:+.4f}</td>
+      <td>{esc(outcome)}</td>
+      <td class="num {realized_class}">{realized_cell}</td>
+      <td class="num">{esc(r.get('number_of_orders'))}</td>
+      <td class="num dim">P:{esc(r.get('number_of_profit_hedges', 0))} D:{esc(r.get('number_of_defensive_hedges', 0))} E:{esc(r.get('number_of_emergency_hedges', 0))}</td>
+    </tr>
+    <tr class="{extra_class}">
+      <td colspan="9" style="padding: 0; border-top: none;">
+        <details>
+          <summary style="cursor: pointer; padding: 4px 12px 8px; color: var(--text-dim); font-size: 12px;">Ver {len(orders)} orden(es)</summary>
+          <table style="width: 100%;">
+            <thead><tr><th>Hora</th><th>Lado</th><th class="num">Cantidad</th><th class="num">Precio</th><th class="num">Costo orden</th><th class="num">Costo acum.</th><th class="num">Guaranteed</th><th>Modo</th></tr></thead>
+            <tbody>{orders_table}</tbody>
+          </table>
+        </details>
+      </td>
+    </tr>"""
 
 
 def fmt_pct(value: str) -> str:
@@ -465,140 +414,6 @@ def fmt_price(value: str) -> str:
         return "—"
 
 
-def market_link(title: str, slug: str) -> str:
-    title_html = esc(title)
-    if not slug:
-        return title_html
-    url = esc(MARKET_URL.format(slug=slug))
-    return f'<a href="{url}" target="_blank" rel="noopener">{title_html}</a>'
-
-
-def render_signal_row(row: dict) -> str:
-    action = row.get("action", "IGNORE")
-    return f"""
-    <tr>
-      <td><span class="pill pill-{action.lower()}">{esc(action)}</span></td>
-      <td class="title-cell">{market_link(row.get('title'), row.get('slug'))}</td>
-      <td><b>{esc(row.get('outcome'))}</b></td>
-      <td class="num">{fmt_price(row.get('current_price'))}</td>
-      <td class="num">{esc(row.get('supporting_traders'))}</td>
-      <td class="num">{esc(row.get('conviction'))}</td>
-      <td class="num">${esc(row.get('stake'))}</td>
-    </tr>"""
-
-
-def render_log_row(row: dict, *, extra_class: str = "") -> str:
-    status = row.get("status", "OPEN")
-    consensus_active = row.get("consensus_active", "yes") == "yes"
-    pct_return = row.get("pct_return", "")
-
-    # For OPEN trades, pct_return in the CSV is only set once the trade
-    # closes/resolves - it's blank the whole time it's open, which hid
-    # unrealized losses entirely from this table (they only showed up in
-    # the live Telegram alert text). Compute a live mark-to-market % here
-    # too, so an open position that's currently underwater shows red.
-    is_live_estimate = False
-    if pct_return in (None, ""):
-        try:
-            entry = float(row.get("entry_price") or 0)
-            current = float(row.get("current_price") or 0)
-            if entry > 0:
-                pct_return = f"{(current / entry - 1) * 100:.2f}"
-                is_live_estimate = True
-        except ValueError:
-            pct_return = ""
-
-    return_class = ""
-    if pct_return not in (None, ""):
-        try:
-            return_class = "num-pos" if float(pct_return) >= 0 else "num-neg"
-        except ValueError:
-            return_class = ""
-
-    if status == "OPEN" and not consensus_active:
-        status_badge = '<span class="pill pill-warn">SIN CONSENSO</span>'
-    elif status == "CLOSED":
-        status_badge = '<span class="pill pill-closed">CERRADO (salida temprana)</span>'
-    else:
-        status_badge = f'<span class="pill pill-{status.lower()}">{esc(status)}</span>'
-
-    return_suffix = "*" if is_live_estimate else ""
-
-    return f"""
-    <tr class="{extra_class}">
-      <td>{status_badge}</td>
-      <td class="title-cell">{market_link(row.get('title'), row.get('slug'))}</td>
-      <td><b>{esc(row.get('outcome'))}</b></td>
-      <td class="num">{fmt_price(row.get('entry_price'))}</td>
-      <td class="num">{fmt_price(row.get('exit_price') or row.get('current_price'))}</td>
-      <td class="num {return_class}">{fmt_pct(pct_return)}{return_suffix}</td>
-      <td class="dim">{esc(row.get('date_first_seen'))}</td>
-      <td class="dim">{esc(row.get('traders'))}</td>
-    </tr>"""
-
-
-VERDICT_PILL = {
-    # discover-*-traders scores go through sports_traders.verdict() (A/B/C/REJECT).
-    "A": "win",
-    "B": "open",
-    "C": "wait",
-    # evaluate-*-wallet uses a separate, differently-scaled verdict function.
-    "WATCHLIST_STRONG": "win",
-    "WATCHLIST": "open",
-    "PAPER_ONLY": "wait",
-    "REJECT": "loss",
-}
-
-
-def render_trader_row(row: dict) -> str:
-    wallet = row.get("wallet", "")
-    username = row.get("username") or "(sin username)"
-    profile = esc(PROFILE_URL.format(wallet=wallet))
-    verdict = row.get("verdict", "")
-    pill_class = VERDICT_PILL.get(verdict, "ignore")
-    short_wallet = f"{wallet[:6]}…{wallet[-4:]}" if len(wallet) > 12 else wallet
-    return f"""
-    <tr>
-      <td><b>{esc(row.get('label'))}</b></td>
-      <td><a href="{profile}" target="_blank" rel="noopener">{esc(username)}</a></td>
-      <td class="dim">{esc(short_wallet)}</td>
-      <td><span class="pill pill-{pill_class}">{esc(verdict)}</span></td>
-      <td class="dim">{esc(row.get('status'))}</td>
-    </tr>"""
-
-
-def render_esports_reviewed_row(row: dict) -> str:
-    wallet = row.get("wallet", "")
-    username = row.get("username") or ""
-    # discover-esports-traders falls back to Polymarket's raw "name" field
-    # when a wallet never set a public display name, which is literally
-    # "{wallet}-{some id}" - not a searchable handle, so say so instead of
-    # showing something that looks like a real username but isn't.
-    if username.lower().startswith(wallet.lower()):
-        username_display = "(sin username)"
-    else:
-        username_display = username or "(sin username)"
-    profile = esc(PROFILE_URL.format(wallet=wallet))
-    copy_verdict = row.get("copy_verdict", "")
-    pill_class = VERDICT_PILL.get(copy_verdict, "ignore")
-    short_wallet = f"{wallet[:6]}…{wallet[-4:]}" if len(wallet) > 12 else wallet
-    return f"""
-    <tr>
-      <td><a href="{profile}" target="_blank" rel="noopener">{esc(username_display)}</a></td>
-      <td class="dim">{esc(short_wallet)}</td>
-      <td><span class="pill pill-win">sin señal de bot</span></td>
-      <td><span class="pill pill-{pill_class}">{esc(copy_verdict)}</span></td>
-      <td class="num dim">{esc(row.get('events_participated'))}</td>
-    </tr>"""
-
-
-FLAG_PILL = {
-    "DECLINING": "loss",
-    "LOW_SAMPLE": "wait",
-    "OK": "win",
-}
-
-
 def fmt_money(value: str | None) -> str:
     try:
         num = float(value or 0)
@@ -608,58 +423,8 @@ def fmt_money(value: str | None) -> str:
     return f"{sign}{num:,.0f}"
 
 
-def render_performance_row(row: dict, *, wallet_to_username: dict[str, str] | None = None, extra_class: str = "") -> str:
-    flag = row.get("flag", "")
-    pill_class = FLAG_PILL.get(flag, "wait")
-    pnl_7d = row.get("pnl_7d")
-    pnl_class = "num-pos" if (pnl_7d and float(pnl_7d) >= 0) else "num-neg"
-    pnl_30d = row.get("pnl_30d")
-    pnl_30d_class = "num-pos" if (pnl_30d and float(pnl_30d) >= 0) else "num-neg"
-
-    wallet = row.get("wallet_address", "")
-    username = (wallet_to_username or {}).get(wallet.lower(), "") or "(sin username)"
-    profile = esc(PROFILE_URL.format(wallet=wallet))
-    short_wallet = f"{wallet[:6]}…{wallet[-4:]}" if len(wallet) > 12 else wallet
-
-    return f"""
-    <tr class="{extra_class}">
-      <td><b>{esc(row.get('label'))}</b></td>
-      <td><a href="{profile}" target="_blank" rel="noopener">{esc(username)}</a></td>
-      <td class="dim">{esc(short_wallet)}</td>
-      <td><span class="pill pill-{pill_class}">{esc(flag)}</span></td>
-      <td class="num {pnl_class}">{fmt_money(pnl_7d)}</td>
-      <td class="num">{fmt_pct(row.get('win_rate_7d'))}</td>
-      <td class="num dim">{esc(row.get('resolved_7d'))}</td>
-      <td class="num {pnl_30d_class}">{fmt_money(pnl_30d)}</td>
-      <td class="num">{fmt_pct(row.get('win_rate_30d'))}</td>
-      <td class="num dim">{esc(row.get('resolved_30d'))}</td>
-    </tr>"""
-
-
 def main() -> None:
-    # Deportes' history/scoreboard reflect REAL money only - the paper
-    # screening log used to feed this same tab, which meant a signal that
-    # never got a real fill (kill switch off, order errored, etc.) showed up
-    # identically to one that did, no way to tell them apart.
-    log_rows = real_log_to_display_rows(read_csv(LIVE_TRADE_LOG))
-    signal_rows = read_csv(SIGNALS)
-    trader_rows = read_csv(TRADERS)
-    performance_rows = read_csv(PERFORMANCE)
-    esports_reviewed_rows = read_csv(ESPORTS_REVIEWED)
-    esports_signal_rows = read_csv(ESPORTS_SIGNALS)
-    esports_log_rows = read_csv(ESPORTS_TRADE_LOG)
     btc5m_rows = read_csv(BTC5M_TRADE_LOG)
-
-    log_rows.sort(key=lambda r: (STATUS_ORDER.get(r.get("status", "OPEN"), 9), r.get("last_updated", "")), reverse=False)
-    signal_rows.sort(key=lambda r: ACTION_ORDER.get(r.get("action", "IGNORE"), 9))
-    trader_rows.sort(key=lambda r: r.get("label", ""))
-    performance_rows.sort(key=lambda r: float(r.get("pnl_7d") or 0))
-    wallet_to_username = {r["wallet"].lower(): r.get("username") for r in trader_rows if r.get("wallet")}
-    performance_ok = [r for r in performance_rows if r.get("flag") == "OK"]
-    performance_inactive = [r for r in performance_rows if r.get("flag") != "OK"]
-    esports_reviewed_rows.sort(key=lambda r: int(r.get("events_participated") or 0), reverse=True)
-    esports_signal_rows.sort(key=lambda r: ACTION_ORDER.get(r.get("action", "IGNORE"), 9))
-    esports_log_rows.sort(key=lambda r: (STATUS_ORDER.get(r.get("status", "OPEN"), 9), r.get("last_updated", "")), reverse=False)
     btc5m_rows.sort(key=lambda r: r.get("date_closed", ""), reverse=True)
 
     # Every btc5m row opens and resolves within the same script run (see
@@ -682,8 +447,6 @@ def main() -> None:
         d["usd_sum"] += stake * pct / 100
         if r.get("status") == "WIN":
             d["wins"] += 1
-    btc5m_visible = btc5m_rows[:20]
-    btc5m_hidden = btc5m_rows[20:]
     btc5m_rows_by_strategy: dict[str, list[dict]] = defaultdict(list)
     for r in btc5m_rows:
         btc5m_rows_by_strategy[r.get("strategy", "")].append(r)
@@ -722,143 +485,30 @@ def main() -> None:
         (r.get("stake_usd_requested") for r in btc5m_live_rows_real if r.get("stake_usd_requested")), None
     )
 
-    resolved = [r for r in log_rows if r.get("status") in ("WIN", "LOSS", "CLOSED")]
-    open_trades = [r for r in log_rows if r.get("status") == "OPEN"]
-
-    # Real open positions only carry the entry fill in live_trade_log.csv -
-    # no live mark-to-market price is tracked between cron cycles, so
-    # current_price defaulted to entry_price (a flat 0%, per
-    # real_log_to_display_rows). There are only ever a handful of these
-    # open at once, so fetching each one's live price directly is cheap.
-    for row in open_trades:
-        live_price = fetch_live_price(row.get("condition_id", ""), row.get("asset", ""))
-        if live_price is not None:
-            row["current_price"] = live_price
-
-    account_positions = fetch_account_positions(LIVE_ACCOUNT_WALLET)
-
-    # Historial de trades: abiertos primero (siempre visibles, son pocos),
-    # despues los cerrados por fecha (no por resultado) - solo los ultimos
-    # 10 se ven de entrada, el resto queda oculto detras de un boton
-    # "ver todas" para que la tabla no ocupe la pagina con el historico.
-    open_by_date = sorted(open_trades, key=lambda r: r.get("date_first_seen", ""), reverse=True)
-    resolved_by_date = sorted(resolved, key=lambda r: r.get("last_updated", ""), reverse=True)
-    resolved_visible = resolved_by_date[:10]
-    resolved_hidden = resolved_by_date[10:]
-
-    copy_signals = [r for r in signal_rows if r.get("action") == "COPY"]
-    other_signals = [r for r in signal_rows if r.get("action") != "COPY"][:20]
-
-    # Same open+last-10-closed / show-all pattern as the sports history table.
-    esports_resolved = [r for r in esports_log_rows if r.get("status") in ("WIN", "LOSS", "CLOSED")]
-    esports_open = [r for r in esports_log_rows if r.get("status") == "OPEN"]
-    esports_open_by_date = sorted(esports_open, key=lambda r: r.get("date_first_seen", ""), reverse=True)
-    esports_resolved_by_date = sorted(esports_resolved, key=lambda r: r.get("last_updated", ""), reverse=True)
-    esports_resolved_visible = esports_resolved_by_date[:10]
-    esports_resolved_hidden = esports_resolved_by_date[10:]
-
-    esports_copy_signals = [r for r in esports_signal_rows if r.get("action") == "COPY"]
-    esports_other_signals = [r for r in esports_signal_rows if r.get("action") != "COPY"][:20]
+    # BTC5m cross-side hedge bot - PAPER ONLY (see atlantis/btc5m_hedge/,
+    # scripts/run_btc5m_hedge_paper_trading.py). Doesn't predict Up/Down -
+    # buys both sides aiming for min(profit_if_up, profit_if_down) > 0
+    # regardless of outcome. Decisions are appended in chronological
+    # order (every poll, WAIT included), so the LAST row is always the
+    # bot's current live state - no separate "current window" state file
+    # to read.
+    btc5m_hedge_decisions = read_csv(BTC5M_HEDGE_DECISIONS)
+    btc5m_hedge_latest = btc5m_hedge_decisions[-1] if btc5m_hedge_decisions else None
+    btc5m_hedge_orders_by_slug: dict[str, list[dict]] = defaultdict(list)
+    for d in btc5m_hedge_decisions:
+        if d.get("action") == "BUY":
+            btc5m_hedge_orders_by_slug[d.get("window_slug", "")].append(d)
+    btc5m_hedge_window_rows = read_csv(BTC5M_HEDGE_WINDOW_SUMMARY)
+    btc5m_hedge_window_rows.sort(key=lambda r: r.get("window_closed_at", ""), reverse=True)
+    btc5m_hedge_resolved = [r for r in btc5m_hedge_window_rows if r.get("realized_outcome")]
+    btc5m_hedge_locked = [r for r in btc5m_hedge_window_rows if float(r.get("guaranteed_profit") or 0) > 0]
+    btc5m_hedge_realized_sum = sum(float(r.get("realized_profit") or 0) for r in btc5m_hedge_resolved if r.get("realized_profit"))
+    btc5m_hedge_visible = btc5m_hedge_window_rows[:20]
+    btc5m_hedge_hidden = btc5m_hedge_window_rows[20:]
 
     now_utc = datetime.now(timezone.utc)
     now = now_utc.strftime("%Y-%m-%d %H:%M UTC")
     now_zurich = now_utc.astimezone(ZURICH).strftime("%Y-%m-%d %H:%M")
-
-    # --- Retorno realizado (trades cerrados) vs no realizado (abiertos) ---
-    # Averages only - a sum of independent trades' % returns isn't a real
-    # portfolio metric (it inflates with trade count regardless of money
-    # actually made), so we don't compute or show it anymore.
-    realized_pct = [float(r["pct_return"]) for r in resolved if r.get("pct_return") not in (None, "")]
-    realized_avg = sum(realized_pct) / len(realized_pct) if realized_pct else 0.0
-
-    unrealized_pct = []
-    for r in open_trades:
-        try:
-            entry = float(r.get("entry_price") or 0)
-            current = float(r.get("current_price") or 0)
-            if entry > 0:
-                unrealized_pct.append((current / entry - 1) * 100)
-        except ValueError:
-            continue
-    unrealized_avg = sum(unrealized_pct) / len(unrealized_pct) if unrealized_pct else 0.0
-
-    # Headline "Retorno promedio" blends both pools (all trades, closed or
-    # not) so it moves with whichever side - realized or unrealized - is
-    # actually driving performance right now, instead of only reflecting
-    # closed trades.
-    all_pct = realized_pct + unrealized_pct
-    avg_return = sum(all_pct) / len(all_pct) if all_pct else 0.0
-
-    PAPER_ASSUMED_STAKE_USD = 25.0  # trade_log_esports.csv (paper) never tracks a per-trade stake
-
-    def trade_dollar_pnl(row: dict, pct: float) -> float:
-        try:
-            stake = float(row.get("stake_usd_actual") or 0) or PAPER_ASSUMED_STAKE_USD
-        except ValueError:
-            stake = PAPER_ASSUMED_STAKE_USD
-        return stake * pct / 100
-
-    # Por dia (hora Zurich): realizado = dia en que cerro (last_updated),
-    # no realizado = dia en que se detecto la posicion (date_first_seen)
-    realized_by_day: dict[str, list[tuple[float, float]]] = defaultdict(list)
-    for r in resolved:
-        if r.get("pct_return") not in (None, ""):
-            pct = float(r["pct_return"])
-            realized_by_day[zurich_day(r.get("last_updated", ""))].append((pct, trade_dollar_pnl(r, pct)))
-
-    unrealized_by_day: dict[str, list[tuple[float, float]]] = defaultdict(list)
-    for r, pct in zip(
-        [r for r in open_trades if r.get("entry_price") and r.get("current_price")], unrealized_pct
-    ):
-        unrealized_by_day[zurich_day(r.get("date_first_seen", ""))].append((pct, trade_dollar_pnl(r, pct)))
-
-    def day_rows(by_day: dict[str, list[tuple[float, float]]]) -> str:
-        rows = []
-        for day in sorted(by_day.keys(), reverse=True):
-            vals = by_day[day]
-            avg = sum(pct for pct, _ in vals) / len(vals)
-            total_usd = sum(usd for _, usd in vals)
-            cls = "num-pos" if avg >= 0 else "num-neg"
-            usd_cls = "num-pos" if total_usd >= 0 else "num-neg"
-            rows.append(
-                f'<tr><td class="dim">{esc(day)}</td><td class="num">{len(vals)}</td>'
-                f'<td class="num {cls}">{avg:+.1f}%</td>'
-                f'<td class="num {usd_cls}">${fmt_money(str(total_usd))}</td></tr>'
-            )
-        return "".join(rows) or '<tr><td colspan="4" class="empty">Sin datos</td></tr>'
-
-    # Same scoreboard/"Rendimiento" stats as Deportes, minus win rate - this
-    # is paper trading, so a % of trades landing on the "right" outcome
-    # isn't as meaningful yet as just tracking whether the simulated
-    # returns are trending positive.
-    esports_realized_pct = [float(r["pct_return"]) for r in esports_resolved if r.get("pct_return") not in (None, "")]
-    esports_realized_avg = sum(esports_realized_pct) / len(esports_realized_pct) if esports_realized_pct else 0.0
-
-    esports_unrealized_pct = []
-    for r in esports_open:
-        try:
-            entry = float(r.get("entry_price") or 0)
-            current = float(r.get("current_price") or 0)
-            if entry > 0:
-                esports_unrealized_pct.append((current / entry - 1) * 100)
-        except ValueError:
-            continue
-    esports_unrealized_avg = sum(esports_unrealized_pct) / len(esports_unrealized_pct) if esports_unrealized_pct else 0.0
-
-    esports_all_pct = esports_realized_pct + esports_unrealized_pct
-    esports_avg_return = sum(esports_all_pct) / len(esports_all_pct) if esports_all_pct else 0.0
-
-    esports_realized_by_day: dict[str, list[tuple[float, float]]] = defaultdict(list)
-    for r in esports_resolved:
-        if r.get("pct_return") not in (None, ""):
-            pct = float(r["pct_return"])
-            esports_realized_by_day[zurich_day(r.get("last_updated", ""))].append((pct, trade_dollar_pnl(r, pct)))
-
-    esports_unrealized_by_day: dict[str, list[tuple[float, float]]] = defaultdict(list)
-    for r, pct in zip(
-        [r for r in esports_open if r.get("entry_price") and r.get("current_price")], esports_unrealized_pct
-    ):
-        esports_unrealized_by_day[zurich_day(r.get("date_first_seen", ""))].append((pct, trade_dollar_pnl(r, pct)))
 
     fonts_css = f"""
     @font-face {{
@@ -1119,298 +769,23 @@ footer a:hover {{ text-decoration: underline; }}
   <header>
     <div>
       <h1>ATLANTIS <span>SCREENING</span></h1>
-      <div class="subtitle">Señales de consenso · Polymarket sports · 14 traders verificados</div>
+      <div class="subtitle">BTC "Up or Down 5m" · Polymarket</div>
     </div>
     <div class="updated">Última corrida (UTC)<br><b>{esc(now)}</b><br>Hora Zúrich<br><b>{esc(now_zurich)}</b></div>
   </header>
 
   <div class="tabs">
-    <button class="tab-btn active" data-tab="btc5m">BTC 5m (Paper)</button>
+    <button class="tab-btn active" data-tab="btc5m-hedge">BTC 5m (Hedge)</button>
+    <button class="tab-btn" data-tab="btc5m">BTC 5m (Paper)</button>
     <button class="tab-btn" data-tab="btc5m-real">BTC 5m (Real)</button>
-    <button class="tab-btn" data-tab="sports">Deportes</button>
-    <button class="tab-btn" data-tab="esports-reviewed">Esports</button>
   </div>
 
-  <div class="tab-panel" data-tab-panel="sports">
-
-  <div class="scoreboard">
-    <div class="stat">
-      <div class="stat-label">Trades registrados</div>
-      <div class="stat-value">{len(log_rows)}</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Retorno promedio</div>
-      <div class="stat-value {'pos' if avg_return >= 0 else 'neg'}">{avg_return:+.1f}%</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Posiciones abiertas</div>
-      <div class="stat-value">{len(open_trades)}</div>
-    </div>
-  </div>
+  <div class="tab-panel" data-tab-panel="btc5m">
 
   <section>
     <div class="section-head">
-      <h2>Rendimiento</h2>
-      <span class="section-note">Realizado = trades cerrados · No realizado = abiertos, marca en vivo</span>
-    </div>
-    <div class="scoreboard" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 20px;">
-      <div class="stat">
-        <div class="stat-label">Retorno realizado (promedio)</div>
-        <div class="stat-value {'pos' if realized_avg >= 0 else 'neg'}">{realized_avg:+.1f}%</div>
-        <div class="section-note">{len(realized_pct)} trades cerrados</div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">Retorno no realizado (promedio)</div>
-        <div class="stat-value {'pos' if unrealized_avg >= 0 else 'neg'}">{unrealized_avg:+.1f}%</div>
-        <div class="section-note">{len(unrealized_pct)} trades abiertos</div>
-      </div>
-    </div>
-    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-      <div class="table-scroll">
-        <table>
-          <thead><tr><th>Día (Zúrich)</th><th class="num">Trades</th><th class="num">Promedio %</th><th class="num">USD ganado/perdido</th></tr></thead>
-          <tbody>{day_rows(realized_by_day)}</tbody>
-        </table>
-      </div>
-      <div class="table-scroll">
-        <table>
-          <thead><tr><th>Día detectado (Zúrich)</th><th class="num">Trades</th><th class="num">Promedio %</th><th class="num">USD ganado/perdido</th></tr></thead>
-          <tbody>{day_rows(unrealized_by_day)}</tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <div class="section-head">
-      <h2>Posiciones reales ahora</h2>
-      <span class="section-note">directo de la cuenta en Polymarket (no de nuestro registro interno) · precio y % en vivo, calculados por el exchange · se actualiza cada ~1 min</span>
-    </div>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Mercado (clic para abrir)</th><th>Apuesta</th><th>Entrada</th>
-            <th>Actual</th><th>Retorno</th><th>Valor</th>
-          </tr>
-        </thead>
-        <tbody>
-          {"".join(render_account_position_row(p) for p in account_positions) or '<tr><td colspan="6" class="empty">Sin posiciones abiertas ahora mismo (o no se pudo consultar Polymarket)</td></tr>'}
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <section>
-    <div class="section-head">
-      <h2>Señales activas ahora</h2>
-      <span class="section-note">{len(copy_signals)} COPY · candidatas a operar en base al consenso actual, no son trades ya ejecutados · actualiza cada ~1 min</span>
-    </div>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Acción</th><th>Mercado (clic para abrir)</th><th>Apuesta</th><th>Precio</th>
-            <th>Traders</th><th>Convicción</th><th>Stake</th>
-          </tr>
-        </thead>
-        <tbody>
-          {"".join(render_signal_row(r) for r in copy_signals + other_signals) or '<tr><td colspan="7" class="empty">Sin señales activas en este momento</td></tr>'}
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <section>
-    <div class="section-head">
-      <h2>Historial de trades (dinero real)</h2>
-      <span class="section-note">{len(open_trades)} abiertos + últimos 10 cerrados (de {len(resolved)} resueltos) · solo ejecuciones reales · ordenado por fecha · * = retorno estimado, sin precio en vivo para posiciones abiertas</span>
-    </div>
-    <div class="table-scroll">
-      <table id="history-table">
-        <thead>
-          <tr>
-            <th>Estado</th><th>Mercado (clic para abrir)</th><th>Apuesta</th><th>Entrada</th>
-            <th>Salida</th><th>Retorno</th><th>Detectado</th><th>Traders</th>
-          </tr>
-        </thead>
-        <tbody>
-          {"".join(render_log_row(r) for r in open_by_date)}
-          {"".join(render_log_row(r) for r in resolved_visible)}
-          {"".join(render_log_row(r, extra_class="row-hidden") for r in resolved_hidden)}
-          {'<tr><td colspan="8" class="empty">Todavía no hay trades registrados</td></tr>' if not (open_by_date or resolved_visible) else ''}
-        </tbody>
-      </table>
-    </div>
-    {f'<button class="tab-btn" id="toggle-history-btn" data-count="{len(resolved)}" data-label="Ver todas las cerradas">Ver todas las cerradas ({len(resolved)})</button>' if resolved_hidden else ''}
-  </section>
-
-  <section>
-    <div class="section-head">
-      <h2>Rendimiento por trader</h2>
-      <span class="section-note">{len(performance_ok)} OK visibles ({len(performance_inactive)} DECLINING/LOW_SAMPLE ocultos) · PnL realizado y win rate en ventanas móviles de 7 y 30 días · se actualiza cada ~2h</span>
-    </div>
-    <div class="table-scroll">
-      <table id="performance-table">
-        <thead>
-          <tr>
-            <th>Label</th><th>Usuario</th><th>Wallet</th><th>Flag</th>
-            <th>PnL 7d</th><th>WR 7d</th><th>Trades 7d</th>
-            <th>PnL 30d</th><th>WR 30d</th><th>Trades 30d</th>
-          </tr>
-        </thead>
-        <tbody>
-          {"".join(render_performance_row(r, wallet_to_username=wallet_to_username) for r in performance_ok)}
-          {"".join(render_performance_row(r, wallet_to_username=wallet_to_username, extra_class="row-hidden") for r in performance_inactive)}
-          {'<tr><td colspan="10" class="empty">Sin datos de rendimiento todavia</td></tr>' if not (performance_ok or performance_inactive) else ''}
-        </tbody>
-      </table>
-    </div>
-    {f'<button class="tab-btn" id="toggle-performance-btn" data-count="{len(performance_inactive)}" data-label="Ver inactivos">Ver inactivos ({len(performance_inactive)})</button>' if performance_inactive else ''}
-  </section>
-
-  <section>
-    <div class="section-head">
-      <h2>Traders</h2>
-      <span class="section-note">{len(trader_rows)} wallets · clic en el usuario para ver su perfil en Polymarket</span>
-    </div>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Label</th><th>Usuario</th><th>Wallet</th><th>Verdict</th><th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {"".join(render_trader_row(r) for r in trader_rows) or '<tr><td colspan="5" class="empty">Sin datos de traders todavia</td></tr>'}
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  </div>
-
-  <div class="tab-panel" data-tab-panel="esports-reviewed">
-
-  <div class="scoreboard">
-    <div class="stat">
-      <div class="stat-label">Trades registrados</div>
-      <div class="stat-value">{len(esports_log_rows)}</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Retorno promedio</div>
-      <div class="stat-value {'pos' if esports_avg_return >= 0 else 'neg'}">{esports_avg_return:+.1f}%</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Posiciones abiertas</div>
-      <div class="stat-value">{len(esports_open)}</div>
-    </div>
-  </div>
-
-  <section>
-    <div class="section-head">
-      <h2>Rendimiento — Esports (paper)</h2>
-      <span class="section-note">Realizado = trades cerrados · No realizado = abiertos, marca en vivo · USD asume ${PAPER_ASSUMED_STAKE_USD:.0f} hipotéticos por señal (esto es papel, no dinero real)</span>
-    </div>
-    <div class="scoreboard" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 20px;">
-      <div class="stat">
-        <div class="stat-label">Retorno realizado (promedio)</div>
-        <div class="stat-value {'pos' if esports_realized_avg >= 0 else 'neg'}">{esports_realized_avg:+.1f}%</div>
-        <div class="section-note">{len(esports_realized_pct)} trades cerrados</div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">Retorno no realizado (promedio)</div>
-        <div class="stat-value {'pos' if esports_unrealized_avg >= 0 else 'neg'}">{esports_unrealized_avg:+.1f}%</div>
-        <div class="section-note">{len(esports_unrealized_pct)} trades abiertos</div>
-      </div>
-    </div>
-    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-      <div class="table-scroll">
-        <table>
-          <thead><tr><th>Día (Zúrich)</th><th class="num">Trades</th><th class="num">Promedio %</th><th class="num">USD ganado/perdido</th></tr></thead>
-          <tbody>{day_rows(esports_realized_by_day)}</tbody>
-        </table>
-      </div>
-      <div class="table-scroll">
-        <table>
-          <thead><tr><th>Día detectado (Zúrich)</th><th class="num">Trades</th><th class="num">Promedio %</th><th class="num">USD ganado/perdido</th></tr></thead>
-          <tbody>{day_rows(esports_unrealized_by_day)}</tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <div class="section-head">
-      <h2>Esports — revisadas (sin señal de bot)</h2>
-      <span class="section-note">{len(esports_reviewed_rows)} de los candidatos que pasaron detect-bot-wallet (heurístico de frecuencia) · ordenado por eventos donde apareció · igual falta revisión manual antes de aprobar cualquiera</span>
-    </div>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Usuario</th><th>Wallet</th><th>Chequeo de bot</th><th>Verdict</th><th>Eventos</th>
-          </tr>
-        </thead>
-        <tbody>
-          {"".join(render_esports_reviewed_row(r) for r in esports_reviewed_rows) or '<tr><td colspan="5" class="empty">Sin wallets revisadas todavía</td></tr>'}
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <section>
-    <div class="section-head">
-      <h2>Señales activas ahora — Esports (paper)</h2>
-      <span class="section-note">{len(esports_copy_signals)} COPY · paper trading, sin ejecución real · actualiza cada ~1 min</span>
-    </div>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Acción</th><th>Mercado (clic para abrir)</th><th>Apuesta</th><th>Precio</th>
-            <th>Traders</th><th>Convicción</th><th>Stake</th>
-          </tr>
-        </thead>
-        <tbody>
-          {"".join(render_signal_row(r) for r in esports_copy_signals + esports_other_signals) or '<tr><td colspan="7" class="empty">Sin señales activas en este momento</td></tr>'}
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <section>
-    <div class="section-head">
-      <h2>Historial de trades — Esports (paper)</h2>
-      <span class="section-note">{len(esports_open)} abiertos + últimos 10 cerrados (de {len(esports_resolved)} resueltos) · ordenado por fecha · * = retorno no realizado, mercado sigue abierto</span>
-    </div>
-    <div class="table-scroll">
-      <table id="history-table-esports">
-        <thead>
-          <tr>
-            <th>Estado</th><th>Mercado (clic para abrir)</th><th>Apuesta</th><th>Entrada</th>
-            <th>Salida</th><th>Retorno</th><th>Detectado</th><th>Traders</th>
-          </tr>
-        </thead>
-        <tbody>
-          {"".join(render_log_row(r) for r in esports_open_by_date)}
-          {"".join(render_log_row(r) for r in esports_resolved_visible)}
-          {"".join(render_log_row(r, extra_class="row-hidden") for r in esports_resolved_hidden)}
-          {'<tr><td colspan="8" class="empty">Todavía no hay trades registrados</td></tr>' if not (esports_open_by_date or esports_resolved_visible) else ''}
-        </tbody>
-      </table>
-    </div>
-    {f'<button class="tab-btn" id="toggle-history-btn-esports" data-count="{len(esports_resolved)}" data-label="Ver todas las cerradas">Ver todas las cerradas ({len(esports_resolved)})</button>' if esports_resolved_hidden else ''}
-  </section>
-
-  </div>
-
-  <div class="tab-panel active" data-tab-panel="btc5m">
-
-  <section>
-    <div class="section-head">
-      <h2>BTC "Up or Down 5m" — 5 estrategias (paper trading, sin dinero real)</h2>
-      <span class="section-note">A-D: $1 por señal (una entrada) · E: $0.20 por entrada, varias por ventana, inspirada en una wallet real que opera estos mercados · cada ventana abre y resuelve en el mismo ciclo · sin relación con deportes/esports ni con dinero real</span>
+      <h2>BTC "Up or Down 5m" — 4 estrategias (paper trading, sin dinero real)</h2>
+      <span class="section-note">A/B/D: $1 por señal (una entrada) · E: $0.20 por entrada, varias por ventana, inspirada en una wallet real que opera estos mercados · cada ventana abre y resuelve en el mismo ciclo</span>
     </div>
     <div class="table-scroll">
       <table>
@@ -1428,29 +803,6 @@ footer a:hover {{ text-decoration: underline; }}
   </section>
 
   {"".join(render_btc5m_strategy_section(name, btc5m_by_strategy.get(name, {"n": 0, "wins": 0, "pct_sum": 0.0, "usd_sum": 0.0}), btc5m_rows_by_strategy.get(name, [])) for name in STRATEGY_LABELS)}
-
-  <section>
-    <div class="section-head">
-      <h2>Historial de trades — BTC 5m, todas las estrategias combinadas (paper)</h2>
-      <span class="section-note">{len(btc5m_rows)} señales registradas · últimas 20 visibles · ordenado por fecha de cierre</span>
-    </div>
-    <div class="table-scroll">
-      <table id="history-table-btc5m">
-        <thead>
-          <tr>
-            <th>Estado</th><th>Estrategia</th><th>Ventana</th><th>Dirección</th>
-            <th>Entrada</th><th>Retorno</th><th>Cerrado</th>
-          </tr>
-        </thead>
-        <tbody>
-          {"".join(render_btc5m_row(r) for r in btc5m_visible)}
-          {"".join(render_btc5m_row(r, extra_class="row-hidden") for r in btc5m_hidden)}
-          {'<tr><td colspan="7" class="empty">Todavía no hay trades registrados</td></tr>' if not btc5m_rows else ''}
-        </tbody>
-      </table>
-    </div>
-    {f'<button class="tab-btn" id="toggle-history-btn-btc5m" data-count="{len(btc5m_rows)}" data-label="Ver todas">Ver todas ({len(btc5m_rows)})</button>' if btc5m_hidden else ''}
-  </section>
 
   </div>
 
@@ -1502,6 +854,81 @@ footer a:hover {{ text-decoration: underline; }}
 
   </div>
 
+  <div class="tab-panel active" data-tab-panel="btc5m-hedge">
+
+  <section>
+    <div class="section-head">
+      <h2>BTC "Up or Down 5m" — hedge Up+Down (paper trading, sin dinero real)</h2>
+      <span class="section-note">No predice dirección: compra Up y Down buscando que el payout garantizado (min(up_shares, down_shares) a $1/share) supere el costo total sin importar el resultado — reverse-engineered de una wallet real 2026-08-08 · primera versión, solo paper, sin credenciales ni órdenes reales</span>
+    </div>
+  </section>
+
+  <div class="scoreboard">
+    <div class="stat">
+      <div class="stat-label">Señal actual</div>
+      <div class="stat-value {'pos' if btc5m_hedge_latest and btc5m_hedge_latest.get('action') in ('BUY', 'LOCKED_PROFIT') else ''}">{esc(btc5m_hedge_signal_for_row(btc5m_hedge_latest))}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Ventana actual</div>
+      <div class="stat-value">{esc(btc5m_hedge_latest.get('window_slug')) if btc5m_hedge_latest else '—'}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Guaranteed profit (en vivo)</div>
+      <div class="stat-value {'pos' if btc5m_hedge_latest and float(btc5m_hedge_latest.get('guaranteed_profit_after') or 0) >= 0 else 'neg'}">${float(btc5m_hedge_latest.get('guaranteed_profit_after') or 0) if btc5m_hedge_latest else 0:+.4f}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Ventanas con hedge logrado</div>
+      <div class="stat-value">{len(btc5m_hedge_locked)} / {len(btc5m_hedge_window_rows)}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Profit realizado (resueltas)</div>
+      <div class="stat-value {'pos' if btc5m_hedge_realized_sum >= 0 else 'neg'}">${btc5m_hedge_realized_sum:+.2f}</div>
+    </div>
+  </div>
+
+  <section>
+    <div class="section-head">
+      <h2>Estado en vivo</h2>
+      <span class="section-note">{f"última actualización {esc(btc5m_hedge_latest.get('timestamp'))} · {esc(btc5m_hedge_latest.get('reason', ''))}" if btc5m_hedge_latest else 'el bot todavia no ha corrido'}</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Mercado</th><th class="num">UP shares</th><th class="num">DOWN shares</th><th class="num">Costo total</th>
+          <th class="num">P/L si UP</th><th class="num">P/L si DOWN</th><th class="num">Guaranteed</th><th>Modo</th></tr>
+        </thead>
+        <tbody>
+          {render_btc5m_hedge_live_row(btc5m_hedge_latest)}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Historial de ventanas</h2>
+      <span class="section-note">{len(btc5m_hedge_window_rows)} ventanas registradas · últimas 20 visibles · ordenado por cierre</span>
+    </div>
+    <div class="table-scroll">
+      <table id="history-table-btc5m-hedge">
+        <thead>
+          <tr>
+            <th>Ventana</th><th class="num">Costo</th><th class="num">UP sh</th><th class="num">DOWN sh</th>
+            <th class="num">Guaranteed</th><th>Resultado</th><th class="num">Profit real</th><th class="num">Órdenes</th><th>Modos</th>
+          </tr>
+        </thead>
+        <tbody>
+          {"".join(render_btc5m_hedge_window_row(r, btc5m_hedge_orders_by_slug.get(r.get('window_slug', ''), [])) for r in btc5m_hedge_visible)}
+          {"".join(render_btc5m_hedge_window_row(r, btc5m_hedge_orders_by_slug.get(r.get('window_slug', ''), []), extra_class="row-hidden") for r in btc5m_hedge_hidden)}
+          {'<tr><td colspan="9" class="empty">Todavía no hay ventanas registradas</td></tr>' if not btc5m_hedge_window_rows else ''}
+        </tbody>
+      </table>
+    </div>
+    {f'<button class="tab-btn" id="toggle-history-btn-btc5m-hedge" data-count="{len(btc5m_hedge_window_rows)}" data-label="Ver todas">Ver todas ({len(btc5m_hedge_window_rows)})</button>' if btc5m_hedge_hidden else ''}
+  </section>
+
+  </div>
+
   <footer>
     <span>Generado automáticamente por un cron en VPS cada 2 min.</span>
     <a href="https://github.com/giuseppemineo685-beep/atlantis-polymarket-screening" target="_blank">Ver repositorio</a>
@@ -1526,11 +953,9 @@ function wireHistoryToggle(btnId, tableId) {{
     btn.textContent = showingAll ? 'Ver menos' : `${{btn.dataset.label}} (${{btn.dataset.count}})`;
   }});
 }}
-wireHistoryToggle('toggle-history-btn', 'history-table');
-wireHistoryToggle('toggle-history-btn-esports', 'history-table-esports');
-wireHistoryToggle('toggle-history-btn-btc5m', 'history-table-btc5m');
 wireHistoryToggle('toggle-history-btn-btc5m-live', 'history-table-btc5m-live');
-{"".join(f"wireHistoryToggle('toggle-history-btn-btc5m-{name}', 'history-table-btc5m-{name}');" + chr(10) for name in STRATEGY_LABELS)}{"".join(f"wireHistoryToggle('toggle-history-btn-btc5m-real-{name}', 'history-table-btc5m-real-{name}');" + chr(10) for name in ("E", "B"))}wireHistoryToggle('toggle-performance-btn', 'performance-table');
+wireHistoryToggle('toggle-history-btn-btc5m-hedge', 'history-table-btc5m-hedge');
+{"".join(f"wireHistoryToggle('toggle-history-btn-btc5m-{name}', 'history-table-btc5m-{name}');" + chr(10) for name in STRATEGY_LABELS)}{"".join(f"wireHistoryToggle('toggle-history-btn-btc5m-real-{name}', 'history-table-btc5m-real-{name}');" + chr(10) for name in ("E", "B"))}
 </script>
 </body>
 </html>
