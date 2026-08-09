@@ -687,8 +687,8 @@ footer a:hover {{ text-decoration: underline; }}
   </header>
 
   <div class="tabs">
-    <button class="tab-btn active" data-tab="btc5m-hedge">BTC 5m (Hedge)</button>
-    <button class="tab-btn" data-tab="btc5m-momentum">BTC 5m (Momentum)</button>
+    <button class="tab-btn active" data-tab="btc5m-momentum">BTC 5m (Momentum)</button>
+    <button class="tab-btn" data-tab="btc5m-hedge">BTC 5m (Hedge)</button>
     <button class="tab-btn" data-tab="btc5m">BTC 5m (Paper)</button>
   </div>
 
@@ -718,7 +718,7 @@ footer a:hover {{ text-decoration: underline; }}
 
   </div>
 
-  <div class="tab-panel active" data-tab-panel="btc5m-hedge">
+  <div class="tab-panel" data-tab-panel="btc5m-hedge">
 
   <section>
     <div class="section-head">
@@ -793,7 +793,7 @@ footer a:hover {{ text-decoration: underline; }}
 
   </div>
 
-  <div class="tab-panel" data-tab-panel="btc5m-momentum">
+  <div class="tab-panel active" data-tab-panel="btc5m-momentum">
 
   <section>
     <div class="section-head">
