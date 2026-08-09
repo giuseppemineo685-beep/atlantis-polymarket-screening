@@ -2,7 +2,7 @@ from dataclasses import replace
 from decimal import Decimal
 
 from atlantis.btc5m_hedge.config import OptimizerConfig, RiskConfig
-from atlantis.btc5m_hedge.optimizer import choose_action, equalizing_quantity, hedge_buy_range
+from atlantis.btc5m_hedge.optimizer import choose_action, detect_price_runaway, equalizing_quantity, hedge_buy_range
 from atlantis.btc5m_hedge.portfolio import DOWN, UP, OrderBookLevel, Portfolio
 
 
@@ -272,3 +272,84 @@ def test_choose_action_rejects_when_too_close_to_resolution():
 
     assert decision.candidate is None
     assert "riesgo" in decision.reason
+
+
+# Real lagging-side price trajectories reconstructed 2026-08-09 from the
+# Germany VPS's actual decision log (btc5m_hedge_paper_decisions.csv),
+# one sample per poll. FAIL_TRAJECTORY is window btc-updown-5m-1786263300,
+# which never completed its hedge and lost the full $3.00 opening stake -
+# price climbed from $0.62 to $0.98 with virtually no pullback. OK_TRAJECTORY
+# is btc-updown-5m-1786258800, which eventually locked +$1.25 - price
+# oscillated the whole time (even touching $0.93 once) and never sustained
+# a one-directional run. See optimizer.detect_price_runaway's docstring.
+FAIL_TRAJECTORY = [
+    0.62, 0.64, 0.64, 0.62, 0.6, 0.6, 0.62, 0.64, 0.72, 0.64, 0.647, 0.64, 0.66, 0.67, 0.68, 0.69, 0.69, 0.69,
+    0.715, 0.73, 0.77, 0.68, 0.73, 0.74, 0.74, 0.74, 0.74, 0.74, 0.71, 0.71, 0.73, 0.77, 0.75, 0.79, 0.78, 0.76,
+    0.81, 0.8, 0.78, 0.77, 0.77, 0.79, 0.82, 0.82, 0.82, 0.82, 0.83, 0.84, 0.84, 0.85, 0.85, 0.85, 0.85, 0.86,
+    0.86, 0.86, 0.86, 0.87, 0.87, 0.88, 0.89, 0.88, 0.88, 0.88, 0.88, 0.88, 0.89, 0.89, 0.88, 0.87, 0.87, 0.88,
+    0.88, 0.89, 0.89, 0.89, 0.89, 0.87, 0.87, 0.88, 0.88, 0.88, 0.89,
+]
+OK_TRAJECTORY = [
+    0.71, 0.72, 0.72, 0.74, 0.74, 0.73, 0.74, 0.74, 0.75, 0.78, 0.75, 0.76, 0.76, 0.77, 0.71, 0.73, 0.73, 0.74,
+    0.78, 0.79, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.74, 0.76, 0.77, 0.77, 0.77, 0.76, 0.75, 0.75, 0.76, 0.75, 0.79,
+    0.8, 0.77, 0.77, 0.77, 0.78, 0.8, 0.8, 0.8, 0.8, 0.78, 0.78, 0.79, 0.8, 0.81, 0.83, 0.83, 0.82, 0.86, 0.89,
+    0.92, 0.9, 0.88, 0.86, 0.87, 0.87, 0.88, 0.9, 0.93, 0.93, 0.89, 0.88, 0.86, 0.86, 0.86, 0.87, 0.88, 0.89,
+    0.89, 0.89, 0.89, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.87, 0.87,
+]
+
+
+def test_detect_price_runaway_synthetic_climb_triggers():
+    climb = [Decimal("0.30") + Decimal("0.005") * i for i in range(45)]  # 0.30 -> 0.52, no pullback
+    assert detect_price_runaway(
+        climb, min_samples=45, min_net_move=Decimal("0.10"), max_pullback=Decimal("0.03")
+    )
+
+
+def test_detect_price_runaway_synthetic_oscillation_does_not_trigger():
+    osc = [Decimal("0.70") + (Decimal("0.05") if i % 2 == 0 else Decimal("-0.05")) for i in range(45)]
+    assert not detect_price_runaway(
+        osc, min_samples=45, min_net_move=Decimal("0.10"), max_pullback=Decimal("0.03")
+    )
+
+
+def test_detect_price_runaway_insufficient_samples_never_triggers():
+    climb = [Decimal("0.30") + Decimal("0.05") * i for i in range(10)]  # steep, but too short
+    assert not detect_price_runaway(
+        climb, min_samples=45, min_net_move=Decimal("0.10"), max_pullback=Decimal("0.03")
+    )
+
+
+def test_detect_price_runaway_fires_on_real_failed_window_before_it_becomes_hopeless():
+    """Regression test for the real 2026-08-09 case: replays FAIL_TRAJECTORY
+    one sample at a time (as the live bot would, appending to a rolling
+    window each poll) and asserts the runaway fires - and, critically,
+    fires while the price is still far from the ~$0.97+ level at which
+    completing the hedge is hopeless regardless (see the docstring's note
+    that this real check doesn't save every possible case - only ones
+    where the climb is sustained long enough to be detected before the
+    price becomes unrecoverable)."""
+    history: list[Decimal] = []
+    fired_at_price = None
+    for p in FAIL_TRAJECTORY:
+        history.append(Decimal(str(p)))
+        if detect_price_runaway(
+            history, min_samples=45, min_net_move=Decimal("0.10"), max_pullback=Decimal("0.03")
+        ):
+            fired_at_price = Decimal(str(p))
+            break
+    assert fired_at_price is not None
+    assert fired_at_price <= Decimal("0.90")  # caught well before the eventual $0.98 peak
+
+
+def test_detect_price_runaway_never_fires_on_real_successful_window():
+    """The mirror-image regression test: OK_TRAJECTORY includes a genuine
+    spike to $0.93 (bigger than the failed window's early noise), but
+    because it reverses instead of sustaining, the runaway check must
+    never fire on it - confirming the pullback tolerance is doing real
+    work, not just always triggering on any big number."""
+    history: list[Decimal] = []
+    for p in OK_TRAJECTORY:
+        history.append(Decimal(str(p)))
+        assert not detect_price_runaway(
+            history, min_samples=45, min_net_move=Decimal("0.10"), max_pullback=Decimal("0.03")
+        )

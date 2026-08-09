@@ -493,6 +493,7 @@ def _evaluate_emergency_hedge(
     optimizer_cfg: OptimizerConfig,
     risk_cfg: RiskConfig,
     hedge_timing_cfg: HedgeTimingConfig,
+    enforce_loss_floor: bool = True,
 ) -> HedgeDecision:
     current_wcp = portfolio.get_worst_case_profit()
     current_loss = portfolio.get_max_loss()
@@ -552,15 +553,32 @@ def _evaluate_emergency_hedge(
     # means MODE C sometimes does nothing and eats full variance on the
     # open leg - that is intentional, not a bug: forced "insurance" this
     # expensive has worse EV than no insurance at all.
-    affordable = [
-        c for c in approved if c.new_portfolio.get_guaranteed_profit() >= -risk_cfg.max_forced_hedge_loss_usd
-    ]
-    if not affordable:
-        return _no_op_decision(
-            portfolio, seconds_remaining,
-            f"emergency hedge: todos los candidatos superan la perdida maxima aceptable "
-            f"(${risk_cfg.max_forced_hedge_loss_usd:.2f}) - se deja la posicion sin cubrir",
-        )
+    #
+    # enforce_loss_floor=False (used for the price-runaway trigger path,
+    # see evaluate_hedge) deliberately skips this floor. Confirmed live
+    # 2026-08-09: the 3 real windows that lost their FULL opening stake
+    # all had a lagging price that, by the time 45 samples confirmed a
+    # genuine one-directional runaway, had already moved far enough that
+    # completing would cost MORE than max_forced_hedge_loss_usd - the
+    # floor would reject every candidate here too, same as it does at
+    # true end-of-window. The floor's premise (an ordinary, not-yet-
+    # confirmed-bad moment where paying up is probably not worth it) does
+    # not hold once a sustained trend is independently confirmed - there,
+    # "improves over doing nothing" (the pre-floor MODE C rule) is the
+    # right bar again, because "doing nothing" is the thing just shown to
+    # be deteriorating, not a neutral, possibly-fine default.
+    if enforce_loss_floor:
+        affordable = [
+            c for c in approved if c.new_portfolio.get_guaranteed_profit() >= -risk_cfg.max_forced_hedge_loss_usd
+        ]
+        if not affordable:
+            return _no_op_decision(
+                portfolio, seconds_remaining,
+                f"emergency hedge: todos los candidatos superan la perdida maxima aceptable "
+                f"(${risk_cfg.max_forced_hedge_loss_usd:.2f}) - se deja la posicion sin cubrir",
+            )
+    else:
+        affordable = approved
 
     # Buying more of a tied position's tie-break side (the only kind of
     # candidate generate_lagging_side_candidates produces once tied)
@@ -582,8 +600,9 @@ def _evaluate_emergency_hedge(
             f"emergency hedge: ningun candidato mejora el worst-case actual (${current_wcp:.2f}) - se mantiene la posicion",
         )
     new_loss = best.new_portfolio.get_max_loss()
+    trigger = "quedan pocos segundos" if enforce_loss_floor else "tendencia de precio sostenida detectada"
     reason = (
-        f"Emergency hedge seleccionado porque quedan {seconds_remaining:.0f}s - "
+        f"Emergency hedge seleccionado porque {trigger} ({seconds_remaining:.0f}s restantes) - "
         f"{best.side} x{best.fill.filled_quantity:.2f} lleva worst-case de ${current_wcp:.2f} a ${new_wcp:.2f}"
     )
     return HedgeDecision(
@@ -592,6 +611,46 @@ def _evaluate_emergency_hedge(
         current_max_loss=current_loss, new_max_loss=new_loss,
         loss_reduction=current_loss - new_loss, loss_reduction_pct=_loss_reduction_pct(current_loss, new_loss),
     )
+
+
+def detect_price_runaway(
+    price_history: list[Decimal], *, min_samples: int, min_net_move: Decimal, max_pullback: Decimal
+) -> bool:
+    """True if `price_history` (oldest -> newest, one sample per poll, the
+    LAGGING side's best ask) shows a sustained one-directional climb
+    rather than normal oscillation.
+
+    Confirmed live 2026-08-09 across the first 20 real windows on the
+    Germany VPS: the 3 windows that ended in a full loss of the opening
+    stake (never managed to complete the hedge at any acceptable price)
+    all showed the lagging side's price climbing with almost no pullback
+    for 57-110 consecutive polls (e.g. $0.62 -> $0.98 over ~166s) BEFORE
+    it became too expensive to hedge at all. Every window that eventually
+    locked a real profit instead oscillated +-$0.03-0.05 around a range
+    the whole time and never sustained a one-directional run anywhere
+    close to that long. A backtest of "grab the first floor-clearing
+    completion, no matter when" against those same 20 windows was net
+    ~breakeven (it saved the 3 catastrophic windows but cut short 15 of
+    the 17 good ones before they reached their eventual, better price) -
+    this trend check exists specifically to fire ONLY in the runaway
+    case, leaving the patient behavior that generates most of the
+    strategy's edge untouched otherwise.
+
+    Thresholds (min_samples=45, min_net_move=$0.10, max_pullback=$0.03 in
+    the shipped config) are calibrated on that same small sample (only 3
+    positive examples) - revisit as more real windows accumulate."""
+    if len(price_history) < min_samples:
+        return False
+    recent = price_history[-min_samples:]
+    if recent[-1] - recent[0] < min_net_move:
+        return False
+    peak = recent[0]
+    for p in recent[1:]:
+        if p > peak:
+            peak = p
+        elif peak - p > max_pullback:
+            return False
+    return True
 
 
 def evaluate_hedge(
@@ -603,12 +662,20 @@ def evaluate_hedge(
     optimizer_cfg: OptimizerConfig,
     risk_cfg: RiskConfig,
     hedge_timing_cfg: HedgeTimingConfig,
+    price_runaway: bool = False,
 ) -> HedgeDecision:
     """Top-level entry point implementing the full state machine:
     MODE A (always tried first) -> MODE B (defensive, 30s-120s band if A
     found nothing) -> MODE C (emergency, <30s if A found nothing). Times
     are configurable via hedge_timing_cfg; see config.yaml for the exact
-    band boundaries and rationale."""
+    band boundaries and rationale.
+
+    `price_runaway=True` (see detect_price_runaway) bypasses MODE A/B/C's
+    normal time bands and floor/pct bars entirely, going straight to
+    MODE C's floor-free "improves over doing nothing" logic regardless of
+    seconds_remaining - see the real-data justification where this is
+    invoked below, MODE B/C's normal bars are provably too strict to ever
+    clear once a runaway is actually confirmed."""
     profit_decision = choose_action(
         portfolio=portfolio, up_levels=up_levels, down_levels=down_levels,
         seconds_remaining=seconds_remaining, optimizer_cfg=optimizer_cfg, risk_cfg=risk_cfg,
@@ -660,6 +727,30 @@ def evaluate_hedge(
             current_worst_case_profit=current_wcp, new_worst_case_profit=new_wcp,
             current_max_loss=current_loss, new_max_loss=new_loss,
             loss_reduction=current_loss - new_loss, loss_reduction_pct=_loss_reduction_pct(current_loss, new_loss),
+        )
+
+    # price_runaway short-circuits straight to the floor-free "just
+    # improve over doing nothing" logic, regardless of time band.
+    # Confirmed live 2026-08-09: MODE B's pct-based bar (doubled to 40%
+    # for seconds_remaining >= defensive_hedge_start_seconds, which is
+    # true for basically the entire window) and MODE C's own
+    # max_forced_hedge_loss_usd floor are BOTH already too strict to
+    # clear by the time detect_price_runaway's 45-sample window confirms
+    # a genuine trend - real numbers from the 3 windows that lost their
+    # full opening stake showed only 17-28% loss reduction available at
+    # the moment the trend was confirmed, and a resulting guaranteed_
+    # profit of -$1.24 to -$2.15, both well short of MODE B/C's normal
+    # bars. Those bars exist for the ORDINARY case (an as-yet-unconfirmed
+    # bad moment, where paying up might not be worth it) - once a
+    # sustained runaway is independently confirmed, "improves over the
+    # status quo" is the right bar again, same as MODE C used before the
+    # floor was added, because the status quo has just been shown to be
+    # actively deteriorating, not a neutral default.
+    if price_runaway:
+        return _evaluate_emergency_hedge(
+            portfolio=portfolio, up_levels=up_levels, down_levels=down_levels,
+            seconds_remaining=seconds_remaining, optimizer_cfg=optimizer_cfg, risk_cfg=risk_cfg,
+            hedge_timing_cfg=hedge_timing_cfg, enforce_loss_floor=False,
         )
 
     if seconds_remaining >= hedge_timing_cfg.profit_hedge_only_seconds:

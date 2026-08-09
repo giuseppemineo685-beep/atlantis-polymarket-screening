@@ -26,6 +26,9 @@ def hedge_timing(**overrides) -> HedgeTimingConfig:
         min_worst_case_improvement_pct=Decimal("0.20"),
         defensive_share_quantities=DEFAULT_SHARE_QUANTITIES,
         defensive_imbalance_fractions=DEFAULT_IMBALANCE_FRACTIONS,
+        price_runaway_window_samples=45,
+        price_runaway_min_move=Decimal("0.10"),
+        price_runaway_max_pullback=Decimal("0.03"),
     )
     base.update(overrides)
     return HedgeTimingConfig(**base)
@@ -233,6 +236,46 @@ def test_emergency_hedge_never_opens_a_position_from_empty():
 
     assert decision.candidate is None
     assert decision.hedge_mode == "WAIT"
+
+
+def test_price_runaway_grabs_a_partial_recovery_that_the_normal_bars_would_reject():
+    """Regression test for the real 2026-08-09 case that motivated adding
+    price_runaway: window btc-updown-5m-1786263300 opened DOWN 7.692308
+    shares @ $0.39 ($3.00, guaranteed=-$3.00), then UP climbed with almost
+    no pullback. By the time detect_price_runaway's 45-sample window
+    would have confirmed the trend (~193s remaining, UP @ $0.89), tying
+    the position would only reach guaranteed=-$2.15 - worse than both
+    MODE B's doubled 40% loss-reduction bar (this only clears ~28%) and
+    MODE C's max_forced_hedge_loss_usd floor ($0.45). Without
+    price_runaway, evaluate_hedge must still WAIT (unchanged default
+    behavior - it doesn't know a trend is happening). With
+    price_runaway=True, it must grab this partial recovery anyway,
+    because -$2.15 beats letting the still-open $3.00 stake ride into a
+    likely total loss (which is exactly how this window actually ended
+    live: -$3.00)."""
+    portfolio = Portfolio().simulate_buy(DOWN, Decimal("7.692307692307692307692307692"), Decimal("0.39"))
+    assert portfolio.get_guaranteed_profit() == Decimal("-3")
+
+    up_levels = [OrderBookLevel(Decimal("0.89"), Decimal(1000))]
+    down_levels = [OrderBookLevel(Decimal("0.39"), Decimal(1000))]
+    generous_risk = risk(max_order_size_usd=Decimal(100), max_forced_hedge_loss_usd=Decimal("0.45"))
+
+    without_runaway = evaluate_hedge(
+        portfolio=portfolio, up_levels=up_levels, down_levels=down_levels, seconds_remaining=193,
+        optimizer_cfg=optimizer(), risk_cfg=generous_risk, hedge_timing_cfg=hedge_timing(),
+    )
+    assert without_runaway.candidate is None
+    assert without_runaway.hedge_mode == "WAIT"
+
+    with_runaway = evaluate_hedge(
+        portfolio=portfolio, up_levels=up_levels, down_levels=down_levels, seconds_remaining=193,
+        optimizer_cfg=optimizer(), risk_cfg=generous_risk, hedge_timing_cfg=hedge_timing(),
+        price_runaway=True,
+    )
+    assert with_runaway.candidate is not None
+    assert with_runaway.hedge_mode == EMERGENCY_HEDGE
+    new_guaranteed = with_runaway.candidate.new_portfolio.get_guaranteed_profit()
+    assert Decimal("-2.2") < new_guaranteed < Decimal("-2.1")  # ~-$2.15, beats -$3.00 but well short of the normal floor
 
 
 def test_emergency_hedge_refuses_expensive_insurance_and_leaves_position_unhedged():

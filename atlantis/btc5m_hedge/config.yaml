@@ -167,6 +167,16 @@ hedge_timing:
   # (optimizer.equalizing_quantity) is always tried too, regardless of
   # this list.
   defensive_imbalance_fractions: [0.25, 0.5, 0.75, 1.0]
+  # Lets MODE B (defensive) fire even before profit_hedge_only_seconds if
+  # optimizer.detect_price_runaway flags the lagging side's price as a
+  # sustained one-directional climb (not normal oscillation) - see that
+  # function's own docstring for the full 2026-08-09 real-data
+  # justification. window_samples is poll counts (poll_interval_seconds
+  # apart, so ~45s of lookback at the default 1s interval), not seconds.
+  # Calibrated on only 3 real failure examples - revisit with more data.
+  price_runaway_window_samples: 45
+  price_runaway_min_move: 0.10
+  price_runaway_max_pullback: 0.03
 
 fees:
   # Polymarket itself charges no explicit taker fee at the time this was

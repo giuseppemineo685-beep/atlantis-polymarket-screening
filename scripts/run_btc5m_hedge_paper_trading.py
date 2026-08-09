@@ -32,13 +32,15 @@ from __future__ import annotations
 
 import sys
 import time
+from collections import deque
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from atlantis.btc5m_hedge.config import load_config  # noqa: E402
+from atlantis.btc5m_hedge.config import HedgeTimingConfig, load_config  # noqa: E402
 from atlantis.btc5m_hedge.execution import execute_paper  # noqa: E402
 from atlantis.btc5m_hedge.logger import WindowStats, backfill_missing_outcomes, log_decision, log_window_summary  # noqa: E402
 from atlantis.btc5m_hedge.market_data import (  # noqa: E402
@@ -49,8 +51,14 @@ from atlantis.btc5m_hedge.market_data import (  # noqa: E402
     fetch_resolved_outcome,
     slug_for_window,
 )
-from atlantis.btc5m_hedge.optimizer import DEFENSIVE_HEDGE, EMERGENCY_HEDGE, PROFIT_HEDGE, evaluate_hedge  # noqa: E402
-from atlantis.btc5m_hedge.portfolio import Portfolio  # noqa: E402
+from atlantis.btc5m_hedge.optimizer import (  # noqa: E402
+    DEFENSIVE_HEDGE,
+    EMERGENCY_HEDGE,
+    PROFIT_HEDGE,
+    detect_price_runaway,
+    evaluate_hedge,
+)
+from atlantis.btc5m_hedge.portfolio import OrderBookLevel, Portfolio  # noqa: E402
 from atlantis.btc5m_hedge.risk import meets_safety_margin  # noqa: E402
 
 HEDGE_MODE_LABEL = {
@@ -85,6 +93,34 @@ def print_status(slug: str, portfolio: Portfolio, seconds_remaining: float, sign
         _log(reason)
 
 
+def lagging_side_runaway(
+    portfolio: Portfolio,
+    up_levels: list[OrderBookLevel],
+    down_levels: list[OrderBookLevel],
+    up_history: deque[Decimal],
+    down_history: deque[Decimal],
+    hedge_timing_cfg: HedgeTimingConfig,
+) -> bool:
+    """Appends this poll's best ask (if any liquidity) to the appropriate
+    side's rolling history, then checks ONLY the currently-lagging side
+    (the one a completing trade would actually need to buy) for a
+    detect_price_runaway trend - a tied or empty portfolio has no lagging
+    side yet, so there's nothing to check."""
+    if up_levels:
+        up_history.append(up_levels[0].price)
+    if down_levels:
+        down_history.append(down_levels[0].price)
+    if portfolio.up_shares == portfolio.down_shares:
+        return False
+    lagging_history = up_history if portfolio.up_shares < portfolio.down_shares else down_history
+    return detect_price_runaway(
+        list(lagging_history),
+        min_samples=hedge_timing_cfg.price_runaway_window_samples,
+        min_net_move=hedge_timing_cfg.price_runaway_min_move,
+        max_pullback=hedge_timing_cfg.price_runaway_max_pullback,
+    )
+
+
 def main() -> None:
     config = load_config()
     _log("btc5m-hedge-paper: arrancando (paper trading, sin dinero real)")
@@ -93,6 +129,8 @@ def main() -> None:
     market: MarketInfo | None = None
     portfolio = Portfolio()
     stats = WindowStats()
+    up_price_history: deque[Decimal] = deque(maxlen=config.hedge_timing.price_runaway_window_samples)
+    down_price_history: deque[Decimal] = deque(maxlen=config.hedge_timing.price_runaway_window_samples)
 
     while True:
         now = datetime.now(timezone.utc)
@@ -120,6 +158,8 @@ def main() -> None:
             market = None
             portfolio = Portfolio()
             stats = WindowStats()
+            up_price_history.clear()
+            down_price_history.clear()
 
             if closing_slug is not None:
                 print()
@@ -159,6 +199,10 @@ def main() -> None:
         up_levels = fetch_order_book_asks(market.up_token_id)
         down_levels = fetch_order_book_asks(market.down_token_id)
 
+        price_runaway = lagging_side_runaway(
+            portfolio, up_levels, down_levels, up_price_history, down_price_history, config.hedge_timing
+        )
+
         hedge_decision = evaluate_hedge(
             portfolio=portfolio,
             up_levels=up_levels,
@@ -167,6 +211,7 @@ def main() -> None:
             optimizer_cfg=config.optimizer,
             risk_cfg=config.risk,
             hedge_timing_cfg=config.hedge_timing,
+            price_runaway=price_runaway,
         )
 
         before = portfolio

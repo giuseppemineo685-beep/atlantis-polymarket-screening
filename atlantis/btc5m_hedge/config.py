@@ -56,6 +56,9 @@ class HedgeTimingConfig:
     min_worst_case_improvement_pct: Decimal
     defensive_share_quantities: tuple[Decimal, ...]
     defensive_imbalance_fractions: tuple[Decimal, ...]
+    price_runaway_window_samples: int
+    price_runaway_min_move: Decimal
+    price_runaway_max_pullback: Decimal
 
 
 @dataclass(frozen=True)
@@ -126,6 +129,9 @@ def load_config(path: Path | None = None, repo_root: Path | None = None) -> Hedg
             min_worst_case_improvement_pct=_dec(h["min_worst_case_improvement_pct"]),
             defensive_share_quantities=tuple(_dec(x) for x in h["defensive_share_quantities"]),
             defensive_imbalance_fractions=tuple(_dec(x) for x in h["defensive_imbalance_fractions"]),
+            price_runaway_window_samples=int(h["price_runaway_window_samples"]),
+            price_runaway_min_move=_dec(h["price_runaway_min_move"]),
+            price_runaway_max_pullback=_dec(h["price_runaway_max_pullback"]),
         ),
         fees=FeesConfig(taker_fee_pct=_dec(f["taker_fee_pct"])),
         paper=PaperConfig(
