@@ -10,12 +10,12 @@ risk:
   # Hard caps on how much capital this bot is allowed to touch at all -
   # independent of, and does not read from, any other vertical's
   # LiveSettings/kill switch in this repo.
-  max_total_exposure_usd: 100
-  max_exposure_per_market_usd: 20
+  max_total_exposure_usd: 300
+  max_exposure_per_market_usd: 60
   # Shares, not USD - abs(up_shares - down_shares). A pure hedge wants
   # this near zero; this caps how lopsided the bot may get while still
   # chasing guaranteed_profit.
-  max_directional_imbalance_shares: 50
+  max_directional_imbalance_shares: 150
   # A candidate order is only ELIGIBLE to execute if the resulting
   # position's guaranteed_profit/ROI clears both floors - this is the
   # margin-of-safety for fees, slippage, partial fills and price moves
@@ -33,9 +33,14 @@ risk:
   # unreachable at this opening size. Lowered to $0.10 (5% edge on a $2
   # open) to match what the market actually offers, while still refusing
   # genuinely break-even-or-worse opens.
-  minimum_guaranteed_profit_usd: 0.10
+  # 2026-08-09: scaled 3x (0.10 -> 0.30) alongside every other dollar
+  # figure in this file, at the owner's request, to make per-window P/L
+  # swings big enough to extrapolate to a real $100 test day - the
+  # underlying % edges this floor enforces are unchanged, only the chip
+  # size grew.
+  minimum_guaranteed_profit_usd: 0.30
   minimum_guaranteed_roi_pct: 1.0
-  max_order_size_usd: 10
+  max_order_size_usd: 30
   # Two related but distinct guards near a window's close - kept separate
   # per the spec rather than collapsed into one, since they answer
   # different questions: "is there enough time left for a new order to
@@ -62,7 +67,11 @@ risk:
   # unhedged and accepting the coin-flip. Below this floor, MODE B/C must
   # refuse to trade and let the window resolve unhedged instead of buying
   # expensive "insurance".
-  max_forced_hedge_loss_usd: 0.15
+  # Also scaled 3x 2026-08-09 (0.15 -> 0.45) alongside minimum_guaranteed_
+  # profit_usd above - the whole point of this floor is to bound a forced
+  # hedge's downside relative to the size of the position it's defending,
+  # so it has to grow with the chip size or it stops meaning anything.
+  max_forced_hedge_loss_usd: 0.45
 
 optimizer:
   # Candidate order notionals (USD) tried on EACH side every poll, before
@@ -72,7 +81,9 @@ optimizer:
   # position from nothing" (deficit-range is undefined at 0/0), the
   # closed form catches "top up the cheap side just enough to lock in
   # profit" once a position already exists.
-  candidate_order_sizes_usd: [0.5, 1, 2, 5, 10]
+  # Scaled 3x 2026-08-09 (was [0.5, 1, 2, 5, 10]) alongside every other
+  # dollar figure in this file.
+  candidate_order_sizes_usd: [1.5, 3, 6, 15, 30]
   # Caps how big an OPENING trade (one that doesn't improve
   # guaranteed_profit right now, only justified by a projected completed
   # hedge at the other side's CURRENT price - see optimizer.choose_action)
@@ -87,7 +98,8 @@ optimizer:
   # up a position that's already most of the way hedged) aren't opening
   # trades and aren't capped by this - they can use the full
   # candidate_order_sizes_usd range up to max_order_size_usd.
-  max_opening_order_usd: 2
+  # Scaled 3x 2026-08-09 (was $2).
+  max_opening_order_usd: 6
   # Second, independent way to justify an OPENING trade (alongside the
   # projected-profit path above): if either side's own ask is at or below
   # this price, buy it - mirrors how the real wallet 0x3048...e7537
