@@ -4,3 +4,4 @@
 cd /root/atlantis-polymarket-screening
 pgrep -f 'scripts/run_btc5m_hedge_paper_trading.py' > /dev/null ||   nohup python3 -u scripts/run_btc5m_hedge_paper_trading.py > /var/log/atlantis-btc5m-hedge.log 2>&1 &
 pgrep -f 'scripts/publish_dashboard_loop.sh' > /dev/null ||   nohup bash scripts/publish_dashboard_loop.sh > /var/log/atlantis-btc5m-hedge-dashboard.log 2>&1 &
+pgrep -f 'scripts/run_btc5m_momentum_paper_trading.py' > /dev/null ||   nohup python3 -u scripts/run_btc5m_momentum_paper_trading.py > /var/log/atlantis-btc5m-momentum.log 2>&1 &
