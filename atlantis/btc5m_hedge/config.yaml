@@ -1,0 +1,168 @@
+# BTC 5m Up/Down cross-side hedge bot - all tunable parameters live here,
+# nothing hardcoded in the modules. See atlantis/btc5m_hedge/config.py for
+# the dataclasses these sections load into.
+
+market:
+  window_seconds: 300
+  poll_interval_seconds: 1.0
+
+risk:
+  # Hard caps on how much capital this bot is allowed to touch at all -
+  # independent of, and does not read from, any other vertical's
+  # LiveSettings/kill switch in this repo.
+  max_total_exposure_usd: 100
+  max_exposure_per_market_usd: 20
+  # Shares, not USD - abs(up_shares - down_shares). A pure hedge wants
+  # this near zero; this caps how lopsided the bot may get while still
+  # chasing guaranteed_profit.
+  max_directional_imbalance_shares: 50
+  # A candidate order is only ELIGIBLE to execute if the resulting
+  # position's guaranteed_profit/ROI clears both floors - this is the
+  # margin-of-safety for fees, slippage, partial fills and price moves
+  # between decision and fill, not the trigger to buy in the first place
+  # (the optimizer's delta_guaranteed_profit > 0 is the trigger).
+  #
+  # This is also, unavoidably, the bar an OPENING trade must clear (see
+  # optimizer.choose_action's opens_toward_locked_profit) - and since
+  # opening is capped at max_opening_order_usd ($2, see below), $0.50
+  # demanded a 25% combined-price edge just to open anything. Confirmed
+  # live 2026-08-08 with the arb-shadow tool: real edges on this market
+  # run 2-13%, essentially never 25%+ - the bot went from 13:10 to past
+  # 16:50 (3.5+ hours) without opening a single position, not because of
+  # any network issue but because this floor was mathematically almost
+  # unreachable at this opening size. Lowered to $0.10 (5% edge on a $2
+  # open) to match what the market actually offers, while still refusing
+  # genuinely break-even-or-worse opens.
+  minimum_guaranteed_profit_usd: 0.10
+  minimum_guaranteed_roi_pct: 1.0
+  max_order_size_usd: 10
+  # Two related but distinct guards near a window's close - kept separate
+  # per the spec rather than collapsed into one, since they answer
+  # different questions: "is there enough time left for a new order to
+  # realistically fill" vs "how long before close do we stop trying new
+  # entries at all regardless of fill odds". In practice the effective
+  # cutoff used by risk.py is whichever of the two is larger.
+  minimum_time_remaining_seconds: 10
+  stop_new_entries_seconds_before_resolution: 5
+  # Reject a candidate if the order book can't actually fill at least
+  # this fraction of the requested quantity within the levels read -
+  # placing a $5 order that only fills $0.20 of it isn't worth the
+  # attempt (gas, rate limits, log noise) even though it wouldn't be
+  # unsafe.
+  min_fill_ratio: 0.5
+  # Absolute floor on how bad a FORCED hedge (MODE B/defensive or MODE C/
+  # emergency) is allowed to lock in. Confirmed live 2026-08-08: MODE C's
+  # only bar was "better than not hedging at all" (new_worst_case_profit >
+  # current), which let it pay $0.99 for the lagging side 29s before close
+  # just to nudge guaranteed_profit from -$0.4987 to -$0.4857 - technically
+  # an improvement, but a terrible trade. Across 13 real paper windows,
+  # PROFIT_HEDGE closes averaged +$0.11 while forced (defensive/emergency)
+  # closes averaged -$0.26, with emergency alone averaging -$0.49 - far
+  # worse than the ~+$0.14 expected value of just leaving the opening leg
+  # unhedged and accepting the coin-flip. Below this floor, MODE B/C must
+  # refuse to trade and let the window resolve unhedged instead of buying
+  # expensive "insurance".
+  max_forced_hedge_loss_usd: 0.15
+
+optimizer:
+  # Candidate order notionals (USD) tried on EACH side every poll, before
+  # risk filtering. The closed-form deficit-buy-range solution (see
+  # optimizer.hedge_buy_range) is always tried in addition to these fixed
+  # sizes, not instead of them - fixed sizes catch "build an initial
+  # position from nothing" (deficit-range is undefined at 0/0), the
+  # closed form catches "top up the cheap side just enough to lock in
+  # profit" once a position already exists.
+  candidate_order_sizes_usd: [0.5, 1, 2, 5, 10]
+  # Caps how big an OPENING trade (one that doesn't improve
+  # guaranteed_profit right now, only justified by a projected completed
+  # hedge at the other side's CURRENT price - see optimizer.choose_action)
+  # may be. Confirmed live 2026-08-08: a $10 opening leg (DOWN 40sh @
+  # 0.25) got followed 2-4 SECONDS later by the completing UP leg at
+  # 0.81-0.87 instead of the ~0.70 the projection assumed - BTC moved
+  # enough in those few seconds to flip a projected +$0.50 into a locked
+  # -$6.16 loss. Smaller opening size means less capital exposed to that
+  # same few-seconds price-move risk per attempt - matches the real
+  # wallet's own pattern of many small trades rather than a few large
+  # ones. Trades that already improve TODAY's guaranteed_profit (topping
+  # up a position that's already most of the way hedged) aren't opening
+  # trades and aren't capped by this - they can use the full
+  # candidate_order_sizes_usd range up to max_order_size_usd.
+  max_opening_order_usd: 2
+  # Second, independent way to justify an OPENING trade (alongside the
+  # projected-profit path above): if either side's own ask is at or below
+  # this price, buy it - mirrors how the real wallet 0x3048...e7537
+  # actually trades (buy whichever side looks cheap right now, trust that
+  # BTC's oscillation during the 5 minutes cheapens the OTHER side later
+  # too, and lean on MODE B/defensive or MODE C/emergency to complete or
+  # damage-control if it doesn't). Deliberately does NOT require the
+  # other side to already be cheap enough for an instant profitable pair
+  # - added 2026-08-08 after the bot went 3.5+ hours without opening
+  # anything because the projected-profit path alone demanded a 25%+
+  # combined edge that essentially never occurs, while the owner watched
+  # Up trade at 37-42c on Polymarket's own book with nothing happening.
+  # This does reintroduce real legging risk (the side bought cheap now
+  # might not get a cheap partner before close) - that risk is exactly
+  # what MODE B/C exist to bound, not something this threshold itself
+  # guards against.
+  cheap_open_threshold: 0.40
+  # Secondary objective (score = guaranteed_profit - lambda *
+  # directional_imbalance) - only used when objective: score below.
+  imbalance_penalty_lambda: 0.01
+  # "guaranteed_profit": always pick the candidate with the highest
+  # resulting guaranteed_profit (spec's primary objective).
+  # "score": pick the highest guaranteed_profit - lambda*imbalance
+  # instead, penalizing lopsided positions even if raw guaranteed_profit
+  # is slightly lower - this is the "second objective function" the spec
+  # asked to also be able to try.
+  objective: guaranteed_profit
+
+hedge_timing:
+  # MODE A (profit hedge) always has priority regardless of these
+  # thresholds - they only decide what to fall back to when MODE A finds
+  # nothing to buy. Spec 2026-08-08: "primero intentar bloquear
+  # beneficio, si no es posible, reducir la perdida maxima, y cerca del
+  # vencimiento minimizar el peor resultado posible."
+  #
+  # >= profit_hedge_only_seconds left: MODE A only, never defensive.
+  # emergency_hedge_start_seconds..profit_hedge_only_seconds: MODE B
+  #   (defensive partial hedge) if MODE A found nothing - the 90-120s
+  #   sub-band requires DOUBLE the normal improvement bar (see
+  #   min_worst_case_improvement_pct below) since "seguir priorizando
+  #   hedge rentable, permitir hedge parcial solamente si mejora mucho"
+  #   only gave a qualitative bar, not a number - 2x is this repo's own
+  #   interpretation of "mejora mucho" vs the normal bar, not a value
+  #   from the spec itself.
+  # < emergency_hedge_start_seconds: MODE C (emergency) - no improvement
+  #   floor at all, just maximize worst_case_profit with whatever
+  #   liquidity/risk budget remains.
+  profit_hedge_only_seconds: 120
+  defensive_hedge_start_seconds: 90
+  emergency_hedge_start_seconds: 30
+  # A defensive (MODE B) candidate must cut current_max_loss by at least
+  # this fraction to be worth taking - otherwise it's just spending more
+  # capital for a marginal improvement. Does NOT apply to MODE C
+  # (emergency) - by definition there's no bar left to clear near close,
+  # only "less bad than doing nothing".
+  min_worst_case_improvement_pct: 0.20
+  # Absolute share-count sizes tried for MODE B/C candidates (buying more
+  # of whichever side currently has FEWER shares - a defensive/emergency
+  # hedge only ever tops up the lagging side, never the leading one, same
+  # reasoning as optimizer.choose_action's is_lagging_or_tied guard).
+  defensive_share_quantities: [1, 2, 5, 10, 20, 25, 50, 75, 100]
+  # Tried alongside the absolute sizes above, as fractions of the CURRENT
+  # imbalance (abs(up_shares - down_shares)) - not fixed percentages of
+  # anything else. The mathematically optimal full-close quantity
+  # (optimizer.equalizing_quantity) is always tried too, regardless of
+  # this list.
+  defensive_imbalance_fractions: [0.25, 0.5, 0.75, 1.0]
+
+fees:
+  # Polymarket itself charges no explicit taker fee at the time this was
+  # written - kept configurable (not hardcoded to 0) since risk.py's
+  # profit-floor checks must account for it the moment that changes, and
+  # backtest.py needs to be able to stress-test a nonzero-fee scenario.
+  taker_fee_pct: 0.0
+
+paper:
+  decision_log_path: outputs/btc5m_hedge_paper_decisions.csv
+  window_summary_log_path: outputs/btc5m_hedge_paper_window_summary.csv
