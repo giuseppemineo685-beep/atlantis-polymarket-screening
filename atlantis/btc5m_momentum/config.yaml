@@ -1,0 +1,48 @@
+# BTC 5m Up/Down DIRECTIONAL momentum bot - deliberately takes one-sided
+# risk on BTC's own short-term direction, unlike atlantis/btc5m_hedge/
+# which never does. See atlantis/btc5m_momentum/signal.py for the
+# 2026-08-09 real-data derivation of the signal this is built on.
+
+market:
+  window_seconds: 300
+  poll_interval_seconds: 1.0
+
+signal:
+  # How far back to look for BTC's own momentum, using ONLY price data
+  # from strictly BEFORE the current 5-min window opened - zero overlap
+  # with the window whose Up/Down outcome is being predicted (confirmed
+  # 2026-08-09 this is NOT a look-ahead artifact: re-tested against 296
+  # real windows using purely pre-window momentum, 58.0% accuracy overall,
+  # 65.3% in the strongest half by magnitude, vs 50.7% in the weakest
+  # half - a real, if modest, ex-ante edge).
+  momentum_lookback_seconds: 180
+  # Minimum |momentum| (as a FRACTION of BTC's price, not a fixed dollar
+  # amount, so this doesn't need re-calibrating if BTC's price level
+  # changes) to bother betting at all. Calibrated 2026-08-09 from the
+  # real sample's median |momentum| ($5.40 on a ~$65,000 BTC price at the
+  # time) - below this, accuracy was statistically indistinguishable from
+  # 50/50 (50.7% in the weak half of that same sample). Below the median
+  # in dollar terms this was noise; above it, 63.2% accuracy.
+  momentum_min_pct_move: 0.00008
+
+risk:
+  # Refuse to enter if the favored side already costs more than this -
+  # confirmed 2026-08-09 the market barely reprices on momentum (average
+  # entry price ~$0.51-0.52 regardless of momentum strength), so this is
+  # mostly a safety net against an already-mispriced-the-other-way book,
+  # not the normal case.
+  max_entry_price: 0.55
+  # Flat size per bet while this strategy is unproven live - no Kelly
+  # sizing yet, deliberately small (this is real directional variance,
+  # unlike the hedge bot) until enough live windows confirm the paper
+  # edge holds up against real execution/slippage.
+  bet_size_usd: 2
+  # Circuit breaker - stop taking new bets for the rest of the session
+  # once cumulative realized loss crosses this. Not a per-window risk
+  # control (max_entry_price already bounds that) - this bounds a bad
+  # STREAK, since even a real edge can string together several losses.
+  max_session_loss_usd: 20
+
+paper:
+  decision_log_path: outputs/btc5m_momentum_paper_decisions.csv
+  window_summary_log_path: outputs/btc5m_momentum_paper_window_summary.csv
