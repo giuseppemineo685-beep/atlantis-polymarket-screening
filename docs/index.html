@@ -257,7 +257,7 @@ footer a:hover { text-decoration: underline; }
       <h1>ATLANTIS <span>SCREENING</span></h1>
       <div class="subtitle">BTC "Up or Down 5m" · Polymarket</div>
     </div>
-    <div class="updated">Última corrida (UTC)<br><b>2026-08-13 07:49 UTC</b><br>Hora Zúrich<br><b>2026-08-13 09:49</b></div>
+    <div class="updated">Última corrida (UTC)<br><b>2026-08-13 07:50 UTC</b><br>Hora Zúrich<br><b>2026-08-13 09:50</b></div>
   </header>
 
   <div class="tabs">
@@ -73340,15 +73340,15 @@ footer a:hover { text-decoration: underline; }
     </div>
     <div class="stat">
       <div class="stat-label">Ventana actual</div>
-      <div class="stat-value">btc-updown-5m-1786607100</div>
+      <div class="stat-value">btc-updown-5m-1786607400</div>
     </div>
     <div class="stat">
       <div class="stat-label">Guaranteed profit (en vivo)</div>
-      <div class="stat-value neg">$-0.5270</div>
+      <div class="stat-value pos">$+0.0000</div>
     </div>
     <div class="stat">
       <div class="stat-label">Ventanas con hedge logrado</div>
-      <div class="stat-value">709 / 1139</div>
+      <div class="stat-value">709 / 1140</div>
     </div>
     <div class="stat">
       <div class="stat-label">Profit realizado (resueltas)</div>
@@ -73359,7 +73359,7 @@ footer a:hover { text-decoration: underline; }
   <section>
     <div class="section-head">
       <h2>Estado en vivo</h2>
-      <span class="section-note">última actualización 2026-08-13 07:49:40 UTC · emergency hedge: todos los candidatos superan la perdida maxima aceptable ($0.45) - se deja la posicion sin cubrir</span>
+      <span class="section-note">última actualización 2026-08-13 07:50:16 UTC · ningun candidato mejora guaranteed_profit - WAIT</span>
     </div>
     <div class="table-scroll">
       <table>
@@ -73370,13 +73370,13 @@ footer a:hover { text-decoration: underline; }
         <tbody>
           
     <tr>
-      <td class="title-cell">BTC 5min · 07:45 UTC</td>
-      <td class="num">4.05</td>
-      <td class="num">4.05</td>
-      <td class="num">$4.58</td>
-      <td class="num num-neg">$-0.53</td>
-      <td class="num num-neg">$-0.53</td>
-      <td class="num num-neg">$-0.5270</td>
+      <td class="title-cell">BTC 5min · 07:50 UTC</td>
+      <td class="num">0.00</td>
+      <td class="num">0.00</td>
+      <td class="num">$0.00</td>
+      <td class="num num-pos">$+0.00</td>
+      <td class="num num-pos">$+0.00</td>
+      <td class="num num-pos">$+0.0000</td>
       <td class="dim">WAIT</td>
     </tr>
         </tbody>
@@ -73387,7 +73387,7 @@ footer a:hover { text-decoration: underline; }
   <section>
     <div class="section-head">
       <h2>Historial de ventanas</h2>
-      <span class="section-note">1139 ventanas registradas · últimas 20 visibles · ordenado por cierre</span>
+      <span class="section-note">1140 ventanas registradas · últimas 20 visibles · ordenado por cierre</span>
     </div>
     <div class="table-scroll">
       <table id="history-table-btc5m-hedge">
@@ -73399,6 +73399,48 @@ footer a:hover { text-decoration: underline; }
         </thead>
         <tbody>
           
+    <tr class="">
+      <td class="title-cell">BTC 5min · 07:45 UTC</td>
+      <td class="num">$4.58</td>
+      <td class="num">4.05</td>
+      <td class="num">4.05</td>
+      <td class="num num-neg">$-0.5270</td>
+      <td>?</td>
+      <td class="num ">—</td>
+      <td class="num">2</td>
+      <td class="num dim">P:1 D:0 E:1</td>
+    </tr>
+    <tr class="">
+      <td colspan="9" style="padding: 0; border-top: none;">
+        <details>
+          <summary style="cursor: pointer; padding: 4px 12px 8px; color: var(--text-dim); font-size: 12px;">Ver 2 orden(es)</summary>
+          <table style="width: 100%;">
+            <thead><tr><th>Hora</th><th>Lado</th><th class="num">Cantidad</th><th class="num">Precio</th><th class="num">Costo orden</th><th class="num">Costo acum.</th><th class="num">Guaranteed</th><th>Modo</th></tr></thead>
+            <tbody>
+        <tr>
+          <td class="dim">07:45:26</td>
+          <td><b>UP</b></td>
+          <td class="num">4.05</td>
+          <td class="num">$0.370</td>
+          <td class="num">$1.50</td>
+          <td class="num">$1.50</td>
+          <td class="num num-neg">$-1.50</td>
+          <td class="dim">PROFIT_HEDGE</td>
+        </tr>
+        <tr>
+          <td class="dim">07:47:40</td>
+          <td><b>DOWN</b></td>
+          <td class="num">4.05</td>
+          <td class="num">$0.760</td>
+          <td class="num">$3.08</td>
+          <td class="num">$4.58</td>
+          <td class="num num-neg">$-0.53</td>
+          <td class="dim">EMERGENCY_HEDGE</td>
+        </tr></tbody>
+          </table>
+        </details>
+      </td>
+    </tr>
     <tr class="">
       <td class="title-cell">BTC 5min · 07:40 UTC</td>
       <td class="num">$3.83</td>
@@ -74197,7 +74239,8 @@ footer a:hover { text-decoration: underline; }
         </details>
       </td>
     </tr>
-    <tr class="">
+          
+    <tr class="row-hidden">
       <td class="title-cell">BTC 5min · 06:05 UTC</td>
       <td class="num">$4.37</td>
       <td class="num">4.29</td>
@@ -74208,7 +74251,7 @@ footer a:hover { text-decoration: underline; }
       <td class="num">2</td>
       <td class="num dim">P:1 D:1 E:0</td>
     </tr>
-    <tr class="">
+    <tr class="row-hidden">
       <td colspan="9" style="padding: 0; border-top: none;">
         <details>
           <summary style="cursor: pointer; padding: 4px 12px 8px; color: var(--text-dim); font-size: 12px;">Ver 2 orden(es)</summary>
@@ -74239,7 +74282,6 @@ footer a:hover { text-decoration: underline; }
         </details>
       </td>
     </tr>
-          
     <tr class="row-hidden">
       <td class="title-cell">BTC 5min · 06:00 UTC</td>
       <td class="num">$3.86</td>
@@ -120702,7 +120744,7 @@ footer a:hover { text-decoration: underline; }
         </tbody>
       </table>
     </div>
-    <button class="tab-btn" id="toggle-history-btn-btc5m-hedge" data-count="1139" data-label="Ver todas">Ver todas (1139)</button>
+    <button class="tab-btn" id="toggle-history-btn-btc5m-hedge" data-count="1140" data-label="Ver todas">Ver todas (1140)</button>
   </section>
 
   </div>
@@ -120723,7 +120765,7 @@ footer a:hover { text-decoration: underline; }
     </div>
     <div class="stat">
       <div class="stat-label">Ventana actual</div>
-      <div class="stat-value">btc-updown-5m-1786607100</div>
+      <div class="stat-value">btc-updown-5m-1786607400</div>
     </div>
     <div class="stat">
       <div class="stat-label">Ventanas apostadas (de las resueltas)</div>
@@ -120738,7 +120780,7 @@ footer a:hover { text-decoration: underline; }
   <section>
     <div class="section-head">
       <h2>Estado en vivo</h2>
-      <span class="section-note">última actualización 2026-08-13 07:45:01 UTC · momentum -0.0260% favorece Down - entrando a $0.5</span>
+      <span class="section-note">última actualización 2026-08-13 07:50:00 UTC · momentum -0.0168% favorece Down - entrando a $0.51</span>
     </div>
     <div class="table-scroll">
       <table>
@@ -120749,12 +120791,12 @@ footer a:hover { text-decoration: underline; }
         <tbody>
           
     <tr>
-      <td class="title-cell">BTC 5min · 07:45 UTC</td>
+      <td class="title-cell">BTC 5min · 07:50 UTC</td>
       <td>BET</td>
       <td><b>Down</b></td>
-      <td class="num num-neg">-0.0260%</td>
-      <td class="num">4.0000</td>
-      <td class="num">$0.500</td>
+      <td class="num num-neg">-0.0168%</td>
+      <td class="num">3.9216</td>
+      <td class="num">$0.510</td>
       <td class="num">$2.00</td>
     </tr>
         </tbody>
@@ -120765,7 +120807,7 @@ footer a:hover { text-decoration: underline; }
   <section>
     <div class="section-head">
       <h2>Historial de ventanas</h2>
-      <span class="section-note">1065 ventanas registradas · últimas 20 visibles · ordenado por cierre</span>
+      <span class="section-note">1066 ventanas registradas · últimas 20 visibles · ordenado por cierre</span>
     </div>
     <div class="table-scroll">
       <table id="history-table-btc5m-momentum">
@@ -120777,6 +120819,15 @@ footer a:hover { text-decoration: underline; }
         </thead>
         <tbody>
           
+    <tr class="">
+      <td class="title-cell">BTC 5min · 07:45 UTC</td>
+      <td><b>Down</b></td>
+      <td class="num num-neg">-0.0260%</td>
+      <td class="num">4.0000</td>
+      <td class="num">$2.00</td>
+      <td>?</td>
+      <td class="num ">—</td>
+    </tr>
     <tr class="">
       <td class="title-cell">BTC 5min · 07:40 UTC</td>
       <td><b>sin apuesta</b></td>
@@ -120948,7 +120999,8 @@ footer a:hover { text-decoration: underline; }
       <td>Up</td>
       <td class="num num-neg">$-2.00</td>
     </tr>
-    <tr class="">
+          
+    <tr class="row-hidden">
       <td class="title-cell">BTC 5min · 06:05 UTC</td>
       <td><b>Down</b></td>
       <td class="num num-neg">-0.0302%</td>
@@ -120957,7 +121009,6 @@ footer a:hover { text-decoration: underline; }
       <td>Down</td>
       <td class="num num-pos">$+1.92</td>
     </tr>
-          
     <tr class="row-hidden">
       <td class="title-cell">BTC 5min · 06:00 UTC</td>
       <td><b>Down</b></td>
@@ -130367,7 +130418,7 @@ footer a:hover { text-decoration: underline; }
         </tbody>
       </table>
     </div>
-    <button class="tab-btn" id="toggle-history-btn-btc5m-momentum" data-count="1065" data-label="Ver todas">Ver todas (1065)</button>
+    <button class="tab-btn" id="toggle-history-btn-btc5m-momentum" data-count="1066" data-label="Ver todas">Ver todas (1066)</button>
   </section>
 
   </div>
