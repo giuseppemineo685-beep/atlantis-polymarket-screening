@@ -11,7 +11,6 @@ from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
 FONTS = Path(__file__).resolve().parent / "fonts"
-BTC5M_TRADE_LOG = ROOT / "outputs" / "trade_log_btc5m.csv"
 BTC5M_HEDGE_DECISIONS = ROOT / "outputs" / "btc5m_hedge_paper_decisions.csv"
 BTC5M_HEDGE_WINDOW_SUMMARY = ROOT / "outputs" / "btc5m_hedge_paper_window_summary.csv"
 BTC5M_MOMENTUM_DECISIONS = ROOT / "outputs" / "btc5m_momentum_paper_decisions.csv"
@@ -34,105 +33,6 @@ def read_csv(path: Path) -> list[dict]:
 
 def esc(value) -> str:
     return html.escape(str(value if value is not None else ""))
-
-
-STRATEGY_LABELS = {
-    "A_lag_arbitrage": "A · Arbitraje de rezago",
-    "B_momentum": "B · Momentum de cierre",
-    "D_cheap_blind": "D · Barato sin filtro",
-    "E_scaling_replicator": "E · Réplica de bot real (escalado)",
-}
-
-STRATEGY_DESCRIPTIONS = {
-    "A_lag_arbitrage": "Compra el lado que el precio de BTC ya favorece, pero solo si esa cuota sigue barata (&lt;20¢) — apuesta a que el libro de órdenes todavía no se re-precio.",
-    "B_momentum": "Mira hacia dónde viene la tendencia del precio en el último minuto y compra ese lado, sin importar si la cuota está cara o barata.",
-    "D_cheap_blind": "Compra cualquier lado que esté por debajo de 15¢ cerca del cierre, sin mirar hacia dónde va el precio — sirve de comparación para saber si las otras 4 realmente le ganan a comprar barato a ciegas.",
-    "E_scaling_replicator": "Va comprando de a poco (cada ~25 seg) del lado que el precio favorece en cada momento, pudiendo cambiar de lado si se da vuelta — inspirada en el patrón real de una wallet que opera estos mercados con ~78% de acierto.",
-}
-
-
-def render_btc5m_row(r: dict, *, extra_class: str = "", show_strategy: bool = True) -> str:
-    pct_return = r.get("pct_return", "")
-    return_class = ""
-    if pct_return not in (None, ""):
-        try:
-            return_class = "num-pos" if float(pct_return) >= 0 else "num-neg"
-        except ValueError:
-            return_class = ""
-    status = r.get("status", "")
-    status_badge = f'<span class="pill pill-{"win" if status == "WIN" else "loss"}">{esc(status)}</span>'
-    strategy_cell = (
-        f"<td class=\"dim\">{esc(STRATEGY_LABELS.get(r.get('strategy'), r.get('strategy')))}</td>"
-        if show_strategy
-        else ""
-    )
-    return f"""
-    <tr class="{extra_class}">
-      <td>{status_badge}</td>
-      {strategy_cell}
-      <td class="title-cell">{esc(r.get('window_slug'))}</td>
-      <td><b>{esc(r.get('direction'))}</b></td>
-      <td class="num">{fmt_price(r.get('entry_price'))}</td>
-      <td class="num {return_class}">{fmt_pct(pct_return)}</td>
-      <td class="dim">{esc(r.get('date_closed'))}</td>
-    </tr>"""
-
-
-def render_btc5m_strategy_row(name: str, stats: dict) -> str:
-    n = stats["n"]
-    win_rate = (stats["wins"] / n * 100) if n else 0
-    usd_class = "num-pos" if stats["usd_sum"] >= 0 else "num-neg"
-    return f"""
-    <tr>
-      <td>{esc(STRATEGY_LABELS.get(name, name))}</td>
-      <td class="num">{n}</td>
-      <td class="num">{win_rate:.1f}%</td>
-      <td class="num {'num-pos' if stats['pct_sum'] / n >= 0 else 'num-neg'}">{(stats['pct_sum'] / n if n else 0):+.1f}%</td>
-      <td class="num {usd_class}">${stats['usd_sum']:+.2f}</td>
-    </tr>"""
-
-
-def render_btc5m_strategy_section(strategy_key: str, stats: dict, rows: list[dict]) -> str:
-    label = STRATEGY_LABELS.get(strategy_key, strategy_key)
-    n = stats.get("n", 0)
-    win_rate = (stats["wins"] / n * 100) if n else 0
-    avg_pct = (stats["pct_sum"] / n) if n else 0
-    usd_sum = stats.get("usd_sum", 0.0)
-    avg_class = "num-pos" if avg_pct >= 0 else "num-neg"
-    usd_class = "num-pos" if usd_sum >= 0 else "num-neg"
-    visible = rows[:15]
-    hidden = rows[15:]
-    table_id = f"history-table-btc5m-{strategy_key}"
-    toggle_id = f"toggle-history-btn-btc5m-{strategy_key}"
-    toggle_btn = (
-        f'<button class="tab-btn" id="{toggle_id}" data-count="{len(rows)}" data-label="Ver todas">Ver todas ({len(rows)})</button>'
-        if hidden
-        else ""
-    )
-    description = STRATEGY_DESCRIPTIONS.get(strategy_key, "")
-    return f"""
-  <section>
-    <div class="section-head">
-      <h2>{esc(label)}</h2>
-      <p class="strategy-desc">{description}</p>
-      <span class="section-note">{n} trades · win rate {win_rate:.1f}% · retorno promedio <span class="{avg_class}">{avg_pct:+.1f}%</span> · USD total <span class="{usd_class}">${usd_sum:+.2f}</span></span>
-    </div>
-    <div class="table-scroll">
-      <table id="{table_id}">
-        <thead>
-          <tr>
-            <th>Estado</th><th>Ventana</th><th>Dirección</th><th>Entrada</th><th>Retorno</th><th>Cerrado</th>
-          </tr>
-        </thead>
-        <tbody>
-          {"".join(render_btc5m_row(r, show_strategy=False) for r in visible)}
-          {"".join(render_btc5m_row(r, extra_class="row-hidden", show_strategy=False) for r in hidden)}
-          {'<tr><td colspan="6" class="empty">Todavía no hay trades registrados</td></tr>' if not rows else ''}
-        </tbody>
-      </table>
-    </div>
-    {toggle_btn}
-  </section>"""
 
 
 def btc5m_hedge_signal_for_row(r: dict | None) -> str:
@@ -326,63 +226,7 @@ def render_btc5m_momentum_window_row(r: dict, *, extra_class: str = "") -> str:
     </tr>"""
 
 
-def fmt_pct(value: str) -> str:
-    if value in (None, ""):
-        return "—"
-    try:
-        v = float(value)
-    except ValueError:
-        return "—"
-    sign = "+" if v > 0 else ""
-    return f"{sign}{v:.1f}%"
-
-
-def fmt_price(value: str) -> str:
-    if value in (None, ""):
-        return "—"
-    try:
-        return f"{float(value):.3f}"
-    except ValueError:
-        return "—"
-
-
-def fmt_money(value: str | None) -> str:
-    try:
-        num = float(value or 0)
-    except ValueError:
-        return "—"
-    sign = "+" if num > 0 else ""
-    return f"{sign}{num:,.0f}"
-
-
 def main() -> None:
-    btc5m_rows = read_csv(BTC5M_TRADE_LOG)
-    btc5m_rows.sort(key=lambda r: r.get("date_closed", ""), reverse=True)
-
-    # Every btc5m row opens and resolves within the same script run (see
-    # scripts/run_btc5m_paper_trading.py) - there's no OPEN status here,
-    # just WIN/LOSS per strategy per window, so the scoreboard is a
-    # straight per-strategy rollup rather than realized/unrealized split.
-    btc5m_by_strategy: dict[str, dict] = defaultdict(lambda: {"n": 0, "wins": 0, "pct_sum": 0.0, "usd_sum": 0.0})
-    for r in btc5m_rows:
-        d = btc5m_by_strategy[r.get("strategy", "")]
-        d["n"] += 1
-        try:
-            pct = float(r.get("pct_return") or 0)
-        except ValueError:
-            pct = 0.0
-        try:
-            stake = float(r.get("stake_usd") or 1)
-        except ValueError:
-            stake = 1.0
-        d["pct_sum"] += pct
-        d["usd_sum"] += stake * pct / 100
-        if r.get("status") == "WIN":
-            d["wins"] += 1
-    btc5m_rows_by_strategy: dict[str, list[dict]] = defaultdict(list)
-    for r in btc5m_rows:
-        btc5m_rows_by_strategy[r.get("strategy", "")].append(r)
-
     # BTC5m cross-side hedge bot - PAPER ONLY (see atlantis/btc5m_hedge/,
     # scripts/run_btc5m_hedge_paper_trading.py). Doesn't predict Up/Down -
     # buys both sides aiming for min(profit_if_up, profit_if_down) > 0
@@ -689,33 +533,6 @@ footer a:hover {{ text-decoration: underline; }}
   <div class="tabs">
     <button class="tab-btn active" data-tab="btc5m-momentum">BTC 5m (Momentum)</button>
     <button class="tab-btn" data-tab="btc5m-hedge">BTC 5m (Hedge)</button>
-    <button class="tab-btn" data-tab="btc5m">BTC 5m (Paper)</button>
-  </div>
-
-  <div class="tab-panel" data-tab-panel="btc5m">
-
-  <section>
-    <div class="section-head">
-      <h2>BTC "Up or Down 5m" — 4 estrategias (paper trading, sin dinero real)</h2>
-      <span class="section-note">A/B/D: $1 por señal (una entrada) · E: $0.20 por entrada, varias por ventana, inspirada en una wallet real que opera estos mercados · cada ventana abre y resuelve en el mismo ciclo</span>
-    </div>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Estrategia</th><th class="num">Trades</th><th class="num">Win rate</th>
-            <th class="num">Retorno promedio</th><th class="num">USD total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {"".join(render_btc5m_strategy_row(name, stats) for name, stats in btc5m_by_strategy.items()) or '<tr><td colspan="5" class="empty">Todavía no hay resultados</td></tr>'}
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  {"".join(render_btc5m_strategy_section(name, btc5m_by_strategy.get(name, {"n": 0, "wins": 0, "pct_sum": 0.0, "usd_sum": 0.0}), btc5m_rows_by_strategy.get(name, [])) for name in STRATEGY_LABELS)}
-
   </div>
 
   <div class="tab-panel" data-tab-panel="btc5m-hedge">
@@ -890,7 +707,6 @@ function wireHistoryToggle(btnId, tableId) {{
 }}
 wireHistoryToggle('toggle-history-btn-btc5m-hedge', 'history-table-btc5m-hedge');
 wireHistoryToggle('toggle-history-btn-btc5m-momentum', 'history-table-btc5m-momentum');
-{"".join(f"wireHistoryToggle('toggle-history-btn-btc5m-{name}', 'history-table-btc5m-{name}');" + chr(10) for name in STRATEGY_LABELS)}
 </script>
 </body>
 </html>
