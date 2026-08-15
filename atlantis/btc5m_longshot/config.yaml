@@ -1,0 +1,34 @@
+# BTC 5m Up/Down "moderate underdog" bot - buys whichever side is
+# currently cheaper in the last ~2.5 minutes of the window, but ONLY if
+# its price sits in a moderate range - see atlantis/btc5m_longshot/
+# signal.py for the 2026-08-15 real-data derivation (extreme longshots,
+# below $0.05, are a LOSING bet; $0.05-$0.25 has a real, sizeable edge).
+
+market:
+  window_seconds: 300
+  poll_interval_seconds: 1.0
+
+signal:
+  # Only look in the last 150s (2.5 min) of the window - matches how the
+  # real data was sampled. Checked every poll, so this fires on the
+  # FIRST qualifying observation, not just once at a fixed instant.
+  entry_window_seconds: 150
+  # Real 2026-08-15 week (4,020 observations): $0.05-$0.10 -> +$0.52/$,
+  # $0.10-$0.15 -> +$0.46/$, $0.15-$0.25 -> +$0.75/$, all with 180-281
+  # samples each. Below $0.05 is confirmed NEGATIVE (as low as -$0.59/$
+  # at $0.02-0.03, n=99) - do not lower min_underdog_price without new
+  # real-data validation, it looks tempting (huge payouts) but loses.
+  min_underdog_price: 0.05
+  max_underdog_price: 0.25
+
+risk:
+  # Smaller than the momentum bot's $2 - this strategy has much higher
+  # payout variance (4x-20x per win) than momentum's roughly break-even
+  # payout, so a smaller flat size keeps a bad stretch from doing
+  # outsized damage while still unproven live.
+  bet_size_usd: 1
+  max_session_loss_usd: 15
+
+paper:
+  decision_log_path: outputs/btc5m_longshot_paper_decisions.csv
+  window_summary_log_path: outputs/btc5m_longshot_paper_window_summary.csv
