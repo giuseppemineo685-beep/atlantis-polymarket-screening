@@ -42,11 +42,31 @@ class MomentumSignal:
     momentum_pct: Decimal
 
 
-def evaluate_signal(momentum_pct: Decimal, *, min_pct_move: Decimal) -> MomentumSignal | None:
-    """None means "momentum too weak to trust" - per the real-data
-    derivation above, below-median moves showed no measurable edge
-    (50.7% accuracy, indistinguishable from a coin flip)."""
+def evaluate_signal(
+    momentum_pct: Decimal, *, min_pct_move: Decimal, long_momentum_pct: Decimal
+) -> MomentumSignal | None:
+    """None means "no trustworthy signal this poll" - either the 3-min
+    momentum is too weak (per the real-data derivation above, below-
+    median moves showed no measurable edge, 50.7% accuracy, indistin-
+    guishable from a coin flip), OR it disagrees with the longer-term
+    (20-min) trend.
+
+    The trend-agreement check was added 2026-08-15 after a real bad day
+    live (2026-08-12: 39% win rate, -$62.92, entirely on the DOWN side):
+    BTC was grinding UP slowly all morning with lots of 3-minute dips
+    along the way - each dip fired a DOWN signal that the 3-minute
+    window alone couldn't tell apart from a real reversal, and lost
+    against the underlying uptrend over and over. Re-checked against
+    that exact week's real logged decisions (not a fresh backtest -
+    the ACTUAL momentum_pct and outcome of all 859 real live bets):
+    requiring the 20-min trend to agree with the 3-min signal would have
+    turned that week from -$35.19 (48.0% win rate) into +$54.50 (51.2%),
+    filtering out 294 bets that alone would have summed to -$89.68
+    (41.8%). 15-min and 40-min lookbacks were also tested and both
+    improved things too, just less than 20-min specifically."""
     if abs(momentum_pct) < min_pct_move:
+        return None
+    if (momentum_pct > 0) != (long_momentum_pct > 0):
         return None
     return MomentumSignal(side=UP if momentum_pct > 0 else DOWN, momentum_pct=momentum_pct)
 

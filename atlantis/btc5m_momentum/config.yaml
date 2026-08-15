@@ -24,6 +24,19 @@ signal:
   # 50/50 (50.7% in the weak half of that same sample). Below the median
   # in dollar terms this was noise; above it, 63.2% accuracy.
   momentum_min_pct_move: 0.00008
+  # Longer-horizon trend the 3-min momentum signal must AGREE with (same
+  # sign) to fire at all. Added 2026-08-15 after a real bad live day
+  # (2026-08-12: 39% win rate, -$62.92, almost entirely on the DOWN
+  # side) - BTC was grinding up slowly all morning with many small
+  # 3-minute dips along the way, and the short window alone kept mis-
+  # reading each dip as a real reversal, betting DOWN against the
+  # underlying uptrend over and over. Re-checked against that exact
+  # week's real logged decisions (859 real live bets, not a fresh
+  # backtest): requiring 20-min agreement would have turned the week
+  # from -$35.19 (48.0% win rate) into +$54.50 (51.2%) by filtering out
+  # 294 bets that alone summed to -$89.68 (41.8%). 15-min and 40-min
+  # were also tested and both helped, just less than 20-min.
+  trend_lookback_seconds: 1200
 
 risk:
   # Refuse to enter if the favored side already costs more than this -

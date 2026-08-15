@@ -129,3 +129,33 @@ def backfill_missing_outcomes(path: Path, fetch_outcome: Callable[[str], str | N
             for row in rows:
                 writer.writerow({k: row.get(k, "") for k in WINDOW_SUMMARY_FIELDS})
     return updated
+
+
+def compute_session_realized(path: Path) -> Decimal:
+    """Sums every resolved realized_profit in the window-summary file -
+    the source of truth for the circuit breaker, recomputed from disk
+    rather than accumulated incrementally in memory.
+
+    Regression fix 2026-08-15: the live bot's in-memory session_realized
+    was only ever incremented at the single "check resolution right at
+    window close" moment, which - per the SAME oracle-lag lesson already
+    documented in atlantis/btc5m_hedge/logger.py's backfill_missing_
+    outcomes - almost never succeeds. backfill_missing_outcomes fixes the
+    outcome in THIS FILE on a later poll, but nothing ever fed that back
+    into the in-memory counter, so max_session_loss_usd's circuit breaker
+    silently never fired even as real cumulative loss reached -$64.55
+    over 6 real days (final session PnL -$35.19, well past the $20
+    breaker) - the in-memory value stayed near $0 the whole time.
+    Recomputing from the file on every poll instead of tracking a
+    separate running total means the breaker can never drift out of sync
+    with reality again."""
+    if not path.exists():
+        return Decimal(0)
+    total = Decimal(0)
+    for row in csv.DictReader(path.open()):
+        if row.get("realized_profit"):
+            try:
+                total += Decimal(row["realized_profit"])
+            except Exception:
+                continue
+    return total

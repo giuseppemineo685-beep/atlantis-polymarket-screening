@@ -1,0 +1,36 @@
+import csv
+from decimal import Decimal
+from pathlib import Path
+
+from atlantis.btc5m_momentum.logger import WINDOW_SUMMARY_FIELDS, compute_session_realized
+
+
+def _write_summary(path: Path, rows: list[dict]) -> None:
+    with path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=WINDOW_SUMMARY_FIELDS)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({k: row.get(k, "") for k in WINDOW_SUMMARY_FIELDS})
+
+
+def test_compute_session_realized_missing_file_is_zero(tmp_path):
+    assert compute_session_realized(tmp_path / "nope.csv") == Decimal(0)
+
+
+def test_compute_session_realized_sums_only_resolved_rows(tmp_path):
+    """Regression test for the real 2026-08-15 bug: the live bot's
+    in-memory session_realized only updated on the "resolved right at
+    window close" path, which almost never succeeds (oracle lag) - so
+    the circuit breaker silently never fired even as real cumulative
+    loss reached -$64.55. This is the fix: recompute straight from the
+    (backfill-corrected) file every time, never trust an incremental
+    in-memory total again."""
+    path = tmp_path / "summary.csv"
+    _write_summary(path, [
+        {"window_slug": "a", "side": "Up", "realized_profit": "1.64"},
+        {"window_slug": "b", "side": "Down", "realized_profit": "-2"},
+        {"window_slug": "c", "side": "Up", "realized_profit": ""},  # not resolved yet
+        {"window_slug": "d", "side": "", "realized_profit": ""},  # no bet was placed
+        {"window_slug": "e", "side": "Down", "realized_profit": "1.83"},
+    ])
+    assert compute_session_realized(path) == Decimal("1.64") - Decimal("2") + Decimal("1.83")

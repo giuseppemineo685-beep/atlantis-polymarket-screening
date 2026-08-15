@@ -22,6 +22,7 @@ class MarketConfig:
 class SignalConfig:
     momentum_lookback_seconds: int
     momentum_min_pct_move: Decimal
+    trend_lookback_seconds: int
 
 
 @dataclass(frozen=True)
@@ -67,6 +68,7 @@ def load_config(path: Path | None = None, repo_root: Path | None = None) -> Mome
         signal=SignalConfig(
             momentum_lookback_seconds=int(s["momentum_lookback_seconds"]),
             momentum_min_pct_move=_dec(s["momentum_min_pct_move"]),
+            trend_lookback_seconds=int(s["trend_lookback_seconds"]),
         ),
         risk=RiskConfig(
             max_entry_price=_dec(r["max_entry_price"]),

@@ -37,7 +37,12 @@ from atlantis.btc5m_hedge.market_data import (  # noqa: E402
 )
 from atlantis.btc5m_hedge.portfolio import fill_from_levels  # noqa: E402
 from atlantis.btc5m_momentum.config import load_config  # noqa: E402
-from atlantis.btc5m_momentum.logger import backfill_missing_outcomes, log_decision, log_window_summary  # noqa: E402
+from atlantis.btc5m_momentum.logger import (  # noqa: E402
+    backfill_missing_outcomes,
+    compute_session_realized,
+    log_decision,
+    log_window_summary,
+)
 from atlantis.btc5m_momentum.market_data import fetch_binance_price  # noqa: E402
 from atlantis.btc5m_momentum.position import Position  # noqa: E402
 from atlantis.btc5m_momentum.signal import UP, Decision, compute_momentum_pct, decide, evaluate_signal  # noqa: E402
@@ -88,11 +93,15 @@ def decide_and_open(
         ), None
 
     price_lookback = price_from_lookback(price_history, now_ts, config.signal.momentum_lookback_seconds)
-    if price_now is None or price_lookback is None:
+    price_trend_lookback = price_from_lookback(price_history, now_ts, config.signal.trend_lookback_seconds)
+    if price_now is None or price_lookback is None or price_trend_lookback is None:
         return Position(), Decision(False, None, "sin suficiente historial de precio de BTC todavia"), None
 
     momentum_pct = compute_momentum_pct(price_now, price_lookback)
-    signal = evaluate_signal(momentum_pct, min_pct_move=config.signal.momentum_min_pct_move)
+    long_momentum_pct = compute_momentum_pct(price_now, price_trend_lookback)
+    signal = evaluate_signal(
+        momentum_pct, min_pct_move=config.signal.momentum_min_pct_move, long_momentum_pct=long_momentum_pct
+    )
     if signal is None:
         return Position(), decide(None, None, max_entry_price=config.risk.max_entry_price), momentum_pct
 
@@ -124,7 +133,9 @@ def main() -> None:
     session_realized = Decimal(0)
     # ~2x the lookback so price_from_lookback always has something to walk
     # back to even right after startup or a brief fetch gap.
-    price_history: deque[tuple[float, Decimal]] = deque(maxlen=config.signal.momentum_lookback_seconds * 2)
+    price_history: deque[tuple[float, Decimal]] = deque(
+        maxlen=max(config.signal.momentum_lookback_seconds, config.signal.trend_lookback_seconds) * 2
+    )
 
     while True:
         now = datetime.now(timezone.utc)
@@ -158,10 +169,9 @@ def main() -> None:
                 )
                 if outcome:
                     realized = closing_position.realized_profit(outcome)
-                    session_realized += realized
                     _log(
                         f"btc5m-momentum-paper: {closing_slug} cerrada - side={closing_position.side or '(sin apuesta)'}, "
-                        f"outcome={outcome}, realized=${realized:.2f}, sesion acumulada=${session_realized:.2f}"
+                        f"outcome={outcome}, realized=${realized:.2f}"
                     )
                 else:
                     _log(f"btc5m-momentum-paper: {closing_slug} cerrada - outcome desconocido aun")
@@ -169,6 +179,16 @@ def main() -> None:
                 updated = backfill_missing_outcomes(config.paper.window_summary_log_path, fetch_resolved_outcome)
                 if updated:
                     _log(f"btc5m-momentum-paper: backfill resolvio {updated} ventana(s) que estaban pendientes")
+
+                # Recomputed from disk, not accumulated in memory - see
+                # compute_session_realized's own docstring for the real
+                # 2026-08-15 bug this fixes (the circuit breaker silently
+                # never fired across 6 real days despite -$64.55 at its
+                # worst point, because the in-memory total only updated
+                # on the "resolved right at close" path, which almost
+                # never succeeds).
+                session_realized = compute_session_realized(config.paper.window_summary_log_path)
+                _log(f"btc5m-momentum-paper: sesion acumulada real=${session_realized:.2f}")
 
         if market is None:
             fetched = fetch_market_by_slug(slug)
