@@ -13,6 +13,8 @@ ROOT = Path(__file__).resolve().parent.parent
 FONTS = Path(__file__).resolve().parent / "fonts"
 BTC5M_MOMENTUM_DECISIONS = ROOT / "outputs" / "btc5m_momentum_paper_decisions.csv"
 BTC5M_MOMENTUM_WINDOW_SUMMARY = ROOT / "outputs" / "btc5m_momentum_paper_window_summary.csv"
+BTC5M_LONGSHOT_DECISIONS = ROOT / "outputs" / "btc5m_longshot_paper_decisions.csv"
+BTC5M_LONGSHOT_WINDOW_SUMMARY = ROOT / "outputs" / "btc5m_longshot_paper_window_summary.csv"
 OUT_PATH = ROOT / "docs" / "index.html"
 
 ZURICH = ZoneInfo("Europe/Zurich")
@@ -101,6 +103,57 @@ def render_btc5m_momentum_window_row(r: dict, *, extra_class: str = "") -> str:
     </tr>"""
 
 
+def render_btc5m_longshot_live_row(r: dict | None) -> str:
+    if r is None:
+        return '<tr><td colspan="6" class="empty">El bot todavia no ha corrido</td></tr>'
+
+    def f(key: str) -> float:
+        try:
+            return float(r.get(key) or 0)
+        except ValueError:
+            return 0.0
+
+    side = r.get("side") or "—"
+    return f"""
+    <tr>
+      <td class="title-cell">{esc(market_name_for_hedge_slug(r.get('window_slug')))}</td>
+      <td>{esc(r.get('action', ''))}</td>
+      <td><b>{esc(side)}</b></td>
+      <td class="num">${f('underdog_price'):.3f}</td>
+      <td class="num">{f('quantity'):.4f}</td>
+      <td class="num">${f('cost'):.2f}</td>
+    </tr>"""
+
+
+def render_btc5m_longshot_window_row(r: dict, *, extra_class: str = "") -> str:
+    def f(key: str) -> float:
+        try:
+            return float(r.get(key) or 0)
+        except ValueError:
+            return 0.0
+
+    side = r.get("side") or "sin apuesta"
+    realized_raw = r.get("realized_profit")
+    realized_cell = "—"
+    realized_class = ""
+    if realized_raw not in (None, ""):
+        realized = f("realized_profit")
+        realized_class = "num-pos" if realized >= 0 else "num-neg"
+        realized_cell = f"${realized:+.2f}"
+    outcome = r.get("realized_outcome") or "?"
+
+    return f"""
+    <tr class="{extra_class}">
+      <td class="title-cell">{esc(market_name_for_hedge_slug(r.get('window_slug')))}</td>
+      <td><b>{esc(side)}</b></td>
+      <td class="num">${f('underdog_price'):.3f}</td>
+      <td class="num">{f('quantity'):.4f}</td>
+      <td class="num">${f('cost'):.2f}</td>
+      <td>{esc(outcome)}</td>
+      <td class="num {realized_class}">{realized_cell}</td>
+    </tr>"""
+
+
 def main() -> None:
     # BTC5m momentum bot - PAPER ONLY (see atlantis/btc5m_momentum/,
     # added 2026-08-09; the earlier btc5m_hedge cross-side bot was paused
@@ -118,6 +171,22 @@ def main() -> None:
     btc5m_momentum_realized_sum = sum(float(r.get("realized_profit") or 0) for r in btc5m_momentum_resolved)
     btc5m_momentum_visible = btc5m_momentum_window_rows[:20]
     btc5m_momentum_hidden = btc5m_momentum_window_rows[20:]
+
+    # BTC5m longshot bot - PAPER ONLY (see atlantis/btc5m_longshot/,
+    # added 2026-08-15). Polls continuously through the last 150s of a
+    # window (unlike momentum's single decision at open), so the
+    # decisions log only has a row when something ACTIONABLE happened
+    # (a bet, or a circuit-breaker block) - a window with no qualifying
+    # price never gets a decisions.csv row, only a window_summary one.
+    btc5m_longshot_decisions = read_csv(BTC5M_LONGSHOT_DECISIONS)
+    btc5m_longshot_latest = btc5m_longshot_decisions[-1] if btc5m_longshot_decisions else None
+    btc5m_longshot_window_rows = read_csv(BTC5M_LONGSHOT_WINDOW_SUMMARY)
+    btc5m_longshot_window_rows.sort(key=lambda r: r.get("window_closed_at", ""), reverse=True)
+    btc5m_longshot_resolved = [r for r in btc5m_longshot_window_rows if r.get("realized_outcome") and r.get("side")]
+    btc5m_longshot_wins = [r for r in btc5m_longshot_resolved if float(r.get("realized_profit") or 0) > 0]
+    btc5m_longshot_realized_sum = sum(float(r.get("realized_profit") or 0) for r in btc5m_longshot_resolved)
+    btc5m_longshot_visible = btc5m_longshot_window_rows[:20]
+    btc5m_longshot_hidden = btc5m_longshot_window_rows[20:]
 
     now_utc = datetime.now(timezone.utc)
     now = now_utc.strftime("%Y-%m-%d %H:%M UTC")
@@ -389,6 +458,7 @@ footer a:hover {{ text-decoration: underline; }}
 
   <div class="tabs">
     <button class="tab-btn active" data-tab="btc5m-momentum">BTC 5m (Momentum)</button>
+    <button class="tab-btn" data-tab="btc5m-longshot">BTC 5m (Underdog)</button>
   </div>
 
   <div class="tab-panel active" data-tab-panel="btc5m-momentum">
@@ -462,6 +532,77 @@ footer a:hover {{ text-decoration: underline; }}
 
   </div>
 
+  <div class="tab-panel" data-tab-panel="btc5m-longshot">
+
+  <section>
+    <div class="section-head">
+      <h2>BTC "Up or Down 5m" — Underdog moderado (paper trading, sin dinero real)</h2>
+      <span class="section-note">Compra el lado mas barato en los ultimos 150s del cierre, pero SOLO si esta entre $0.05 y $0.25 - los longshots extremos (&lt;$0.05, pagos de 20x-90x+) se confirmaron perdedores con datos reales 2026-08-15 · $1 por apuesta, corte de sesion en -$15</span>
+    </div>
+  </section>
+
+  <div class="scoreboard">
+    <div class="stat">
+      <div class="stat-label">Ultima decision</div>
+      <div class="stat-value {'pos' if btc5m_longshot_latest and btc5m_longshot_latest.get('action') == 'BET' else ''}">{esc(btc5m_longshot_latest.get('action')) if btc5m_longshot_latest else '—'}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Ventana actual</div>
+      <div class="stat-value">{esc(btc5m_longshot_latest.get('window_slug')) if btc5m_longshot_latest else '—'}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Ventanas apostadas (de las resueltas)</div>
+      <div class="stat-value">{len(btc5m_longshot_wins)} / {len(btc5m_longshot_resolved)}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Profit realizado (resueltas)</div>
+      <div class="stat-value {'pos' if btc5m_longshot_realized_sum >= 0 else 'neg'}">${btc5m_longshot_realized_sum:+.2f}</div>
+    </div>
+  </div>
+
+  <section>
+    <div class="section-head">
+      <h2>Estado en vivo</h2>
+      <span class="section-note">{f"última actualización {esc(btc5m_longshot_latest.get('timestamp'))} · {esc(btc5m_longshot_latest.get('reason', ''))}" if btc5m_longshot_latest else 'el bot todavia no ha corrido'}</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Mercado</th><th>Accion</th><th>Lado</th>
+          <th class="num">Precio underdog</th><th class="num">Cantidad</th><th class="num">Costo</th></tr>
+        </thead>
+        <tbody>
+          {render_btc5m_longshot_live_row(btc5m_longshot_latest)}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Historial de ventanas</h2>
+      <span class="section-note">{len(btc5m_longshot_window_rows)} ventanas registradas · últimas 20 visibles · ordenado por cierre</span>
+    </div>
+    <div class="table-scroll">
+      <table id="history-table-btc5m-longshot">
+        <thead>
+          <tr>
+            <th>Ventana</th><th>Lado</th><th class="num">Precio underdog</th><th class="num">Cantidad</th>
+            <th class="num">Costo</th><th>Resultado</th><th class="num">Profit real</th>
+          </tr>
+        </thead>
+        <tbody>
+          {"".join(render_btc5m_longshot_window_row(r) for r in btc5m_longshot_visible)}
+          {"".join(render_btc5m_longshot_window_row(r, extra_class="row-hidden") for r in btc5m_longshot_hidden)}
+          {'<tr><td colspan="7" class="empty">Todavía no hay ventanas registradas</td></tr>' if not btc5m_longshot_window_rows else ''}
+        </tbody>
+      </table>
+    </div>
+    {f'<button class="tab-btn" id="toggle-history-btn-btc5m-longshot" data-count="{len(btc5m_longshot_window_rows)}" data-label="Ver todas">Ver todas ({len(btc5m_longshot_window_rows)})</button>' if btc5m_longshot_hidden else ''}
+  </section>
+
+  </div>
+
   <footer>
     <span>Generado automáticamente por un cron en VPS cada 2 min.</span>
     <a href="https://github.com/giuseppemineo685-beep/atlantis-polymarket-screening" target="_blank">Ver repositorio</a>
@@ -487,6 +628,7 @@ function wireHistoryToggle(btnId, tableId) {{
   }});
 }}
 wireHistoryToggle('toggle-history-btn-btc5m-momentum', 'history-table-btc5m-momentum');
+wireHistoryToggle('toggle-history-btn-btc5m-longshot', 'history-table-btc5m-longshot');
 </script>
 </body>
 </html>

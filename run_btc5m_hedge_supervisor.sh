@@ -8,3 +8,4 @@ cd /root/atlantis-polymarket-screening
 # in place, just not auto-started anymore.
 pgrep -f 'scripts/publish_dashboard_loop.sh' > /dev/null ||   nohup bash scripts/publish_dashboard_loop.sh > /var/log/atlantis-btc5m-hedge-dashboard.log 2>&1 &
 pgrep -f 'scripts/run_btc5m_momentum_paper_trading.py' > /dev/null ||   nohup python3 -u scripts/run_btc5m_momentum_paper_trading.py > /var/log/atlantis-btc5m-momentum.log 2>&1 &
+pgrep -f 'scripts/run_btc5m_longshot_paper_trading.py' > /dev/null ||   nohup python3 -u scripts/run_btc5m_longshot_paper_trading.py > /var/log/atlantis-btc5m-longshot.log 2>&1 &
