@@ -1,0 +1,39 @@
+# Forex grid trader (flat + trend, same engine as the Binance one) -
+# paper trading only, via an OANDA practice account (free demo, no real
+# capital). v1 - stated plainly: these numbers START as the SAME
+# thresholds already calibrated for crypto (docs/GRID_TRADER_STRATEGIES.md),
+# NOT yet independently validated for forex. Forex has structurally
+# lower volatility than crypto (EUR/USD daily range ~0.3-1% vs crypto's
+# 2-10%), so these will very likely need their own walk-forward
+# calibration before being trusted the way the crypto ones are.
+
+usd_per_level: 20
+num_levels: 20
+# Tighter than crypto's 10%/35% - confirmed 2026-08-16 with a real 30d
+# backtest that crypto's thresholds NEVER triggered for forex (absolute
+# PnL swings are much smaller than crypto's), so the exit mechanism was
+# effectively disabled. 3%/10% is a first real attempt at forex scale,
+# not yet independently calibrated the way the crypto ones were (that
+# took a full threshold sweep against 2 real months) - expect to revisit
+# once more live data comes in.
+take_profit_pct: 3
+stop_loss_pct: 10
+flat_pos_min: 20
+flat_pos_max: 80
+# No max_concurrent_positions cap, matching the crypto bot (invest in
+# every genuinely qualifying candidate, not an arbitrary subset).
+max_concurrent_positions: 999
+scan_interval_seconds: 900
+poll_interval_seconds: 30
+# Approximate round-trip cost as a spread, not a taker fee (forex
+# doesn't have Binance-style trading fees, cost lives in the bid/ask
+# spread) - 0.02% is a conservative stand-in for a major pair's typical
+# spread, tighter than crypto's 0.04% taker fee since major FX spreads
+# are usually tighter than that. Minors/exotics have wider real spreads
+# than this approximates - another reason forex needs its own
+# calibration pass before trusting the numbers at face value.
+fee_rate: 0.0002
+
+screener_snapshot_path: outputs/forex_screener_snapshot.csv
+positions_path: outputs/forex_trader_positions.json
+log_path: outputs/forex_trader_paper_log.csv
