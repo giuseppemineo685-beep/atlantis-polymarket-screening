@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent
 FONTS = Path(__file__).resolve().parent / "fonts"
 BTC5M_MOMENTUM_DECISIONS = ROOT / "outputs" / "btc5m_momentum_paper_decisions.csv"
 BTC5M_MOMENTUM_WINDOW_SUMMARY = ROOT / "outputs" / "btc5m_momentum_paper_window_summary.csv"
+GRID_SCREENER_SNAPSHOT = ROOT / "outputs" / "grid_screener_snapshot.csv"
 OUT_PATH = ROOT / "docs" / "index.html"
 
 ZURICH = ZoneInfo("Europe/Zurich")
@@ -101,6 +102,37 @@ def render_btc5m_momentum_window_row(r: dict, *, extra_class: str = "") -> str:
     </tr>"""
 
 
+GRID_VERDICT_PILL = {"bueno": "pill-win", "marginal": "pill-warn", "evitar": "pill-loss"}
+GRID_VERDICT_LABEL = {"bueno": "Bueno", "marginal": "Marginal", "evitar": "Evitar"}
+
+
+def render_grid_screener_row(r: dict, *, extra_class: str = "") -> str:
+    def f(key: str) -> float:
+        try:
+            return float(r.get(key) or 0)
+        except ValueError:
+            return 0.0
+
+    verdict = r.get("verdict") or "evitar"
+    pill_class = GRID_VERDICT_PILL.get(verdict, "pill-loss")
+    pill_label = GRID_VERDICT_LABEL.get(verdict, verdict)
+    quote_vol_m = f("quote_volume_24h") / 1_000_000
+    flags = r.get("flags") or ""
+
+    return f"""
+    <tr class="{extra_class}">
+      <td class="title-cell"><b>{esc(r.get('symbol'))}</b></td>
+      <td class="num">{f('score'):.0f}</td>
+      <td><span class="pill {pill_class}">{esc(pill_label)}</span></td>
+      <td class="num">{f('vol_pct'):.2f}%</td>
+      <td>{esc(r.get('regimen'))}</td>
+      <td class="num">{f('pos_pct'):.0f}%</td>
+      <td>{esc(r.get('liquidez'))} <span class="dim">(${quote_vol_m:,.1f}M)</span></td>
+      <td>{esc(r.get('correlacion'))}</td>
+      <td class="dim">{esc(flags)}</td>
+    </tr>"""
+
+
 def main() -> None:
     # BTC5m momentum bot - PAPER ONLY (see atlantis/btc5m_momentum/,
     # added 2026-08-09; the earlier btc5m_hedge cross-side bot was paused
@@ -118,6 +150,22 @@ def main() -> None:
     btc5m_momentum_realized_sum = sum(float(r.get("realized_profit") or 0) for r in btc5m_momentum_resolved)
     btc5m_momentum_visible = btc5m_momentum_window_rows[:20]
     btc5m_momentum_hidden = btc5m_momentum_window_rows[20:]
+
+    # Grid-bot screener - see atlantis/grid_screener/ (added 2026-08-16).
+    # A read-only ranked snapshot, not a bot with positions: no
+    # win/loss stats, just "how many pairs qualify right now" and the
+    # full ranked table. Refreshed by scripts/run_grid_screener.py on
+    # its own cron cadence (independent of this dashboard's own
+    # regeneration loop), so grid_screener_snapshot.csv can be several
+    # minutes stale relative to "now" - snapshot_at on each row shows
+    # exactly how stale.
+    grid_rows = read_csv(GRID_SCREENER_SNAPSHOT)
+    grid_rows.sort(key=lambda r: float(r.get("score") or 0), reverse=True)
+    grid_buenos = [r for r in grid_rows if r.get("verdict") == "bueno"]
+    grid_marginales = [r for r in grid_rows if r.get("verdict") == "marginal"]
+    grid_snapshot_at = grid_rows[0].get("snapshot_at") if grid_rows else None
+    grid_visible = grid_rows[:40]
+    grid_hidden = grid_rows[40:]
 
     now_utc = datetime.now(timezone.utc)
     now = now_utc.strftime("%Y-%m-%d %H:%M UTC")
@@ -389,6 +437,7 @@ footer a:hover {{ text-decoration: underline; }}
 
   <div class="tabs">
     <button class="tab-btn active" data-tab="btc5m-momentum">BTC 5m (Momentum)</button>
+    <button class="tab-btn" data-tab="grid-screener">Grid screener</button>
   </div>
 
   <div class="tab-panel active" data-tab-panel="btc5m-momentum">
@@ -462,6 +511,59 @@ footer a:hover {{ text-decoration: underline; }}
 
   </div>
 
+  <div class="tab-panel" data-tab-panel="grid-screener">
+
+  <section>
+    <div class="section-head">
+      <h2>Grid-bot screener — Binance USDS-M Futures</h2>
+      <span class="section-note">Pesca todo el universo perpetual USDT con volumen 24h &gt;= $2M y lo puntua con la misma rubrica que la version manual (volatilidad, regimen, posicion en rango, liquidez, correlacion con BTC) · {esc(grid_snapshot_at) if grid_snapshot_at else 'todavia sin correr'}</span>
+    </div>
+  </section>
+
+  <div class="scoreboard">
+    <div class="stat">
+      <div class="stat-label">Pares evaluados</div>
+      <div class="stat-value">{len(grid_rows)}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Buenos</div>
+      <div class="stat-value pos">{len(grid_buenos)}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Marginales</div>
+      <div class="stat-value accent">{len(grid_marginales)}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Ultima corrida (UTC)</div>
+      <div class="stat-value" style="font-size:20px">{esc(grid_snapshot_at) if grid_snapshot_at else '—'}</div>
+    </div>
+  </div>
+
+  <section>
+    <div class="section-head">
+      <h2>Ranking</h2>
+      <span class="section-note">{len(grid_rows)} pares · primeros 40 visibles · ordenado por score</span>
+    </div>
+    <div class="table-scroll">
+      <table id="history-table-grid-screener">
+        <thead>
+          <tr>
+            <th>Par</th><th class="num">Score</th><th>Veredicto</th><th class="num">Volatilidad</th>
+            <th>Regimen</th><th class="num">Posicion rango</th><th>Liquidez</th><th>Correlacion BTC</th><th>Flags</th>
+          </tr>
+        </thead>
+        <tbody>
+          {"".join(render_grid_screener_row(r) for r in grid_visible)}
+          {"".join(render_grid_screener_row(r, extra_class="row-hidden") for r in grid_hidden)}
+          {'<tr><td colspan="9" class="empty">Todavia no hay una corrida del screener</td></tr>' if not grid_rows else ''}
+        </tbody>
+      </table>
+    </div>
+    {f'<button class="tab-btn" id="toggle-history-btn-grid-screener" data-count="{len(grid_rows)}" data-label="Ver todos">Ver todos ({len(grid_rows)})</button>' if grid_hidden else ''}
+  </section>
+
+  </div>
+
   <footer>
     <span>Generado automáticamente por un cron en VPS cada 2 min.</span>
     <a href="https://github.com/giuseppemineo685-beep/atlantis-polymarket-screening" target="_blank">Ver repositorio</a>
@@ -487,6 +589,7 @@ function wireHistoryToggle(btnId, tableId) {{
   }});
 }}
 wireHistoryToggle('toggle-history-btn-btc5m-momentum', 'history-table-btc5m-momentum');
+wireHistoryToggle('toggle-history-btn-grid-screener', 'history-table-grid-screener');
 </script>
 </body>
 </html>
