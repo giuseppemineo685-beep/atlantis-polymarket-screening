@@ -9,7 +9,7 @@ from typing import Any
 
 from atlantis.config import Settings
 from atlantis.polymarket.client import build_client
-from atlantis.services.sports_traders import as_decimal, is_sports_trade
+from atlantis.services.sports_traders import as_decimal, is_copy_target_trade
 
 
 VERDICT_ORDER = {"REJECT": 0, "C": 1, "B": 2, "A": 3}
@@ -65,7 +65,7 @@ def build_active_portfolio(
     for trader in traders:
         positions = client.get_user_positions(wallet_address=trader.wallet_address)
         for position in positions:
-            if not is_sports_trade(position):
+            if not is_copy_target_trade(position):
                 continue
             current_value = as_decimal(position.get("currentValue")) or Decimal("0")
             current_price = as_decimal(position.get("curPrice")) or Decimal("0")

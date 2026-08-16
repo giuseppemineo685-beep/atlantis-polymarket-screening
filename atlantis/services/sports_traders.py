@@ -216,6 +216,47 @@ def is_sports_trade(trade: dict[str, Any]) -> bool:
     return any(term in haystack for term in SPORT_TERMS)
 
 
+# Crypto (this project's own automated BTC 5m bots included) and esports
+# (its own dedicated, explicitly paper-only vertical - see
+# atlantis/services/esports_traders.py::ESPORTS_TERMS, kept separate on
+# purpose) are the only two exclusions. Everything else - sports, politics,
+# macro/Fed decisions, company-valuation markets, entertainment, etc. -
+# counts as a valid copy-trading target. Added 2026-08-16 at the owner's
+# request to broaden the live consensus pipeline beyond sports-only
+# (`is_sports_trade` above is kept as-is for the standalone sports
+# discovery/backtest tooling that still wants a sports-specific signal).
+CRYPTO_TERMS = {
+    "bitcoin", "btc", "ethereum", "eth", "solana", "sol", "xrp", "ripple",
+    "dogecoin", "doge", "cardano", "ada", "litecoin", "ltc", "polkadot",
+    "dot", "chainlink", "link", "avalanche", "avax", "polygon", "matic",
+    "shiba", "shib", "pepe", "crypto", "cryptocurrency", "altcoin",
+    "memecoin", "defi", "nft", "stablecoin", "usdc", "usdt", "tether",
+    "binance", "coinbase", "satoshi", "blockchain", "web3", "up or down",
+    "5m", "hourly", "wormhole", "sui", "ton",
+}
+ESPORTS_TERMS = {
+    "esports", "lol:", "league of legends", "counter-strike", "valorant",
+    "dota 2", "overwatch", "rainbow six", "call of duty", "rocket league",
+    "apex legends",
+}
+_NON_COPY_TERMS = CRYPTO_TERMS | ESPORTS_TERMS
+
+
+def is_copy_target_trade(trade: dict[str, Any]) -> bool:
+    """True for any trade/position eligible for the live copy-trading
+    consensus (sports OR any other non-crypto, non-esports market) - the
+    broadened replacement for is_sports_trade in active_portfolio.py,
+    consensus_backtest.py, trader_performance.py and evaluate_wallet.py.
+    Field names in those modules (sports_trades, sports_volume, etc.) are
+    kept as-is to avoid a wider CSV/dashboard column rename; they now mean
+    "copy-target trades", historically sports-only."""
+    haystack = " ".join(
+        str(trade.get(key) or "").lower()
+        for key in ("title", "slug", "eventSlug", "category", "outcome")
+    )
+    return not any(term in haystack for term in _NON_COPY_TERMS)
+
+
 def calculate_risk_score(
     *,
     sports_trades: int,

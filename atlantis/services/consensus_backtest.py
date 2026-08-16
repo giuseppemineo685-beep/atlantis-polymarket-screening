@@ -10,7 +10,7 @@ from typing import Any
 
 from atlantis.config import Settings
 from atlantis.polymarket.client import build_client
-from atlantis.services.sports_traders import as_decimal, as_int, is_sports_trade
+from atlantis.services.sports_traders import as_decimal, as_int, is_copy_target_trade
 
 
 @dataclass(frozen=True)
@@ -55,7 +55,7 @@ def run_consensus_backtest(
             client.iter_closed_positions(wallet_address=wallet, max_rows=max_closed_positions_per_wallet)
         )
         for position in closed:
-            if not is_sports_trade(position):
+            if not is_copy_target_trade(position):
                 continue
             ts = as_int(position.get("timestamp")) or 0
             if ts < cutoff:

@@ -8,7 +8,7 @@ from typing import Any
 
 from atlantis.config import Settings
 from atlantis.polymarket.client import build_client
-from atlantis.services.sports_traders import as_decimal, as_int, is_sports_trade
+from atlantis.services.sports_traders import as_decimal, as_int, is_copy_target_trade
 
 
 # Wallets manually confirmed as bots through direct investigation (see
@@ -72,7 +72,7 @@ def evaluate_wallet(
     positions = client.get_user_positions(wallet_address=wallet, limit=max_positions)
     bot_result = detect_bot_wallet(settings=settings, wallet_address=wallet, max_trades=max_trades)
 
-    sports_trades = [trade for trade in trades if is_sports_trade(trade)]
+    sports_trades = [trade for trade in trades if is_copy_target_trade(trade)]
     total_volume = sum(notional(trade) for trade in trades)
     sports_volume = sum(notional(trade) for trade in sports_trades)
     total_markets = len({trade.get("conditionId") for trade in trades if trade.get("conditionId")})
@@ -86,7 +86,7 @@ def evaluate_wallet(
         1 for trade in sports_trades if (as_int(trade.get("timestamp")) or 0) >= cutoff_14d
     )
 
-    active_sports = [position for position in positions if is_sports_trade(position)]
+    active_sports = [position for position in positions if is_copy_target_trade(position)]
     active_value = sum(as_decimal(position.get("currentValue")) or Decimal("0") for position in positions)
     active_sports_value = sum(
         as_decimal(position.get("currentValue")) or Decimal("0") for position in active_sports
