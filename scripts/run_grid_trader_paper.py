@@ -198,6 +198,7 @@ def scan_for_new_entries(positions: list[Position], config: GridTraderConfig) ->
         pos = Position(
             symbol=symbol, strategy="flat", levels=levels, open_qty=[Decimal(0)] * len(levels),
             realized=Decimal(0), fees=Decimal(0), trades=0, opened_at=_now_str(),
+            entry_price=Decimal(price_str),
             take_profit_usd=config.take_profit_usd, stop_loss_usd=config.stop_loss_usd,
             last_price=Decimal(price_str),
         )
@@ -226,6 +227,7 @@ def scan_for_new_entries(positions: list[Position], config: GridTraderConfig) ->
         pos = Position(
             symbol=symbol, strategy="trend", levels=levels, open_qty=[Decimal(0)] * len(levels),
             realized=Decimal(0), fees=Decimal(0), trades=0, opened_at=_now_str(),
+            entry_price=Decimal(price_str),
             take_profit_usd=config.take_profit_usd, stop_loss_usd=config.stop_loss_usd,
             last_price=Decimal(price_str), trend_anchor_date=_now().date().isoformat(),
         )

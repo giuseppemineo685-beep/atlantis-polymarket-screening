@@ -139,7 +139,7 @@ def render_grid_trader_levels_detail(pos: dict) -> str:
           </tr>""")
     return f"""
     <tr>
-      <td colspan="8" style="padding:0;border-bottom:none">
+      <td colspan="9" style="padding:0;border-bottom:none">
         <details>
           <summary style="cursor:pointer;padding:8px 14px;color:var(--text-dim);font-size:12px">Ver los {len(levels)} niveles del grid</summary>
           <div class="table-scroll" style="margin:0 14px 12px">
@@ -156,11 +156,13 @@ def render_grid_trader_levels_detail(pos: dict) -> str:
 def render_grid_trader_position_row(pos: dict) -> str:
     total = grid_trader_position_total(pos)
     open_positions = sum(1 for x in pos["open_qty"] if Decimal(x) > 0)
+    entry_price = pos.get("entry_price", pos["last_price"])
     return f"""
     <tr>
       <td class="title-cell"><b>{esc(pos['symbol'])}</b></td>
       <td>{esc(pos['strategy'])}</td>
       <td class="dim">{esc(pos['opened_at'])}</td>
+      <td class="num">${float(entry_price):,.6g}</td>
       <td class="num">${float(pos['last_price']):,.6g}</td>
       <td class="num">{open_positions}</td>
       <td class="num">{pos['trades']}</td>
@@ -623,13 +625,13 @@ footer a:hover {{ text-decoration: underline; }}
       <table>
         <thead>
           <tr>
-            <th>Par</th><th>Estrategia</th><th>Abierta</th><th class="num">Precio actual</th>
+            <th>Par</th><th>Estrategia</th><th>Abierta</th><th class="num">Precio entrada</th><th class="num">Precio actual</th>
             <th class="num">Niveles activos</th><th class="num">Trades</th><th class="num">Total</th><th>TP / SL</th>
           </tr>
         </thead>
         <tbody>
           {"".join(render_grid_trader_position_row(p) for p in grid_trader_positions)}
-          {'<tr><td colspan="8" class="empty">Sin posiciones abiertas</td></tr>' if not grid_trader_positions else ''}
+          {'<tr><td colspan="9" class="empty">Sin posiciones abiertas</td></tr>' if not grid_trader_positions else ''}
         </tbody>
       </table>
     </div>

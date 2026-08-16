@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal
 from pathlib import Path
 
@@ -10,7 +11,7 @@ def _sample_position(**overrides) -> Position:
         levels=[Decimal("100.5"), Decimal("101.25")],
         open_qty=[Decimal("0.5"), Decimal(0)],
         realized=Decimal("12.34"), fees=Decimal("0.56"), trades=3,
-        opened_at="2026-08-16 10:00:00 UTC",
+        opened_at="2026-08-16 10:00:00 UTC", entry_price=Decimal("100.60"),
         take_profit_usd=Decimal(40), stop_loss_usd=Decimal(140),
         last_price=Decimal("100.75"),
     )
@@ -30,7 +31,24 @@ def test_round_trip_preserves_decimal_precision(tmp_path: Path):
     assert got.open_qty == pos.open_qty
     assert got.realized == pos.realized
     assert got.take_profit_usd == pos.take_profit_usd
+    assert got.entry_price == pos.entry_price
     assert isinstance(got.realized, Decimal)
+
+
+def test_missing_entry_price_falls_back_to_last_price(tmp_path: Path):
+    """Positions persisted before entry_price existed - migration
+    safety net so an old outputs/grid_trader_positions.json on the VPS
+    doesn't crash the bot on restart."""
+    path = tmp_path / "positions.json"
+    path.write_text(json.dumps([{
+        "symbol": "BTCUSDT", "strategy": "flat",
+        "levels": ["100.5", "101.25"], "open_qty": ["0.5", "0"],
+        "realized": "12.34", "fees": "0.56", "trades": 3,
+        "opened_at": "2026-08-16 10:00:00 UTC",
+        "take_profit_usd": "40", "stop_loss_usd": "140", "last_price": "100.75",
+    }]))
+    got = load_positions(path)[0]
+    assert got.entry_price == Decimal("100.75")
 
 
 def test_round_trip_preserves_trend_fields(tmp_path: Path):

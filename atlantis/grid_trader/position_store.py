@@ -22,6 +22,7 @@ class Position:
     fees: Decimal
     trades: int
     opened_at: str
+    entry_price: Decimal  # market price at OPEN time - never changes, unlike last_price
     take_profit_usd: Decimal
     stop_loss_usd: Decimal
     last_price: Decimal
@@ -48,6 +49,7 @@ def _to_jsonable(pos: Position) -> dict:
     d["open_qty"] = [str(x) for x in pos.open_qty]
     d["realized"] = str(pos.realized)
     d["fees"] = str(pos.fees)
+    d["entry_price"] = str(pos.entry_price)
     d["take_profit_usd"] = str(pos.take_profit_usd)
     d["stop_loss_usd"] = str(pos.stop_loss_usd)
     d["last_price"] = str(pos.last_price)
@@ -60,7 +62,12 @@ def _from_jsonable(d: dict) -> Position:
         symbol=d["symbol"], strategy=d["strategy"],
         levels=[Decimal(x) for x in d["levels"]], open_qty=[Decimal(x) for x in d["open_qty"]],
         realized=Decimal(d["realized"]), fees=Decimal(d["fees"]), trades=d["trades"],
-        opened_at=d["opened_at"], take_profit_usd=Decimal(d["take_profit_usd"]),
+        opened_at=d["opened_at"],
+        # Fallback to last_price for positions persisted before this field
+        # existed - the best available approximation, not a real gap for
+        # anything opened from now on.
+        entry_price=Decimal(d.get("entry_price", d["last_price"])),
+        take_profit_usd=Decimal(d["take_profit_usd"]),
         stop_loss_usd=Decimal(d["stop_loss_usd"]), last_price=Decimal(d["last_price"]),
         trend_anchor_date=d.get("trend_anchor_date"),
         trend_day_realized=Decimal(d.get("trend_day_realized", "0")),
