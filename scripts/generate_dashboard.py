@@ -12,8 +12,6 @@ from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
 FONTS = Path(__file__).resolve().parent / "fonts"
-BTC5M_MOMENTUM_DECISIONS = ROOT / "outputs" / "btc5m_momentum_paper_decisions.csv"
-BTC5M_MOMENTUM_WINDOW_SUMMARY = ROOT / "outputs" / "btc5m_momentum_paper_window_summary.csv"
 GRID_TRADER_POSITIONS = ROOT / "outputs" / "grid_trader_positions.json"
 GRID_TRADER_LOG = ROOT / "outputs" / "grid_trader_paper_log.csv"
 OUT_PATH = ROOT / "docs" / "index.html"
@@ -34,74 +32,6 @@ def read_csv(path: Path) -> list[dict]:
 
 def esc(value) -> str:
     return html.escape(str(value if value is not None else ""))
-
-
-def market_name_for_hedge_slug(slug: str | None) -> str:
-    """"BTC 5min · HH:MM UTC" instead of the raw "btc-updown-5m-<epoch>"
-    slug - the epoch is the window's own opening instant (see
-    market_data.slug_for_window), so this needs no extra lookup."""
-    if not slug:
-        return "—"
-    try:
-        ts = int(slug.rsplit("-", 1)[-1])
-        dt = datetime.fromtimestamp(ts, tz=timezone.utc)
-        return f"BTC 5min · {dt.strftime('%H:%M')} UTC"
-    except (ValueError, IndexError):
-        return slug
-
-
-def render_btc5m_momentum_live_row(r: dict | None) -> str:
-    if r is None:
-        return '<tr><td colspan="7" class="empty">El bot todavia no ha corrido</td></tr>'
-
-    def f(key: str) -> float:
-        try:
-            return float(r.get(key) or 0)
-        except ValueError:
-            return 0.0
-
-    momentum_pct = f("momentum_pct") * 100
-    side = r.get("side") or "—"
-    return f"""
-    <tr>
-      <td class="title-cell">{esc(market_name_for_hedge_slug(r.get('window_slug')))}</td>
-      <td>{esc(r.get('action', ''))}</td>
-      <td><b>{esc(side)}</b></td>
-      <td class="num {'num-pos' if momentum_pct >= 0 else 'num-neg'}">{momentum_pct:+.4f}%</td>
-      <td class="num">{f('quantity'):.4f}</td>
-      <td class="num">${f('execution_price'):.3f}</td>
-      <td class="num">${f('cost'):.2f}</td>
-    </tr>"""
-
-
-def render_btc5m_momentum_window_row(r: dict, *, extra_class: str = "") -> str:
-    def f(key: str) -> float:
-        try:
-            return float(r.get(key) or 0)
-        except ValueError:
-            return 0.0
-
-    side = r.get("side") or "sin apuesta"
-    momentum_pct = f("momentum_pct") * 100
-    realized_raw = r.get("realized_profit")
-    realized_cell = "—"
-    realized_class = ""
-    if realized_raw not in (None, ""):
-        realized = f("realized_profit")
-        realized_class = "num-pos" if realized >= 0 else "num-neg"
-        realized_cell = f"${realized:+.2f}"
-    outcome = r.get("realized_outcome") or "?"
-
-    return f"""
-    <tr class="{extra_class}">
-      <td class="title-cell">{esc(market_name_for_hedge_slug(r.get('window_slug')))}</td>
-      <td><b>{esc(side)}</b></td>
-      <td class="num {'num-pos' if momentum_pct >= 0 else 'num-neg'}">{momentum_pct:+.4f}%</td>
-      <td class="num">{f('quantity'):.4f}</td>
-      <td class="num">${f('cost'):.2f}</td>
-      <td>{esc(outcome)}</td>
-      <td class="num {realized_class}">{realized_cell}</td>
-    </tr>"""
 
 
 def read_grid_trader_positions(path: Path) -> list[dict]:
@@ -209,23 +139,6 @@ def render_grid_trader_log_row(r: dict, *, extra_class: str = "") -> str:
 
 
 def main() -> None:
-    # BTC5m momentum bot - PAPER ONLY (see atlantis/btc5m_momentum/,
-    # added 2026-08-09; the earlier btc5m_hedge cross-side bot was paused
-    # 2026-08-15 - 6 real days showed 61.3% win rate but -$61.12 net,
-    # never proved its edge, code/data left in place but not rendered
-    # here anymore). One
-    # decision per window (at open), so the decisions log doubles as its
-    # own "live status" the same way the hedge one does.
-    btc5m_momentum_decisions = read_csv(BTC5M_MOMENTUM_DECISIONS)
-    btc5m_momentum_latest = btc5m_momentum_decisions[-1] if btc5m_momentum_decisions else None
-    btc5m_momentum_window_rows = read_csv(BTC5M_MOMENTUM_WINDOW_SUMMARY)
-    btc5m_momentum_window_rows.sort(key=lambda r: r.get("window_closed_at", ""), reverse=True)
-    btc5m_momentum_resolved = [r for r in btc5m_momentum_window_rows if r.get("realized_outcome") and r.get("side")]
-    btc5m_momentum_wins = [r for r in btc5m_momentum_resolved if float(r.get("realized_profit") or 0) > 0]
-    btc5m_momentum_realized_sum = sum(float(r.get("realized_profit") or 0) for r in btc5m_momentum_resolved)
-    btc5m_momentum_visible = btc5m_momentum_window_rows[:20]
-    btc5m_momentum_hidden = btc5m_momentum_window_rows[20:]
-
     # Unified grid trader (flat + trend, one bot) - see
     # atlantis/grid_trader/ and scripts/run_grid_trader_paper.py, added
     # 2026-08-16. Positions read from the bot's own persisted state
@@ -514,86 +427,14 @@ footer a:hover {{ text-decoration: underline; }}
   </header>
 
   <div class="tabs">
-    <button class="tab-btn active" data-tab="btc5m-momentum">BTC 5m (Momentum)</button>
-    <button class="tab-btn" data-tab="grid-trader">Grid trader</button>
+    <button class="tab-btn active" data-tab="grid-trader">Grid trader (Binance)</button>
   </div>
 
-  <div class="tab-panel active" data-tab-panel="btc5m-momentum">
+  <div class="tab-panel active" data-tab-panel="grid-trader">
 
   <section>
     <div class="section-head">
-      <h2>BTC "Up or Down 5m" — Momentum direccional (paper trading, sin dinero real)</h2>
-      <span class="section-note">Toma riesgo direccional a propósito (a diferencia del bot de hedge) - una sola entrada por ventana, basada en el momentum de BTC de los 3 minutos antes de que abra · reverse-engineered de la wallet 0x3048...e7537 2026-08-09 · $2 por apuesta, corte de sesion en -$20</span>
-    </div>
-  </section>
-
-  <div class="scoreboard">
-    <div class="stat">
-      <div class="stat-label">Ultima decision</div>
-      <div class="stat-value {'pos' if btc5m_momentum_latest and btc5m_momentum_latest.get('action') == 'BET' else ''}">{esc(btc5m_momentum_latest.get('action')) if btc5m_momentum_latest else '—'}</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Ventana actual</div>
-      <div class="stat-value">{esc(btc5m_momentum_latest.get('window_slug')) if btc5m_momentum_latest else '—'}</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Ventanas apostadas (de las resueltas)</div>
-      <div class="stat-value">{len(btc5m_momentum_wins)} / {len(btc5m_momentum_resolved)}</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Profit realizado (resueltas)</div>
-      <div class="stat-value {'pos' if btc5m_momentum_realized_sum >= 0 else 'neg'}">${btc5m_momentum_realized_sum:+.2f}</div>
-    </div>
-  </div>
-
-  <section>
-    <div class="section-head">
-      <h2>Estado en vivo</h2>
-      <span class="section-note">{f"última actualización {esc(btc5m_momentum_latest.get('timestamp'))} · {esc(btc5m_momentum_latest.get('reason', ''))}" if btc5m_momentum_latest else 'el bot todavia no ha corrido'}</span>
-    </div>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr><th>Mercado</th><th>Accion</th><th>Lado</th><th class="num">Momentum</th>
-          <th class="num">Cantidad</th><th class="num">Precio</th><th class="num">Costo</th></tr>
-        </thead>
-        <tbody>
-          {render_btc5m_momentum_live_row(btc5m_momentum_latest)}
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <section>
-    <div class="section-head">
-      <h2>Historial de ventanas</h2>
-      <span class="section-note">{len(btc5m_momentum_window_rows)} ventanas registradas · últimas 20 visibles · ordenado por cierre</span>
-    </div>
-    <div class="table-scroll">
-      <table id="history-table-btc5m-momentum">
-        <thead>
-          <tr>
-            <th>Ventana</th><th>Lado</th><th class="num">Momentum</th><th class="num">Cantidad</th>
-            <th class="num">Costo</th><th>Resultado</th><th class="num">Profit real</th>
-          </tr>
-        </thead>
-        <tbody>
-          {"".join(render_btc5m_momentum_window_row(r) for r in btc5m_momentum_visible)}
-          {"".join(render_btc5m_momentum_window_row(r, extra_class="row-hidden") for r in btc5m_momentum_hidden)}
-          {'<tr><td colspan="7" class="empty">Todavía no hay ventanas registradas</td></tr>' if not btc5m_momentum_window_rows else ''}
-        </tbody>
-      </table>
-    </div>
-    {f'<button class="tab-btn" id="toggle-history-btn-btc5m-momentum" data-count="{len(btc5m_momentum_window_rows)}" data-label="Ver todas">Ver todas ({len(btc5m_momentum_window_rows)})</button>' if btc5m_momentum_hidden else ''}
-  </section>
-
-  </div>
-
-  <div class="tab-panel" data-tab-panel="grid-trader">
-
-  <section>
-    <div class="section-head">
-      <h2>Grid trader — plano + tendencia, un solo bot (paper trading, sin dinero real)</h2>
+      <h2>Grid trader (Binance) — plano + tendencia, un solo bot (paper trading, sin dinero real)</h2>
       <span class="section-note">Escanea el universo cada 15 min, clasifica el regimen de cada par y abre grid plano o de tendencia segun corresponda - gate de BTC + stop-loss 35% + take-profit 10% + filtro posicion 20-80%/correlacion BTC &lt;0.5, todo calibrado contra abr-jul 2026 reales (ver docs/GRID_TRADER_STRATEGIES.md)</span>
     </div>
   </section>
@@ -723,7 +564,6 @@ function wireHistoryToggle(btnId, tableId) {{
     btn.textContent = showingAll ? 'Ver menos' : `${{btn.dataset.label}} (${{btn.dataset.count}})`;
   }});
 }}
-wireHistoryToggle('toggle-history-btn-btc5m-momentum', 'history-table-btc5m-momentum');
 wireHistoryToggle('toggle-history-btn-grid-trader', 'history-table-grid-trader');
 </script>
 </body>

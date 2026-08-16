@@ -257,90 +257,18 @@ footer a:hover { text-decoration: underline; }
       <h1>ATLANTIS <span>SCREENING</span></h1>
       <div class="subtitle">BTC "Up or Down 5m" · Polymarket</div>
     </div>
-    <div class="updated">Última corrida (UTC)<br><b>2026-08-16 21:08 UTC</b><br>Hora Zúrich<br><b>2026-08-16 23:08</b></div>
+    <div class="updated">Última corrida (UTC)<br><b>2026-08-16 21:14 UTC</b><br>Hora Zúrich<br><b>2026-08-16 23:14</b></div>
   </header>
 
   <div class="tabs">
-    <button class="tab-btn active" data-tab="btc5m-momentum">BTC 5m (Momentum)</button>
-    <button class="tab-btn" data-tab="grid-trader">Grid trader</button>
+    <button class="tab-btn active" data-tab="grid-trader">Grid trader (Binance)</button>
   </div>
 
-  <div class="tab-panel active" data-tab-panel="btc5m-momentum">
+  <div class="tab-panel active" data-tab-panel="grid-trader">
 
   <section>
     <div class="section-head">
-      <h2>BTC "Up or Down 5m" — Momentum direccional (paper trading, sin dinero real)</h2>
-      <span class="section-note">Toma riesgo direccional a propósito (a diferencia del bot de hedge) - una sola entrada por ventana, basada en el momentum de BTC de los 3 minutos antes de que abra · reverse-engineered de la wallet 0x3048...e7537 2026-08-09 · $2 por apuesta, corte de sesion en -$20</span>
-    </div>
-  </section>
-
-  <div class="scoreboard">
-    <div class="stat">
-      <div class="stat-label">Ultima decision</div>
-      <div class="stat-value ">—</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Ventana actual</div>
-      <div class="stat-value">—</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Ventanas apostadas (de las resueltas)</div>
-      <div class="stat-value">0 / 0</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Profit realizado (resueltas)</div>
-      <div class="stat-value pos">$+0.00</div>
-    </div>
-  </div>
-
-  <section>
-    <div class="section-head">
-      <h2>Estado en vivo</h2>
-      <span class="section-note">el bot todavia no ha corrido</span>
-    </div>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr><th>Mercado</th><th>Accion</th><th>Lado</th><th class="num">Momentum</th>
-          <th class="num">Cantidad</th><th class="num">Precio</th><th class="num">Costo</th></tr>
-        </thead>
-        <tbody>
-          <tr><td colspan="7" class="empty">El bot todavia no ha corrido</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <section>
-    <div class="section-head">
-      <h2>Historial de ventanas</h2>
-      <span class="section-note">0 ventanas registradas · últimas 20 visibles · ordenado por cierre</span>
-    </div>
-    <div class="table-scroll">
-      <table id="history-table-btc5m-momentum">
-        <thead>
-          <tr>
-            <th>Ventana</th><th>Lado</th><th class="num">Momentum</th><th class="num">Cantidad</th>
-            <th class="num">Costo</th><th>Resultado</th><th class="num">Profit real</th>
-          </tr>
-        </thead>
-        <tbody>
-          
-          
-          <tr><td colspan="7" class="empty">Todavía no hay ventanas registradas</td></tr>
-        </tbody>
-      </table>
-    </div>
-    
-  </section>
-
-  </div>
-
-  <div class="tab-panel" data-tab-panel="grid-trader">
-
-  <section>
-    <div class="section-head">
-      <h2>Grid trader — plano + tendencia, un solo bot (paper trading, sin dinero real)</h2>
+      <h2>Grid trader (Binance) — plano + tendencia, un solo bot (paper trading, sin dinero real)</h2>
       <span class="section-note">Escanea el universo cada 15 min, clasifica el regimen de cada par y abre grid plano o de tendencia segun corresponda - gate de BTC + stop-loss 35% + take-profit 10% + filtro posicion 20-80%/correlacion BTC &lt;0.5, todo calibrado contra abr-jul 2026 reales (ver docs/GRID_TRADER_STRATEGIES.md)</span>
     </div>
   </section>
@@ -470,7 +398,6 @@ function wireHistoryToggle(btnId, tableId) {
     btn.textContent = showingAll ? 'Ver menos' : `${btn.dataset.label} (${btn.dataset.count})`;
   });
 }
-wireHistoryToggle('toggle-history-btn-btc5m-momentum', 'history-table-btc5m-momentum');
 wireHistoryToggle('toggle-history-btn-grid-trader', 'history-table-grid-trader');
 </script>
 </body>

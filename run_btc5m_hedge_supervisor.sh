@@ -7,7 +7,10 @@ cd /root/atlantis-polymarket-screening
 # needs 64.0% to break even) - not proven profitable. Code and data left
 # in place, just not auto-started anymore.
 pgrep -f 'scripts/publish_dashboard_loop.sh' > /dev/null ||   nohup bash scripts/publish_dashboard_loop.sh > /var/log/atlantis-btc5m-hedge-dashboard.log 2>&1 &
-pgrep -f 'scripts/run_btc5m_momentum_paper_trading.py' > /dev/null ||   nohup python3 -u scripts/run_btc5m_momentum_paper_trading.py > /var/log/atlantis-btc5m-momentum.log 2>&1 &
+# btc5m_momentum PAUSED 2026-08-16 - even with the 2026-08-15 trend
+# filter improvement, 3 independent real weeks (jul 13-20, ago 9-16 x2)
+# totaling 2,162 bets all converged on ~47-48% win rate / net-zero PnL -
+# no real edge. Code and data left in place, just not auto-started.
 # btc5m_longshot PAUSED 2026-08-16 - the bet-by-bet backtest using the
 # exact live decide() logic (fires on FIRST price crossing into
 # $0.05-$0.25, not the window's eventual minimum) showed -$47.57 net
