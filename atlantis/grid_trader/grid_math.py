@@ -38,7 +38,7 @@ class GridSimResult:
     open_positions: int
     max_drawdown: Decimal  # worst realized+unrealized dip from its own running peak
     bars_run: int = 0
-    exit_reason: str = "period_end"  # "period_end" | "take_profit"
+    exit_reason: str = "period_end"  # "period_end" | "take_profit" | "stop_loss"
 
 
 def simulate_grid(
@@ -47,6 +47,7 @@ def simulate_grid(
     usd_per_level: Decimal,
     fee_rate: Decimal,
     take_profit_usd: Decimal | None = None,
+    stop_loss_usd: Decimal | None = None,
 ) -> GridSimResult:
     """`bars`: chronological (low, high) per bar. `levels`: ascending
     grid price levels. Classic long-only grid: buy resting at level i,
@@ -57,7 +58,16 @@ def simulate_grid(
     `take_profit_usd`: if set, stops the FIRST bar total (realized +
     marked-to-market unrealized) equals or exceeds this - the bot
     doesn't sit on a position for the rest of the window once its
-    target is hit, matching the "no lo mantengamos 30 dias" requirement."""
+    target is hit, matching the "no lo mantengamos 30 dias" requirement.
+
+    `stop_loss_usd`: if set (a POSITIVE magnitude), stops the first bar
+    total drops to or below -stop_loss_usd. Real tradeoff, stated
+    plainly: a tight stop-loss cuts the AIOUSDT/ACEUSDT-style breakdowns
+    short, but ALSO cuts positions that were merely mid-drawdown and
+    would have recovered (VELVETUSDT hit -18.2% before closing at
+    +10.1% in the 2026-07 backtest) - there's no threshold that avoids
+    both failure modes, see docs/GRID_TRADER_STRATEGIES.md for the
+    real-data comparison across thresholds before picking one."""
     n = len(levels)
     open_qty: list[Decimal] = [Decimal(0)] * n
     realized = Decimal(0)
@@ -102,6 +112,9 @@ def simulate_grid(
 
         if take_profit_usd is not None and total_now >= take_profit_usd:
             exit_reason = "take_profit"
+            break
+        if stop_loss_usd is not None and total_now <= -stop_loss_usd:
+            exit_reason = "stop_loss"
             break
 
     unrealized = sum(qty * (last_close - levels[i]) for i, qty in enumerate(open_qty))
