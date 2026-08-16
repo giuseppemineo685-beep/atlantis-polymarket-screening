@@ -257,12 +257,11 @@ footer a:hover { text-decoration: underline; }
       <h1>ATLANTIS <span>SCREENING</span></h1>
       <div class="subtitle">BTC "Up or Down 5m" · Polymarket</div>
     </div>
-    <div class="updated">Última corrida (UTC)<br><b>2026-08-16 19:46 UTC</b><br>Hora Zúrich<br><b>2026-08-16 21:46</b></div>
+    <div class="updated">Última corrida (UTC)<br><b>2026-08-16 19:57 UTC</b><br>Hora Zúrich<br><b>2026-08-16 21:57</b></div>
   </header>
 
   <div class="tabs">
     <button class="tab-btn active" data-tab="btc5m-momentum">BTC 5m (Momentum)</button>
-    <button class="tab-btn" data-tab="grid-copytrade">Grid bots (Copy)</button>
     <button class="tab-btn" data-tab="grid-trader">Grid trader</button>
   </div>
 
@@ -329,60 +328,6 @@ footer a:hover { text-decoration: underline; }
           
           
           <tr><td colspan="7" class="empty">Todavía no hay ventanas registradas</td></tr>
-        </tbody>
-      </table>
-    </div>
-    
-  </section>
-
-  </div>
-
-  <div class="tab-panel" data-tab-panel="grid-copytrade">
-
-  <section>
-    <div class="section-head">
-      <h2>Grid bots (Binance Copy-trade) — seguimiento manual</h2>
-      <span class="section-note">5 bots elegidos a mano el 2026-08-16 de ~50 evaluados en el marketplace de Binance (sin API publica, asi que esto se actualiza cuando mandas una captura nueva) - baseline vs ultima lectura · sin datos todavia</span>
-    </div>
-  </section>
-
-  <section>
-    <div class="section-head">
-      <h2>Entrada vs ahora</h2>
-    </div>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Par</th><th>Direccion</th><th class="num">ROI entrada</th><th class="num">ROI ahora</th><th class="num">&Delta; ROI</th>
-            <th class="num">PnL entrada</th><th class="num">PnL ahora</th><th class="num">&Delta; PnL</th><th class="num">MDD 7D</th><th>Ultima lectura</th>
-          </tr>
-        </thead>
-        <tbody>
-          
-          <tr><td colspan="10" class="empty">Todavia no hay bots en seguimiento</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <section>
-    <div class="section-head">
-      <h2>Historial de lecturas</h2>
-      <span class="section-note">0 lecturas registradas · ultimas 40 visibles</span>
-    </div>
-    <div class="table-scroll">
-      <table id="history-table-grid-copytrade">
-        <thead>
-          <tr>
-            <th>Fecha (UTC)</th><th>Par</th><th>Direccion</th><th class="num">ROI</th>
-            <th class="num">PnL</th><th class="num">MDD 7D</th><th class="num">Trades</th><th>Nota</th>
-          </tr>
-        </thead>
-        <tbody>
-          
-          
-          <tr><td colspan="8" class="empty">Todavia no hay lecturas registradas</td></tr>
         </tbody>
       </table>
     </div>
@@ -488,7 +433,6 @@ function wireHistoryToggle(btnId, tableId) {
   });
 }
 wireHistoryToggle('toggle-history-btn-btc5m-momentum', 'history-table-btc5m-momentum');
-wireHistoryToggle('toggle-history-btn-grid-copytrade', 'history-table-grid-copytrade');
 wireHistoryToggle('toggle-history-btn-grid-trader', 'history-table-grid-trader');
 </script>
 </body>
