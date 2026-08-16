@@ -659,6 +659,44 @@ footer a:hover {{ text-decoration: underline; }}
     {f'<button class="tab-btn" id="toggle-history-btn-grid-trader" data-count="{len(grid_trader_log_rows)}" data-label="Ver todos">Ver todos ({len(grid_trader_log_rows)})</button>' if grid_trader_log_hidden else ''}
   </section>
 
+  <section>
+    <div class="section-head">
+      <h2>Historial de backtests (walk-forward, sin look-ahead)</h2>
+      <span class="section-note">Config final: gate BTC + stop-loss 35% + take-profit 10% + filtro posicion 20-80%/correlacion BTC &lt;0.5 - clasificado en un punto T0 pasado, simulado hacia adelante, sin usar datos futuros · detalle completo en docs/GRID_TRADER_STRATEGIES.md</span>
+    </div>
+    <div class="strategy-desc">Grid plano - 4 de 4 meses positivos:</div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Mes (T0)</th><th class="num">Candidatos</th><th class="num">Win rate</th><th class="num">PnL</th><th class="num">ROI</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="title-cell">Abril 2026</td><td class="num">9</td><td class="num">100%</td><td class="num num-pos">+$367.05</td><td class="num num-pos">+10.2%</td></tr>
+          <tr><td class="title-cell">Mayo 2026</td><td class="num">25</td><td class="num">72.0%</td><td class="num num-pos">+$343.32</td><td class="num num-pos">+3.43%</td></tr>
+          <tr><td class="title-cell">Junio 2026 <span class="dim">(mes de correccion BTC -20%)</span></td><td class="num">21</td><td class="num">61.9%</td><td class="num num-pos">+$97.96</td><td class="num num-pos">+1.17%</td></tr>
+          <tr><td class="title-cell">Julio 2026</td><td class="num">15</td><td class="num">80.0%</td><td class="num num-pos">+$208.85</td><td class="num num-pos">+3.48%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="strategy-desc" style="margin-top:16px">Grid de tendencia - misma ventana, muestra mas chica, sin el mismo nivel de optimizacion todavia:</div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Mes (T0)</th><th class="num">Candidatos</th><th class="num">Win rate</th><th class="num">ROI</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="title-cell">Abril 2026</td><td class="num">0</td><td class="num dim">—</td><td class="num dim">—</td></tr>
+          <tr><td class="title-cell">Mayo 2026</td><td class="num">1</td><td class="num">100%</td><td class="num num-pos">+2.77%</td></tr>
+          <tr><td class="title-cell">Junio 2026</td><td class="num">9</td><td class="num">66.7%</td><td class="num num-pos">+5.23%</td></tr>
+          <tr><td class="title-cell">Julio 2026</td><td class="num">1</td><td class="num num-neg">0%</td><td class="num num-neg">-2.16%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="strategy-desc" style="margin-top:16px">
+      El score compuesto original (rubrica del screener manual) no predijo el resultado real (correlacion +0.03, ruido) - se reemplazo por dos features que si correlacionan: posicion en el rango (30d) y correlacion con BTC. Confirmado con abril como holdout genuino (nunca usado para calibrar el filtro): ROI +6.26%→+10.2%, win rate 86.7%→100%.
+    </div>
+  </section>
+
   </div>
 
   <footer>
