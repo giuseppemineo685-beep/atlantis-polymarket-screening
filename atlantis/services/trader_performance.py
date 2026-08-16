@@ -8,7 +8,7 @@ from pathlib import Path
 
 from atlantis.config import Settings
 from atlantis.polymarket.client import build_client
-from atlantis.services.sports_traders import as_decimal, as_int, is_sports_trade
+from atlantis.services.sports_traders import as_decimal, as_int, is_copy_target_trade
 
 # Windows measured for the swap-decision heuristic. Kept short: the whole
 # point is to catch a trader going cold *recently*, not to re-litigate their
@@ -87,7 +87,7 @@ def compute_trader_performance(
             for p in client.iter_closed_positions(
                 wallet_address=wallet, max_rows=max_closed_positions_per_wallet
             )
-            if is_sports_trade(p)
+            if is_copy_target_trade(p)
         ]
         windows = {days: _window_stats(closed, cutoff_ts=cutoff) for days, cutoff in cutoffs.items()}
         shortest = windows[min(WINDOWS_DAYS)]
