@@ -81,6 +81,16 @@ def fetch_daily_klines(symbol: str, days: int = 65) -> list | None:
     return data
 
 
+def fetch_current_price(symbol: str) -> str | None:
+    """Last traded price (not book bid/ask - grid_trader's paper fills
+    assume this quote is achievable, same simplification the backtest
+    already makes with OHLC bars)."""
+    data = _get(f"/fapi/v1/ticker/price?symbol={symbol}")
+    if not isinstance(data, dict) or "price" not in data:
+        return None
+    return data["price"]
+
+
 def fetch_klines_range(symbol: str, interval: str, start_ms: int, end_ms: int) -> list:
     """Paginated fetch for any interval/date range - single-symbol
     calls only (grid_trader backtests one symbol at a time, unlike the

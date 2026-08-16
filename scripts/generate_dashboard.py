@@ -6,6 +6,7 @@ import html
 import json
 from collections import defaultdict
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -15,6 +16,8 @@ BTC5M_MOMENTUM_DECISIONS = ROOT / "outputs" / "btc5m_momentum_paper_decisions.cs
 BTC5M_MOMENTUM_WINDOW_SUMMARY = ROOT / "outputs" / "btc5m_momentum_paper_window_summary.csv"
 GRID_SCREENER_SNAPSHOT = ROOT / "outputs" / "grid_screener_snapshot.csv"
 GRID_COPYTRADE_TRACKING = ROOT / "outputs" / "grid_copytrade_tracking.csv"
+GRID_TRADER_POSITIONS = ROOT / "outputs" / "grid_trader_positions.json"
+GRID_TRADER_LOG = ROOT / "outputs" / "grid_trader_paper_log.csv"
 OUT_PATH = ROOT / "docs" / "index.html"
 
 ZURICH = ZoneInfo("Europe/Zurich")
@@ -182,6 +185,72 @@ def render_copytrade_history_row(r: dict, *, extra_class: str = "") -> str:
     </tr>"""
 
 
+def read_grid_trader_positions(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    return json.loads(path.read_text())
+
+
+def grid_trader_position_total(pos: dict) -> Decimal:
+    levels = [Decimal(x) for x in pos["levels"]]
+    open_qty = [Decimal(x) for x in pos["open_qty"]]
+    last_price = Decimal(pos["last_price"])
+    unrealized = sum(q * (last_price - lvl) for q, lvl in zip(open_qty, levels))
+    total = Decimal(pos["realized"]) + unrealized
+    if pos["strategy"] == "trend":
+        total += Decimal(pos.get("trend_day_realized", "0"))
+    return total
+
+
+def render_grid_trader_position_row(pos: dict) -> str:
+    total = grid_trader_position_total(pos)
+    open_positions = sum(1 for x in pos["open_qty"] if Decimal(x) > 0)
+    return f"""
+    <tr>
+      <td class="title-cell"><b>{esc(pos['symbol'])}</b></td>
+      <td>{esc(pos['strategy'])}</td>
+      <td class="dim">{esc(pos['opened_at'])}</td>
+      <td class="num">${float(pos['last_price']):,.6g}</td>
+      <td class="num">{open_positions}</td>
+      <td class="num">{pos['trades']}</td>
+      <td class="num {'num-pos' if total >= 0 else 'num-neg'}">${total:+,.2f}</td>
+      <td class="num">${float(pos['take_profit_usd']):.0f} / -${float(pos['stop_loss_usd']):.0f}</td>
+    </tr>"""
+
+
+GRID_TRADER_ACTION_PILL = {
+    "OPEN": "pill-open", "CLOSE": "pill-closed", "DAY_REANCHOR": "pill-wait", "SKIP_REANCHOR": "pill-warn",
+}
+
+
+def render_grid_trader_log_row(r: dict, *, extra_class: str = "") -> str:
+    def f(key: str) -> float:
+        try:
+            return float(r.get(key) or 0)
+        except ValueError:
+            return 0.0
+
+    action = r.get("action") or ""
+    pill_class = GRID_TRADER_ACTION_PILL.get(action, "pill-wait")
+    realized_raw = r.get("realized_profit")
+    realized_cell = "—"
+    realized_class = ""
+    if realized_raw not in (None, ""):
+        realized = f("realized_profit")
+        realized_class = "num-pos" if realized >= 0 else "num-neg"
+        realized_cell = f"${realized:+.2f}"
+
+    return f"""
+    <tr class="{extra_class}">
+      <td class="dim">{esc(r.get('timestamp'))}</td>
+      <td class="title-cell"><b>{esc(r.get('symbol'))}</b></td>
+      <td>{esc(r.get('strategy'))}</td>
+      <td><span class="pill {pill_class}">{esc(action)}</span></td>
+      <td class="dim">{esc(r.get('reason'))}</td>
+      <td class="num {realized_class}">{realized_cell}</td>
+    </tr>"""
+
+
 def main() -> None:
     # BTC5m momentum bot - PAPER ONLY (see atlantis/btc5m_momentum/,
     # added 2026-08-09; the earlier btc5m_hedge cross-side bot was paused
@@ -236,6 +305,25 @@ def main() -> None:
     copytrade_visible = copytrade_history_sorted[:40]
     copytrade_hidden = copytrade_history_sorted[40:]
     copytrade_latest_at = copytrade_history_sorted[0].get("snapshot_at") if copytrade_history_sorted else None
+
+    # Unified grid trader (flat + trend, one bot) - see
+    # atlantis/grid_trader/ and scripts/run_grid_trader_paper.py, added
+    # 2026-08-16. Positions read from the bot's own persisted state
+    # (outputs/grid_trader_positions.json), marked to market using
+    # last_price from the bot's own last poll (not a fresh fetch here -
+    # the dashboard generator stays network-free).
+    grid_trader_positions = read_grid_trader_positions(GRID_TRADER_POSITIONS)
+    grid_trader_positions.sort(key=lambda p: grid_trader_position_total(p), reverse=True)
+    grid_trader_total = sum(grid_trader_position_total(p) for p in grid_trader_positions)
+    grid_trader_flat_n = sum(1 for p in grid_trader_positions if p["strategy"] == "flat")
+    grid_trader_trend_n = sum(1 for p in grid_trader_positions if p["strategy"] == "trend")
+    grid_trader_log_rows = read_csv(GRID_TRADER_LOG)
+    grid_trader_log_sorted = sorted(grid_trader_log_rows, key=lambda r: r.get("timestamp", ""), reverse=True)
+    grid_trader_closed = [r for r in grid_trader_log_rows if r.get("action") == "CLOSE"]
+    grid_trader_closed_wins = [r for r in grid_trader_closed if float(r.get("realized_profit") or 0) > 0]
+    grid_trader_closed_pnl = sum(float(r.get("realized_profit") or 0) for r in grid_trader_closed)
+    grid_trader_log_visible = grid_trader_log_sorted[:40]
+    grid_trader_log_hidden = grid_trader_log_sorted[40:]
 
     now_utc = datetime.now(timezone.utc)
     now = now_utc.strftime("%Y-%m-%d %H:%M UTC")
@@ -509,6 +597,7 @@ footer a:hover {{ text-decoration: underline; }}
     <button class="tab-btn active" data-tab="btc5m-momentum">BTC 5m (Momentum)</button>
     <button class="tab-btn" data-tab="grid-screener">Grid screener</button>
     <button class="tab-btn" data-tab="grid-copytrade">Grid bots (Copy)</button>
+    <button class="tab-btn" data-tab="grid-trader">Grid trader</button>
   </div>
 
   <div class="tab-panel active" data-tab-panel="btc5m-momentum">
@@ -689,6 +778,78 @@ footer a:hover {{ text-decoration: underline; }}
 
   </div>
 
+  <div class="tab-panel" data-tab-panel="grid-trader">
+
+  <section>
+    <div class="section-head">
+      <h2>Grid trader — plano + tendencia, un solo bot (paper trading, sin dinero real)</h2>
+      <span class="section-note">Escanea el universo cada 15 min, clasifica el regimen de cada par y abre grid plano o de tendencia segun corresponda - gate de BTC + stop-loss 35% + take-profit 10% + filtro posicion 20-80%/correlacion BTC &lt;0.5, todo calibrado contra abr-jul 2026 reales (ver docs/GRID_TRADER_STRATEGIES.md)</span>
+    </div>
+  </section>
+
+  <div class="scoreboard">
+    <div class="stat">
+      <div class="stat-label">Posiciones abiertas</div>
+      <div class="stat-value">{len(grid_trader_positions)} <span class="dim" style="font-size:16px">({grid_trader_flat_n} plano / {grid_trader_trend_n} tendencia)</span></div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Total no realizado (abiertas)</div>
+      <div class="stat-value {'pos' if grid_trader_total >= 0 else 'neg'}">${grid_trader_total:+,.2f}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Cerradas (ganadas/total)</div>
+      <div class="stat-value">{len(grid_trader_closed_wins)} / {len(grid_trader_closed)}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">PnL realizado (cerradas)</div>
+      <div class="stat-value {'pos' if grid_trader_closed_pnl >= 0 else 'neg'}">${grid_trader_closed_pnl:+,.2f}</div>
+    </div>
+  </div>
+
+  <section>
+    <div class="section-head">
+      <h2>Posiciones abiertas</h2>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Par</th><th>Estrategia</th><th>Abierta</th><th class="num">Precio actual</th>
+            <th class="num">Niveles activos</th><th class="num">Trades</th><th class="num">Total</th><th>TP / SL</th>
+          </tr>
+        </thead>
+        <tbody>
+          {"".join(render_grid_trader_position_row(p) for p in grid_trader_positions)}
+          {'<tr><td colspan="8" class="empty">Sin posiciones abiertas</td></tr>' if not grid_trader_positions else ''}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Historial de eventos</h2>
+      <span class="section-note">{len(grid_trader_log_rows)} eventos registrados · ultimos 40 visibles</span>
+    </div>
+    <div class="table-scroll">
+      <table id="history-table-grid-trader">
+        <thead>
+          <tr>
+            <th>Fecha (UTC)</th><th>Par</th><th>Estrategia</th><th>Accion</th><th>Motivo</th><th class="num">Profit</th>
+          </tr>
+        </thead>
+        <tbody>
+          {"".join(render_grid_trader_log_row(r) for r in grid_trader_log_visible)}
+          {"".join(render_grid_trader_log_row(r, extra_class="row-hidden") for r in grid_trader_log_hidden)}
+          {'<tr><td colspan="6" class="empty">Todavia no hay eventos registrados</td></tr>' if not grid_trader_log_rows else ''}
+        </tbody>
+      </table>
+    </div>
+    {f'<button class="tab-btn" id="toggle-history-btn-grid-trader" data-count="{len(grid_trader_log_rows)}" data-label="Ver todos">Ver todos ({len(grid_trader_log_rows)})</button>' if grid_trader_log_hidden else ''}
+  </section>
+
+  </div>
+
   <footer>
     <span>Generado automáticamente por un cron en VPS cada 2 min.</span>
     <a href="https://github.com/giuseppemineo685-beep/atlantis-polymarket-screening" target="_blank">Ver repositorio</a>
@@ -716,6 +877,7 @@ function wireHistoryToggle(btnId, tableId) {{
 wireHistoryToggle('toggle-history-btn-btc5m-momentum', 'history-table-btc5m-momentum');
 wireHistoryToggle('toggle-history-btn-grid-screener', 'history-table-grid-screener');
 wireHistoryToggle('toggle-history-btn-grid-copytrade', 'history-table-grid-copytrade');
+wireHistoryToggle('toggle-history-btn-grid-trader', 'history-table-grid-trader');
 </script>
 </body>
 </html>

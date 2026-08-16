@@ -1,0 +1,29 @@
+# Unified grid trader (flat + trend, one bot, one capital pool) - paper
+# trading only. Every threshold here was calibrated against real data
+# across 4 real calendar months (abr-jul 2026) - see
+# docs/GRID_TRADER_STRATEGIES.md for the full derivation of each one.
+
+usd_per_level: 20
+num_levels: 20
+take_profit_pct: 10
+stop_loss_pct: 35
+flat_pos_min: 20
+flat_pos_max: 80
+flat_max_corr: 0.5
+# Real-money reference: each open position reserves usd_per_level *
+# num_levels = $400 (if every level filled at once, worst case). Capped
+# at 10 concurrent positions = $4,000 max reference capital, matching
+# the scale already tested in the walk-forward backtests (n=9-25 per
+# month on a $400/position basis).
+max_concurrent_positions: 10
+# How often to re-scan the universe for NEW entries - matches the
+# existing grid_screener cron cadence (15 min), no point checking more
+# often since the snapshot it reads from only refreshes that often.
+scan_interval_seconds: 900
+# How often to poll price for OPEN positions and process fills.
+poll_interval_seconds: 30
+fee_rate: 0.0004
+
+screener_snapshot_path: outputs/grid_screener_snapshot.csv
+positions_path: outputs/grid_trader_positions.json
+log_path: outputs/grid_trader_paper_log.csv

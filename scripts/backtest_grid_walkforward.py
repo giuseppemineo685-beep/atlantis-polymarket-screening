@@ -99,6 +99,7 @@ def main() -> None:
     )
     parser.add_argument("--trend-top-n", type=int, default=10, help="cuantos candidatos de tendencia tomar como maximo, ordenados por fuerza (ER)")
     parser.add_argument("--csv-out", type=str, default=None, help="si se pasa, agrega (append) las filas de flat con sus features crudas + resultado a este CSV, para analisis de correlacion")
+    parser.add_argument("--trend-csv-out", type=str, default=None, help="igual que --csv-out pero para los candidatos de tendencia")
     args = parser.parse_args()
 
     usd_per_level = Decimal(args.usd_per_level)
@@ -194,7 +195,17 @@ def main() -> None:
                 other_results.append((symbol, f"flat_descartado ({', '.join(reasons)})", None))
 
         elif regimen == "fuerte" and move >= 0:
-            trend_candidates.append((symbol, daily, er))
+            vol_pct = daily_volatility_pct(bounds_source)
+            pos_pct = position_in_range_pct(bounds_source)
+            liquidez = liquidez_bucket(t.quote_volume_24h)
+            returns = daily_log_returns(bounds_source)
+            corr_value = pearson(returns, btc_returns)
+            trend_features = {
+                "vol_pct": vol_pct, "pos_pct": pos_pct, "liquidez": liquidez,
+                "quote_volume_24h": t.quote_volume_24h, "corr_value": corr_value,
+                "er": er, "move_pct": move,
+            }
+            trend_candidates.append((symbol, daily, er, trend_features))
 
         elif regimen == "fuerte" and move < 0:
             other_results.append((symbol, "trend_short_no_soportado", None))
@@ -211,6 +222,7 @@ def main() -> None:
     # --- Pass 2: only the survivors get the expensive hourly backtest ---
     results = list(other_results)
     csv_rows = []
+    csv_rows_trend = []
 
     for symbol, bounds_source, score, verdict, features in flat_candidates:
         if not btc_ok_at_t0:
@@ -234,7 +246,7 @@ def main() -> None:
                 "exit_reason": res.exit_reason,
             })
 
-    for symbol, daily, er in trend_candidates:
+    for symbol, daily, er, trend_features in trend_candidates:
         hourly = fetch_klines_range(symbol, "1h", t0_ms, end_ms_global)
         time.sleep(0.1)
         if not hourly:
@@ -245,6 +257,18 @@ def main() -> None:
             btc_daily_klines_all=btc_daily if use_btc_gate else None,
         )
         results.append((symbol, f"trend_long (ER={er:.2f})", res))
+        if args.trend_csv_out and res is not None:
+            cap_trend_ref = float(usd_per_level * TREND_NUM_LEVELS)
+            csv_rows_trend.append({
+                "t0": t0.date().isoformat(), "symbol": symbol,
+                "vol_pct": trend_features["vol_pct"], "pos_pct": trend_features["pos_pct"],
+                "liquidez": trend_features["liquidez"], "quote_volume_24h": trend_features["quote_volume_24h"],
+                "corr_value": trend_features["corr_value"], "er": trend_features["er"],
+                "move_pct": trend_features["move_pct"],
+                "pnl": float(res.total_pnl), "roi_pct": float(res.total_pnl) / cap_trend_ref * 100,
+                "days_run": res.days_run, "days_blocked_by_btc": res.days_blocked_by_btc,
+                "exit_reason": res.exit_reason,
+            })
 
     print(f"{'Simbolo':<12}{'Estrategia':<28}{'Resultado':<50}")
     for symbol, strategy, res in results:
@@ -278,6 +302,21 @@ def main() -> None:
                 writer.writeheader()
             writer.writerows(csv_rows)
         print(f"agregadas {len(csv_rows)} filas a {path}")
+
+    if args.trend_csv_out and csv_rows_trend:
+        path = Path(args.trend_csv_out)
+        is_new = not path.exists()
+        fields = [
+            "t0", "symbol", "vol_pct", "pos_pct", "liquidez", "quote_volume_24h",
+            "corr_value", "er", "move_pct", "pnl", "roi_pct", "days_run",
+            "days_blocked_by_btc", "exit_reason",
+        ]
+        with path.open("a", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fields)
+            if is_new:
+                writer.writeheader()
+            writer.writerows(csv_rows_trend)
+        print(f"agregadas {len(csv_rows_trend)} filas a {path}")
 
 
 if __name__ == "__main__":
