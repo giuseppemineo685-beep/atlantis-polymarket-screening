@@ -71,6 +71,16 @@ def efficiency_ratio(klines: list) -> float:
     return net / path if path > 0 else 0.0
 
 
+def net_move_pct(klines: list) -> float:
+    """Signed % move over the same window efficiency_ratio uses - tells
+    a trend candidate's DIRECTION (ER alone is unsigned, just "how
+    straight was the path")."""
+    closes = _closes(klines[-VOL_WINDOW_DAYS:])
+    if len(closes) < 2 or closes[0] == 0:
+        return 0.0
+    return (closes[-1] - closes[0]) / closes[0] * 100
+
+
 def regimen_from_er(er: float) -> str:
     if er < ER_LEVE:
         return "rango"

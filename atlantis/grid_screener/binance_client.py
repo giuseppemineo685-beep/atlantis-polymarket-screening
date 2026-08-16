@@ -79,3 +79,21 @@ def fetch_daily_klines(symbol: str, days: int = 65) -> list | None:
     if not data or not isinstance(data, list):
         return None
     return data
+
+
+def fetch_klines_range(symbol: str, interval: str, start_ms: int, end_ms: int) -> list:
+    """Paginated fetch for any interval/date range - single-symbol
+    calls only (grid_trader backtests one symbol at a time, unlike the
+    universe-wide screener), so 1000-candle pages are cheap here."""
+    out: list = []
+    cur = start_ms
+    while cur < end_ms:
+        data = _get(f"/fapi/v1/klines?symbol={symbol}&interval={interval}&startTime={cur}&endTime={end_ms}&limit=1000")
+        if not data or not isinstance(data, list):
+            break
+        out.extend(data)
+        if len(data) < 1000:
+            break
+        cur = data[-1][0] + 1
+        time.sleep(0.15)
+    return out

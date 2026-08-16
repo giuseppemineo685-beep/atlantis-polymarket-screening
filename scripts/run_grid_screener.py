@@ -24,6 +24,7 @@ from atlantis.grid_screener.metrics import (  # noqa: E402
     daily_volatility_pct,
     efficiency_ratio,
     liquidez_bucket,
+    net_move_pct,
     pearson,
     position_in_range_pct,
     regimen_from_er,
@@ -32,7 +33,7 @@ from atlantis.grid_screener.scoring import Candidate, evaluar  # noqa: E402
 
 OUT_PATH = ROOT / "outputs" / "grid_screener_snapshot.csv"
 FIELDS = [
-    "symbol", "score", "verdict", "vol_pct", "regimen", "pos_pct",
+    "symbol", "score", "verdict", "vol_pct", "regimen", "er", "net_move_pct", "pos_pct",
     "liquidez", "quote_volume_24h", "correlacion", "corr_value",
     "flags", "snapshot_at",
 ]
@@ -73,6 +74,7 @@ def main() -> None:
         vol_pct = daily_volatility_pct(klines)
         er = efficiency_ratio(klines)
         regimen = regimen_from_er(er)
+        move_pct = net_move_pct(klines)
         pos_pct = position_in_range_pct(klines)
         liquidez = liquidez_bucket(t.quote_volume_24h)
         returns = daily_log_returns(klines)
@@ -87,7 +89,8 @@ def main() -> None:
 
         rows.append({
             "symbol": t.symbol, "score": ev.score, "verdict": ev.verdict,
-            "vol_pct": f"{vol_pct:.3f}", "regimen": regimen, "pos_pct": f"{pos_pct:.1f}",
+            "vol_pct": f"{vol_pct:.3f}", "regimen": regimen, "er": f"{er:.4f}",
+            "net_move_pct": f"{move_pct:.2f}", "pos_pct": f"{pos_pct:.1f}",
             "liquidez": liquidez, "quote_volume_24h": f"{t.quote_volume_24h:.0f}",
             "correlacion": correlacion, "corr_value": f"{corr_value:.3f}",
             "flags": "; ".join(f.text for f in ev.flags),
