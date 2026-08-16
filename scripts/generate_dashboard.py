@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parent.parent
 FONTS = Path(__file__).resolve().parent / "fonts"
 GRID_TRADER_POSITIONS = ROOT / "outputs" / "grid_trader_positions.json"
 GRID_TRADER_LOG = ROOT / "outputs" / "grid_trader_paper_log.csv"
+FOREX_TRADER_POSITIONS = ROOT / "outputs" / "forex_trader_positions.json"
+FOREX_TRADER_LOG = ROOT / "outputs" / "forex_trader_paper_log.csv"
 OUT_PATH = ROOT / "docs" / "index.html"
 
 ZURICH = ZoneInfo("Europe/Zurich")
@@ -157,6 +159,23 @@ def main() -> None:
     grid_trader_closed_pnl = sum(float(r.get("realized_profit") or 0) for r in grid_trader_closed)
     grid_trader_log_visible = grid_trader_log_sorted[:40]
     grid_trader_log_hidden = grid_trader_log_sorted[40:]
+
+    # Forex grid trader (flat + trend, OANDA practice account, paper
+    # only) - see atlantis/forex/ and scripts/run_forex_grid_trader_paper.py,
+    # added 2026-08-16. Same position/log shape as the crypto bot, so the
+    # crypto render functions above are reused unchanged.
+    forex_trader_positions = read_grid_trader_positions(FOREX_TRADER_POSITIONS)
+    forex_trader_positions.sort(key=lambda p: grid_trader_position_total(p), reverse=True)
+    forex_trader_total = sum(grid_trader_position_total(p) for p in forex_trader_positions)
+    forex_trader_flat_n = sum(1 for p in forex_trader_positions if p["strategy"] == "flat")
+    forex_trader_trend_n = sum(1 for p in forex_trader_positions if p["strategy"] == "trend")
+    forex_trader_log_rows = read_csv(FOREX_TRADER_LOG)
+    forex_trader_log_sorted = sorted(forex_trader_log_rows, key=lambda r: r.get("timestamp", ""), reverse=True)
+    forex_trader_closed = [r for r in forex_trader_log_rows if r.get("action") == "CLOSE"]
+    forex_trader_closed_wins = [r for r in forex_trader_closed if float(r.get("realized_profit") or 0) > 0]
+    forex_trader_closed_pnl = sum(float(r.get("realized_profit") or 0) for r in forex_trader_closed)
+    forex_trader_log_visible = forex_trader_log_sorted[:40]
+    forex_trader_log_hidden = forex_trader_log_sorted[40:]
 
     now_utc = datetime.now(timezone.utc)
     now = now_utc.strftime("%Y-%m-%d %H:%M UTC")
@@ -428,6 +447,7 @@ footer a:hover {{ text-decoration: underline; }}
 
   <div class="tabs">
     <button class="tab-btn active" data-tab="grid-trader">Grid trader (Binance)</button>
+    <button class="tab-btn" data-tab="forex-trader">Forex (OANDA demo)</button>
   </div>
 
   <div class="tab-panel active" data-tab-panel="grid-trader">
@@ -540,6 +560,88 @@ footer a:hover {{ text-decoration: underline; }}
 
   </div>
 
+  <div class="tab-panel" data-tab-panel="forex-trader">
+
+  <section>
+    <div class="section-head">
+      <h2>Forex (OANDA demo) — plano + tendencia, mismo motor que el grid de cripto (paper trading, cuenta practice de OANDA, sin dinero real)</h2>
+      <span class="section-note">Mismo motor que Grid trader (Binance), adaptado a forex: cierra el mercado vie 21:00 - dom 21:00 UTC, sin filtro de correlacion ni gate de mercado todavia (hallazgos especificos de cripto, no validados aun para forex) - take-profit 3% / stop-loss 10%, sin calibrar todavia con el mismo rigor que cripto (ver atlantis/forex/config.yaml)</span>
+    </div>
+  </section>
+
+  <div class="scoreboard">
+    <div class="stat">
+      <div class="stat-label">Posiciones abiertas</div>
+      <div class="stat-value">{len(forex_trader_positions)} <span class="dim" style="font-size:16px">({forex_trader_flat_n} plano / {forex_trader_trend_n} tendencia)</span></div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Total no realizado (abiertas)</div>
+      <div class="stat-value {'pos' if forex_trader_total >= 0 else 'neg'}">${forex_trader_total:+,.2f}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Cerradas (ganadas/total)</div>
+      <div class="stat-value">{len(forex_trader_closed_wins)} / {len(forex_trader_closed)}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">PnL realizado (cerradas)</div>
+      <div class="stat-value {'pos' if forex_trader_closed_pnl >= 0 else 'neg'}">${forex_trader_closed_pnl:+,.2f}</div>
+    </div>
+  </div>
+
+  <section>
+    <div class="section-head">
+      <h2>Posiciones abiertas</h2>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Par</th><th>Estrategia</th><th>Abierta</th><th class="num">Precio entrada</th><th class="num">Precio actual</th>
+            <th class="num">Niveles activos</th><th class="num">Trades</th><th class="num">Total</th><th>TP / SL</th>
+          </tr>
+        </thead>
+        <tbody>
+          {"".join(render_grid_trader_position_row(p) for p in forex_trader_positions)}
+          {'<tr><td colspan="9" class="empty">Sin posiciones abiertas</td></tr>' if not forex_trader_positions else ''}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Historial de eventos</h2>
+      <span class="section-note">{len(forex_trader_log_rows)} eventos registrados · ultimos 40 visibles</span>
+    </div>
+    <div class="table-scroll">
+      <table id="history-table-forex-trader">
+        <thead>
+          <tr>
+            <th>Fecha (UTC)</th><th>Par</th><th>Estrategia</th><th>Accion</th><th>Motivo</th><th class="num">Profit</th>
+          </tr>
+        </thead>
+        <tbody>
+          {"".join(render_grid_trader_log_row(r) for r in forex_trader_log_visible)}
+          {"".join(render_grid_trader_log_row(r, extra_class="row-hidden") for r in forex_trader_log_hidden)}
+          {'<tr><td colspan="6" class="empty">Todavia no hay eventos registrados</td></tr>' if not forex_trader_log_rows else ''}
+        </tbody>
+      </table>
+    </div>
+    {f'<button class="tab-btn" id="toggle-history-btn-forex-trader" data-count="{len(forex_trader_log_rows)}" data-label="Ver todos">Ver todos ({len(forex_trader_log_rows)})</button>' if forex_trader_log_hidden else ''}
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Backtesting</h2>
+      <span class="section-note">Walk-forward sin look-ahead, mismo motor y metodologia que cripto (ver scripts/backtest_forex_walkforward.py)</span>
+    </div>
+    <div class="strategy-desc">
+      Todavia en etapa inicial: se corrio un walk-forward de 30 dias contra el universo completo de OANDA para validar que el pipeline funciona con datos reales, pero no se hizo el mismo barrido de calibracion que cripto (que uso 4 meses reales para fijar el gate de BTC, los thresholds de TP/SL y el filtro de posicion/correlacion). Se confirmo que los thresholds originales de cripto (10%/35%) practicamente nunca se activan en forex porque los movimientos de PnL absoluto son mucho mas chicos - se ajusto a 3%/10% como primer intento, sin validar todavia con el mismo rigor. Faltan: barrido de thresholds contra varios meses reales, una investigacion de que features predicen resultado real en forex (el equivalente a posicion-en-rango/correlacion-BTC de cripto), y un gate de mercado (equivalente al gate de BTC).
+    </div>
+  </section>
+
+  </div>
+
   <footer>
     <span>Generado automáticamente por un cron en VPS cada 2 min.</span>
     <a href="https://github.com/giuseppemineo685-beep/atlantis-polymarket-screening" target="_blank">Ver repositorio</a>
@@ -565,6 +667,7 @@ function wireHistoryToggle(btnId, tableId) {{
   }});
 }}
 wireHistoryToggle('toggle-history-btn-grid-trader', 'history-table-grid-trader');
+wireHistoryToggle('toggle-history-btn-forex-trader', 'history-table-forex-trader');
 </script>
 </body>
 </html>
