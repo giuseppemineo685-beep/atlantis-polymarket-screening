@@ -14,6 +14,7 @@ FONTS = Path(__file__).resolve().parent / "fonts"
 BTC5M_MOMENTUM_DECISIONS = ROOT / "outputs" / "btc5m_momentum_paper_decisions.csv"
 BTC5M_MOMENTUM_WINDOW_SUMMARY = ROOT / "outputs" / "btc5m_momentum_paper_window_summary.csv"
 GRID_SCREENER_SNAPSHOT = ROOT / "outputs" / "grid_screener_snapshot.csv"
+GRID_COPYTRADE_TRACKING = ROOT / "outputs" / "grid_copytrade_tracking.csv"
 OUT_PATH = ROOT / "docs" / "index.html"
 
 ZURICH = ZoneInfo("Europe/Zurich")
@@ -133,6 +134,54 @@ def render_grid_screener_row(r: dict, *, extra_class: str = "") -> str:
     </tr>"""
 
 
+def render_copytrade_summary_row(market: str, baseline: dict, latest: dict) -> str:
+    def f(d: dict, key: str) -> float:
+        try:
+            return float(d.get(key) or 0)
+        except ValueError:
+            return 0.0
+
+    roi_now, roi_base = f(latest, "roi_pct"), f(baseline, "roi_pct")
+    pnl_now, pnl_base = f(latest, "pnl_usd"), f(baseline, "pnl_usd")
+    roi_delta = roi_now - roi_base
+    pnl_delta = pnl_now - pnl_base
+    same_snapshot = latest.get("snapshot_at") == baseline.get("snapshot_at")
+
+    return f"""
+    <tr>
+      <td class="title-cell"><b>{esc(market)}</b></td>
+      <td>{esc(latest.get('direction'))}</td>
+      <td class="num">{roi_base:.2f}%</td>
+      <td class="num">{roi_now:.2f}%</td>
+      <td class="num {'num-pos' if roi_delta >= 0 else 'num-neg'}">{'—' if same_snapshot else f'{roi_delta:+.2f}%'}</td>
+      <td class="num">${pnl_base:,.2f}</td>
+      <td class="num">${pnl_now:,.2f}</td>
+      <td class="num {'num-pos' if pnl_delta >= 0 else 'num-neg'}">{'—' if same_snapshot else f'${pnl_delta:+,.2f}'}</td>
+      <td class="num">{f(latest, 'mdd_pct'):.2f}%</td>
+      <td class="dim">{esc(latest.get('snapshot_at'))}</td>
+    </tr>"""
+
+
+def render_copytrade_history_row(r: dict, *, extra_class: str = "") -> str:
+    def f(key: str) -> float:
+        try:
+            return float(r.get(key) or 0)
+        except ValueError:
+            return 0.0
+
+    return f"""
+    <tr class="{extra_class}">
+      <td class="dim">{esc(r.get('snapshot_at'))}</td>
+      <td class="title-cell"><b>{esc(r.get('market'))}</b></td>
+      <td>{esc(r.get('direction'))}</td>
+      <td class="num">{f('roi_pct'):.2f}%</td>
+      <td class="num">${f('pnl_usd'):,.2f}</td>
+      <td class="num">{f('mdd_pct'):.2f}%</td>
+      <td class="num">{f('trades_total'):.0f}</td>
+      <td class="dim">{esc(r.get('note'))}</td>
+    </tr>"""
+
+
 def main() -> None:
     # BTC5m momentum bot - PAPER ONLY (see atlantis/btc5m_momentum/,
     # added 2026-08-09; the earlier btc5m_hedge cross-side bot was paused
@@ -166,6 +215,27 @@ def main() -> None:
     grid_snapshot_at = grid_rows[0].get("snapshot_at") if grid_rows else None
     grid_visible = grid_rows[:40]
     grid_hidden = grid_rows[40:]
+
+    # Copy-trade tracker for the 5 Binance marketplace grid bots picked
+    # 2026-08-16 out of the ~50 screened by hand (no public API for
+    # that marketplace - see atlantis/grid_screener/ for the OTHER,
+    # API-fed tab, which screens raw pairs, not other people's bots).
+    # Manually appended every time a fresh screenshot comes in, so
+    # snapshot_at gaps are real and can be irregular - this is not a
+    # cron job.
+    copytrade_rows = read_csv(GRID_COPYTRADE_TRACKING)
+    copytrade_by_market: dict[str, list[dict]] = defaultdict(list)
+    for r in copytrade_rows:
+        copytrade_by_market[r["market"]].append(r)
+    copytrade_summary_rows = []
+    for market, rs in copytrade_by_market.items():
+        rs_sorted = sorted(rs, key=lambda r: r.get("snapshot_at", ""))
+        copytrade_summary_rows.append((market, rs_sorted[0], rs_sorted[-1]))
+    copytrade_summary_rows.sort(key=lambda t: t[0])
+    copytrade_history_sorted = sorted(copytrade_rows, key=lambda r: r.get("snapshot_at", ""), reverse=True)
+    copytrade_visible = copytrade_history_sorted[:40]
+    copytrade_hidden = copytrade_history_sorted[40:]
+    copytrade_latest_at = copytrade_history_sorted[0].get("snapshot_at") if copytrade_history_sorted else None
 
     now_utc = datetime.now(timezone.utc)
     now = now_utc.strftime("%Y-%m-%d %H:%M UTC")
@@ -438,6 +508,7 @@ footer a:hover {{ text-decoration: underline; }}
   <div class="tabs">
     <button class="tab-btn active" data-tab="btc5m-momentum">BTC 5m (Momentum)</button>
     <button class="tab-btn" data-tab="grid-screener">Grid screener</button>
+    <button class="tab-btn" data-tab="grid-copytrade">Grid bots (Copy)</button>
   </div>
 
   <div class="tab-panel active" data-tab-panel="btc5m-momentum">
@@ -564,6 +635,60 @@ footer a:hover {{ text-decoration: underline; }}
 
   </div>
 
+  <div class="tab-panel" data-tab-panel="grid-copytrade">
+
+  <section>
+    <div class="section-head">
+      <h2>Grid bots (Binance Copy-trade) — seguimiento manual</h2>
+      <span class="section-note">5 bots elegidos a mano el 2026-08-16 de ~50 evaluados en el marketplace de Binance (sin API publica, asi que esto se actualiza cuando mandas una captura nueva) - baseline vs ultima lectura · {esc(copytrade_latest_at) if copytrade_latest_at else 'sin datos todavia'}</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Entrada vs ahora</h2>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Par</th><th>Direccion</th><th class="num">ROI entrada</th><th class="num">ROI ahora</th><th class="num">&Delta; ROI</th>
+            <th class="num">PnL entrada</th><th class="num">PnL ahora</th><th class="num">&Delta; PnL</th><th class="num">MDD 7D</th><th>Ultima lectura</th>
+          </tr>
+        </thead>
+        <tbody>
+          {"".join(render_copytrade_summary_row(market, baseline, latest) for market, baseline, latest in copytrade_summary_rows)}
+          {'<tr><td colspan="10" class="empty">Todavia no hay bots en seguimiento</td></tr>' if not copytrade_summary_rows else ''}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Historial de lecturas</h2>
+      <span class="section-note">{len(copytrade_rows)} lecturas registradas · ultimas 40 visibles</span>
+    </div>
+    <div class="table-scroll">
+      <table id="history-table-grid-copytrade">
+        <thead>
+          <tr>
+            <th>Fecha (UTC)</th><th>Par</th><th>Direccion</th><th class="num">ROI</th>
+            <th class="num">PnL</th><th class="num">MDD 7D</th><th class="num">Trades</th><th>Nota</th>
+          </tr>
+        </thead>
+        <tbody>
+          {"".join(render_copytrade_history_row(r) for r in copytrade_visible)}
+          {"".join(render_copytrade_history_row(r, extra_class="row-hidden") for r in copytrade_hidden)}
+          {'<tr><td colspan="8" class="empty">Todavia no hay lecturas registradas</td></tr>' if not copytrade_rows else ''}
+        </tbody>
+      </table>
+    </div>
+    {f'<button class="tab-btn" id="toggle-history-btn-grid-copytrade" data-count="{len(copytrade_rows)}" data-label="Ver todas">Ver todas ({len(copytrade_rows)})</button>' if copytrade_hidden else ''}
+  </section>
+
+  </div>
+
   <footer>
     <span>Generado automáticamente por un cron en VPS cada 2 min.</span>
     <a href="https://github.com/giuseppemineo685-beep/atlantis-polymarket-screening" target="_blank">Ver repositorio</a>
@@ -590,6 +715,7 @@ function wireHistoryToggle(btnId, tableId) {{
 }}
 wireHistoryToggle('toggle-history-btn-btc5m-momentum', 'history-table-btc5m-momentum');
 wireHistoryToggle('toggle-history-btn-grid-screener', 'history-table-grid-screener');
+wireHistoryToggle('toggle-history-btn-grid-copytrade', 'history-table-grid-copytrade');
 </script>
 </body>
 </html>
