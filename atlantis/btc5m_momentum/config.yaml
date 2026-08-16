@@ -54,7 +54,14 @@ risk:
   # once cumulative realized loss crosses this. Not a per-window risk
   # control (max_entry_price already bounds that) - this bounds a bad
   # STREAK, since even a real edge can string together several losses.
-  max_session_loss_usd: 20
+  # Raised from $20 to $100 2026-08-16: the $20 limit tripped after just
+  # 19 real bets (21.1% win rate, -$21.24, a 7-loss streak) and then
+  # blocked ALL further bets for ~8 hours since session_realized is
+  # cumulative over the whole log, not reset daily - not remotely enough
+  # sample to judge whether the trend-filtered signal holds up live.
+  # $100 allows roughly 50 bets worth of a losing streak before cutting
+  # off, enough to actually gather a meaningful sample.
+  max_session_loss_usd: 100
 
 paper:
   decision_log_path: outputs/btc5m_momentum_paper_decisions.csv
