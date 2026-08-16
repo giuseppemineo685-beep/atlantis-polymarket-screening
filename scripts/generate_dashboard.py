@@ -121,6 +121,38 @@ def grid_trader_position_total(pos: dict) -> Decimal:
     return total
 
 
+def render_grid_trader_levels_detail(pos: dict) -> str:
+    levels = [Decimal(x) for x in pos["levels"]]
+    open_qty = [Decimal(x) for x in pos["open_qty"]]
+    last_price = Decimal(pos["last_price"])
+    rows = []
+    for i, (level, qty) in enumerate(zip(levels, open_qty)):
+        filled = qty > 0
+        unrealized = qty * (last_price - level) if filled else Decimal(0)
+        rows.append(f"""
+          <tr>
+            <td class="dim">#{i}</td>
+            <td class="num">${level:,.8f}</td>
+            <td>{'<span class="pill pill-open">llena</span>' if filled else '<span class="pill pill-ignore">vacia</span>'}</td>
+            <td class="num">{f'{qty:.6f}' if filled else '—'}</td>
+            <td class="num {'num-pos' if unrealized >= 0 else 'num-neg'}">{f'${unrealized:+,.2f}' if filled else '—'}</td>
+          </tr>""")
+    return f"""
+    <tr>
+      <td colspan="8" style="padding:0;border-bottom:none">
+        <details>
+          <summary style="cursor:pointer;padding:8px 14px;color:var(--text-dim);font-size:12px">Ver los {len(levels)} niveles del grid</summary>
+          <div class="table-scroll" style="margin:0 14px 12px">
+            <table>
+              <thead><tr><th>#</th><th class="num">Precio nivel</th><th>Estado</th><th class="num">Cantidad</th><th class="num">No realizado</th></tr></thead>
+              <tbody>{"".join(rows)}</tbody>
+            </table>
+          </div>
+        </details>
+      </td>
+    </tr>"""
+
+
 def render_grid_trader_position_row(pos: dict) -> str:
     total = grid_trader_position_total(pos)
     open_positions = sum(1 for x in pos["open_qty"] if Decimal(x) > 0)
@@ -134,11 +166,12 @@ def render_grid_trader_position_row(pos: dict) -> str:
       <td class="num">{pos['trades']}</td>
       <td class="num {'num-pos' if total >= 0 else 'num-neg'}">${total:+,.2f}</td>
       <td class="num">${float(pos['take_profit_usd']):.0f} / -${float(pos['stop_loss_usd']):.0f}</td>
-    </tr>"""
+    </tr>{render_grid_trader_levels_detail(pos)}"""
 
 
 GRID_TRADER_ACTION_PILL = {
-    "OPEN": "pill-open", "CLOSE": "pill-closed", "DAY_REANCHOR": "pill-wait", "SKIP_REANCHOR": "pill-warn",
+    "OPEN": "pill-open", "CLOSE": "pill-closed", "DAY_REANCHOR": "pill-wait",
+    "SKIP_REANCHOR": "pill-warn", "FILL_BUY": "pill-open",
 }
 
 
@@ -150,7 +183,10 @@ def render_grid_trader_log_row(r: dict, *, extra_class: str = "") -> str:
             return 0.0
 
     action = r.get("action") or ""
-    pill_class = GRID_TRADER_ACTION_PILL.get(action, "pill-wait")
+    if action == "FILL_SELL":
+        pill_class = "pill-win" if f("realized_profit") >= 0 else "pill-loss"
+    else:
+        pill_class = GRID_TRADER_ACTION_PILL.get(action, "pill-wait")
     realized_raw = r.get("realized_profit")
     realized_cell = "—"
     realized_class = ""

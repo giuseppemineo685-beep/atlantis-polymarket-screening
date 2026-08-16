@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from atlantis.grid_trader.grid_math import GridState, build_levels, process_bar, simulate_grid
+from atlantis.grid_trader.grid_math import Fill, GridState, build_levels, process_bar, simulate_grid
 
 
 def test_build_levels_evenly_spaced():
@@ -106,3 +106,26 @@ def test_grid_state_open_positions_count():
     levels = build_levels(Decimal(100), Decimal(104), 5)
     state = GridState(levels=levels, open_qty=[Decimal(1), Decimal(0), Decimal(2), Decimal(0), Decimal(0)])
     assert state.open_positions == 2
+
+
+def test_process_bar_returns_a_fill_per_buy():
+    levels = build_levels(Decimal(100), Decimal(104), 5)
+    state = GridState(levels=levels)
+    fills = process_bar(state, Decimal(99), Decimal(101), usd_per_level=Decimal(100), fee_rate=Decimal(0))
+    assert len(fills) == 2
+    assert all(f.side == "buy" for f in fills)
+    assert {f.level_index for f in fills} == {0, 1}
+    assert {f.price for f in fills} == {Decimal(100), Decimal(101)}
+    assert all(f.profit is None for f in fills)
+
+
+def test_process_bar_returns_a_fill_for_sell_with_profit():
+    levels = build_levels(Decimal(100), Decimal(104), 5)
+    state = GridState(levels=levels)
+    process_bar(state, Decimal(100), Decimal(100), usd_per_level=Decimal(100), fee_rate=Decimal(0))
+    fills = process_bar(state, Decimal(101), Decimal(101), usd_per_level=Decimal(100), fee_rate=Decimal(0))
+    sells = [f for f in fills if f.side == "sell"]
+    assert len(sells) == 1
+    assert sells[0].level_index == 1
+    assert sells[0].price == Decimal(101)
+    assert sells[0].profit == Decimal(1)
