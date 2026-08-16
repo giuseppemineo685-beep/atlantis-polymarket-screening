@@ -11,11 +11,15 @@ flat_pos_min: 20
 flat_pos_max: 80
 flat_max_corr: 0.5
 # Real-money reference: each open position reserves usd_per_level *
-# num_levels = $400 (if every level filled at once, worst case). Capped
-# at 10 concurrent positions = $4,000 max reference capital, matching
-# the scale already tested in the walk-forward backtests (n=9-25 per
-# month on a $400/position basis).
-max_concurrent_positions: 10
+# num_levels = $400 (if every level filled at once, worst case).
+# No artificial cap - raised 2026-08-16 at the owner's request: the
+# walk-forward backtests took EVERY qualifying candidate each month
+# (n=9-57 depending on the month/universe size), so an arbitrary "top
+# 10" live cap would test a different, smaller sample than what was
+# actually validated. This is paper trading (no real capital at risk),
+# so there's no reason to cap it below what the backtest itself did -
+# 999 is just "no meaningful limit", not a real target.
+max_concurrent_positions: 999
 # How often to re-scan the universe for NEW entries - matches the
 # existing grid_screener cron cadence (15 min), no point checking more
 # often since the snapshot it reads from only refreshes that often.
