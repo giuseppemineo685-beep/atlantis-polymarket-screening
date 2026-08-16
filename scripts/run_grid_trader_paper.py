@@ -117,9 +117,18 @@ def manage_position(pos: Position, config: GridTraderConfig) -> bool:
 
     state = pos.state()
     low, high = min(pos.last_price, price), max(pos.last_price, price)
-    process_bar(state, low, high, config.usd_per_level, config.fee_rate)
+    fills = process_bar(state, low, high, config.usd_per_level, config.fee_rate)
     pos.apply_state(state)
     pos.last_price = price
+
+    for fill in fills:
+        action = "FILL_BUY" if fill.side == "buy" else "FILL_SELL"
+        reason = f"nivel #{fill.level_index} @ ${fill.price:.8f} qty={fill.qty:.6f}"
+        log_event(
+            config.log_path, timestamp=_now_str(), symbol=pos.symbol, strategy=pos.strategy,
+            action=action, reason=reason, price=str(fill.price),
+            realized_profit=str(fill.profit) if fill.profit is not None else "",
+        )
 
     total = state.total(price) if pos.strategy == "flat" else pos.trend_day_realized + state.total(price)
     if total >= pos.take_profit_usd or total <= -pos.stop_loss_usd:

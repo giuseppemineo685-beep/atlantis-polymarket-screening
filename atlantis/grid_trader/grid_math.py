@@ -60,11 +60,24 @@ class GridState:
         return sum(1 for q in self.open_qty if q > 0)
 
 
-def process_bar(state: GridState, low: Decimal, high: Decimal, usd_per_level: Decimal, fee_rate: Decimal) -> None:
+@dataclass
+class Fill:
+    side: str  # "buy" | "sell"
+    level_index: int
+    price: Decimal
+    qty: Decimal
+    fee: Decimal
+    profit: Decimal | None = None  # only set for sells
+
+
+def process_bar(state: GridState, low: Decimal, high: Decimal, usd_per_level: Decimal, fee_rate: Decimal) -> list[Fill]:
     """Mutates `state` in place: sells on already-open positions first,
     then opens new buys - see module docstring for why this order and
-    what it approximates."""
+    what it approximates. Returns every individual fill this bar
+    produced, in order - the caller (live bot) logs each one so every
+    grid match is auditable, not just an aggregate trade count."""
     n = len(state.levels)
+    fills: list[Fill] = []
 
     for i in range(n - 1):
         if state.open_qty[i] > 0:
@@ -74,10 +87,12 @@ def process_bar(state: GridState, low: Decimal, high: Decimal, usd_per_level: De
                 proceeds = qty * sell_level
                 cost = qty * state.levels[i]
                 fee = proceeds * fee_rate
-                state.realized += proceeds - cost - fee
+                profit = proceeds - cost - fee
+                state.realized += profit
                 state.fees += fee
                 state.open_qty[i] = Decimal(0)
                 state.trades += 1
+                fills.append(Fill(side="sell", level_index=i + 1, price=sell_level, qty=qty, fee=fee, profit=profit))
 
     for i in range(n - 1):
         if state.open_qty[i] == 0:
@@ -88,6 +103,9 @@ def process_bar(state: GridState, low: Decimal, high: Decimal, usd_per_level: De
                 state.open_qty[i] = qty
                 state.fees += fee
                 state.trades += 1
+                fills.append(Fill(side="buy", level_index=i, price=level, qty=qty, fee=fee))
+
+    return fills
 
 
 @dataclass
