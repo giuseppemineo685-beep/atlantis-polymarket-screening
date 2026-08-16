@@ -222,10 +222,62 @@ el gate+stop-loss reduce el dano, no lo elimina - correr muchos grids
 "planos" simultaneos durante una correccion de BTC sigue siendo un
 riesgo real, solo mas chico que sin proteccion.
 
+## Filtro de calidad para flat: que SI predice el resultado
+
+El dueno pregunto (2026-08-16) si "tomar los mejores" (por score) ayuda
+dado que invertir en 47-57 de 100 pares simultaneos es mucho capital.
+Primer intento: subir el umbral del score compuesto del screener manual
+(volatilidad + posicion + liquidez + correlacion, 0-100). Resultado:
+**no ayudo** - con score>=85 (muy estricto, solo 18 candidatos de 100)
+el ROI se quedo igual (~1.25-1.48%) y el peor caso del mes
+(BCHUSDT, -$120.53) seguia estando ahi con score>=85. La correlacion
+del score compuesto con el resultado real (121 posiciones, may-jun-jul
+2026) fue **+0.029 - practicamente cero**.
+
+Se probo cada componente del score por separado contra el resultado
+real. Dos SI mostraron señal:
+
+| Feature | Correlacion con ROI real |
+|---|---|
+| Score compuesto | +0.029 (nada) |
+| Posicion en rango (30d) | +0.108 |
+| Volatilidad diaria % | +0.109 |
+| Liquidez (volumen 24h) | -0.098 |
+| Efficiency Ratio | -0.162 |
+| **Correlacion con BTC** | **-0.219** |
+
+Los dos filtros con señal real, combinados (posicion 20-80% del rango +
+correlacion absoluta con BTC <0.5):
+
+| Filtro | n (may-jun-jul) | ROI medio | Win rate |
+|---|---|---|---|
+| Sin filtro (solo regimen=rango) | 121 | 0.69% | 59.5% |
+| Posicion 20-80% | 87 | 1.62% | 65.5% |
+| **Posicion 20-80% + `\|corr_BTC\|`<0.5** | 61 | **2.66%** | **70.5%** |
+
+**Validado en abril como holdout genuino** (mes NO usado para encontrar
+el filtro - la misma disciplina que ya se aplico una vez con el bot de
+momentum, para no calibrar y validar contra los mismos datos):
+
+| Abril 2026 | n | Win rate | ROI |
+|---|---|---|---|
+| Sin filtro de correlacion | 30 | 86.7% | 6.26% |
+| **Con filtro (`\|corr_BTC\|`<0.5)** | 9 | **100%** | **10.2%** |
+
+El filtro sostuvo la mejora en datos nuevos - no es sobreajuste al
+periodo de calibracion. Muestra chica en el holdout (n=9), asi que la
+magnitud exacta (10.2%) hay que tomarla con cautela, pero la direccion
+(mejora, no empeora) se repite.
+
+**Nuevo default de `scripts/backtest_grid_walkforward.py`**:
+`--flat-min-score 0` (desactivado, no predice nada) +
+`--flat-pos-range 20,80` + `--flat-max-corr 0.5`.
+
 ## Limitaciones conocidas (dichas explicitamente, no escondidas)
 
-- Solo 2 meses calendario probados con muestra grande (jun, jul 2026).
-  No se sabe si generaliza a mas meses/regimenes de mercado.
+- 4 meses calendario probados en total (abr, may, jun, jul 2026), pero
+  solo abril fue un holdout genuino del filtro de correlacion - may/jun/jul
+  se usaron para encontrarlo. Sigue sin probarse en mas meses/regimenes.
 - Trend grid v1 es long-only (candidatos bajistas quedan afuera - en
   junio esto excluyo 2-5 simbolos segun la ventana).
 - El reanclaje diario del trend grid no migra posiciones entre dias
@@ -241,13 +293,16 @@ riesgo real, solo mas chico que sin proteccion.
 ## Como correr esto de nuevo
 
 ```bash
-# Walk-forward completo, config final (gate activo + stop-loss 35% son default)
+# Walk-forward completo, config final (gate + stop-loss 35% + filtro pos/corr son default)
 python3 scripts/backtest_grid_walkforward.py --lookback-days 30 --forward-days 30 --universe-size 100 --usd-per-level 20 --take-profit-pct 10
 
-# Desactivar el stop-loss o el gate para comparar
-python3 scripts/backtest_grid_walkforward.py --lookback-days 30 --forward-days 30 --universe-size 100 --stop-loss-pct '' --no-btc-gate
+# Desactivar el stop-loss, el gate, o el filtro de correlacion para comparar
+python3 scripts/backtest_grid_walkforward.py --lookback-days 30 --forward-days 30 --universe-size 100 --stop-loss-pct '' --no-btc-gate --flat-max-corr 1.0
 
-# Backtest ad-hoc de un solo simbolo/estrategia (sin walk-forward, sin gate/stop-loss)
+# Recolectar features crudas + resultado en un CSV (para re-analizar correlaciones con mas meses)
+python3 scripts/backtest_grid_walkforward.py --lookback-days 30 --forward-days 30 --universe-size 100 --flat-min-score 0 --flat-max-corr 1.0 --csv-out outputs/grid_flat_features.csv
+
+# Backtest ad-hoc de un solo simbolo/estrategia (sin walk-forward, sin gate/stop-loss/filtros)
 python3 scripts/backtest_grid.py flat HYPEUSDT --days 14 --usd-per-level 20
 python3 scripts/backtest_grid.py trend HUSDT --days 14 --usd-per-level 20
 ```
@@ -255,13 +310,13 @@ python3 scripts/backtest_grid.py trend HUSDT --days 14 --usd-per-level 20
 ## Estado y proximos pasos
 
 - **Estado actual: solo backtest, nada corriendo en paper ni en real.**
-- Confirmado 2026-08-16: gate de BTC + stop-loss 35% como configuracion
-  base para lo que sigue.
-- Pendiente: probar mas meses/ventanas para tener mas confianza que
-  jun/jul.
+- Confirmado 2026-08-16: gate de BTC + stop-loss 35% + filtro
+  posicion 20-80% + correlacion BTC <0.5 como configuracion base.
+- Pendiente: probar mas meses para seguir confirmando el filtro de
+  correlacion (solo abril fue holdout genuino hasta ahora).
 - Pendiente: decidir si pasar a paper trading con esta configuracion.
 - Pendiente (si se quiere soporte para tendencias bajistas): motor de
   fills espejado (short) en `grid_math.py`.
-- Pendiente (opcional, no bloqueante): aplicar el stop-loss/gate
+- Pendiente (opcional, no bloqueante): aplicar el stop-loss/gate/filtros
   tambien a `scripts/backtest_grid.py` (el backtest ad-hoc de un solo
   simbolo todavia no los tiene, solo el walk-forward).
