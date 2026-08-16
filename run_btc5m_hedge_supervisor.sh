@@ -16,3 +16,7 @@ pgrep -f 'scripts/run_btc5m_momentum_paper_trading.py' > /dev/null ||   nohup py
 # MINIMUM price observed across the whole window, which a live
 # first-crossing trigger can never actually capture). Code and data
 # left in place, just not auto-started anymore.
+# grid_trader (flat + trend, one bot) started 2026-08-16 - see
+# docs/GRID_TRADER_STRATEGIES.md for the full backtest derivation
+# (4 real months, walk-forward, no look-ahead) of every threshold used.
+pgrep -f 'scripts/run_grid_trader_paper.py' > /dev/null ||   nohup python3 -u scripts/run_grid_trader_paper.py > /var/log/atlantis-grid-trader.log 2>&1 &
