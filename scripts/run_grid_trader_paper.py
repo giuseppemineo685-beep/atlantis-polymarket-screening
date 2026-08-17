@@ -178,8 +178,11 @@ def scan_for_new_entries(positions: list[Position], config: GridTraderConfig) ->
         elif regimen == "fuerte" and move_pct >= 0:
             trend_candidates.append((symbol, er))
 
-    flat_candidates.sort(key=lambda c: c[1], reverse=True)
-    trend_candidates.sort(key=lambda c: c[1], reverse=True)
+    # Deliberately NOT sorted by score/ER - with max_concurrent_positions
+    # now capped (see config.yaml), ranking by score would decide who
+    # gets a slot, and score was already shown not to predict outcome
+    # (r=+0.03). Admission order stays first-qualifying-in-snapshot so
+    # the cap doesn't quietly reintroduce cherry-picking.
 
     for symbol, _score in flat_candidates:
         if slots <= 0:

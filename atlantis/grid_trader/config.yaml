@@ -12,14 +12,18 @@ flat_pos_max: 80
 flat_max_corr: 0.5
 # Real-money reference: each open position reserves usd_per_level *
 # num_levels = $400 (if every level filled at once, worst case).
-# No artificial cap - raised 2026-08-16 at the owner's request: the
-# walk-forward backtests took EVERY qualifying candidate each month
-# (n=9-57 depending on the month/universe size), so an arbitrary "top
-# 10" live cap would test a different, smaller sample than what was
-# actually validated. This is paper trading (no real capital at risk),
-# so there's no reason to cap it below what the backtest itself did -
-# 999 is just "no meaningful limit", not a real target.
-max_concurrent_positions: 999
+# Cap reintroduced 2026-08-17 at 30, down from 999 (raised 2026-08-16).
+# The backtest classified ONCE per month and simulated forward - the
+# biggest single-month cohort was mayo's 25 flat + 1 trend. Live, the
+# screener re-scans every 15 min with no expiry, so positions just keep
+# accumulating with no natural ceiling (hit 148 concurrent within a
+# day). 30 gives a little headroom above the largest backtested cohort
+# without testing a scale we never validated. Admission stays
+# first-qualifying-in-snapshot (see scan_for_new_entries) - no
+# score-based ranking, since score was already shown not to predict
+# outcome (r=+0.03) and ranking by it under a cap would silently
+# reintroduce the cherry-picking the uncap was meant to remove.
+max_concurrent_positions: 30
 # How often to re-scan the universe for NEW entries - matches the
 # existing grid_screener cron cadence (15 min), no point checking more
 # often since the snapshot it reads from only refreshes that often.
