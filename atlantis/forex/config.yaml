@@ -34,6 +34,12 @@ poll_interval_seconds: 30
 # calibration pass before trusting the numbers at face value.
 fee_rate: 0.0002
 
+# Kill switch, required (no silent default) - true submits REAL market
+# orders to the OANDA practice (demo, no real capital) account on every
+# detected grid fill; false falls back to pure local simulation exactly
+# like before, no code change/redeploy needed to flip it.
+execute_real_orders: true
+
 screener_snapshot_path: outputs/forex_screener_snapshot.csv
 positions_path: outputs/forex_trader_positions.json
 log_path: outputs/forex_trader_paper_log.csv

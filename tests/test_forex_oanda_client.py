@@ -1,4 +1,6 @@
-from atlantis.forex.oanda_client import candles_to_klines
+from decimal import Decimal
+
+from atlantis.forex.oanda_client import OrderResult, _parse_order_response, candles_to_klines, round_units
 
 
 def test_candles_to_klines_shape_matches_binance_convention():
@@ -32,3 +34,47 @@ def test_candles_to_klines_skips_incomplete_candle():
 
 def test_candles_to_klines_empty_list():
     assert candles_to_klines([]) == []
+
+
+def test_round_units_normal_rounding_above_minimum():
+    # EUR_USD-style: precision 0, minimum 1 - well above the minimum
+    assert round_units(Decimal("19.4"), precision=0, minimum_trade_size=Decimal(1)) == Decimal(19)
+    assert round_units(Decimal("-19.6"), precision=0, minimum_trade_size=Decimal(1)) == Decimal(-20)
+
+
+def test_round_units_floors_nonzero_to_minimum_not_zero():
+    # USD_JPY-style: theoretical qty rounds to 0 whole units - must floor
+    # up to the minimum instead of silently making the order impossible.
+    assert round_units(Decimal("0.13"), precision=0, minimum_trade_size=Decimal(1)) == Decimal(1)
+    assert round_units(Decimal("-0.13"), precision=0, minimum_trade_size=Decimal(1)) == Decimal(-1)
+
+
+def test_round_units_zero_stays_zero():
+    assert round_units(Decimal(0), precision=0, minimum_trade_size=Decimal(1)) == Decimal(0)
+
+
+def test_parse_order_response_success_fill():
+    data = {
+        "orderFillTransaction": {"price": "1.13027", "units": "19", "tradeOpened": {"tradeID": "6368", "units": "19"}},
+        "lastTransactionID": "6368",
+    }
+    result = _parse_order_response(data)
+    assert result.success is True
+    assert result.filled_units == Decimal(19)
+    assert result.fill_price == Decimal("1.13027")
+    assert result.reject_reason is None
+
+
+def test_parse_order_response_reject():
+    data = {"orderRejectTransaction": {"rejectReason": "INSUFFICIENT_MARGIN"}}
+    result = _parse_order_response(data)
+    assert result.success is False
+    assert result.reject_reason == "INSUFFICIENT_MARGIN"
+    assert result.filled_units is None
+
+
+def test_parse_order_response_malformed_input_never_succeeds():
+    assert _parse_order_response(None).success is False
+    assert _parse_order_response({}).success is False
+    assert _parse_order_response({"orderFillTransaction": {"units": "19"}}).success is False  # missing price
+    assert _parse_order_response("not a dict").success is False

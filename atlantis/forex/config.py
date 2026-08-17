@@ -21,6 +21,7 @@ class ForexTraderConfig:
     scan_interval_seconds: int
     poll_interval_seconds: int
     fee_rate: Decimal
+    execute_real_orders: bool
     screener_snapshot_path: Path
     positions_path: Path
     log_path: Path
@@ -48,6 +49,7 @@ def load_config(path: Path | None = None) -> ForexTraderConfig:
         scan_interval_seconds=int(raw["scan_interval_seconds"]),
         poll_interval_seconds=int(raw["poll_interval_seconds"]),
         fee_rate=Decimal(str(raw["fee_rate"])),
+        execute_real_orders=bool(raw["execute_real_orders"]),
         screener_snapshot_path=ROOT / raw["screener_snapshot_path"],
         positions_path=ROOT / raw["positions_path"],
         log_path=ROOT / raw["log_path"],

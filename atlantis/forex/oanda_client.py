@@ -58,12 +58,47 @@ def _get(path: str, retries: int = 4):
     return None
 
 
+def _post(path: str, body: dict, retries: int = 4) -> dict | None:
+    """NOT a mirror of `_get`'s retry behavior on purpose: an order POST
+    isn't safely retriable on a timeout/connection error - the order may
+    have already reached OANDA, and a blind retry risks a real duplicate
+    order (the same class of incident already documented in
+    atlantis/polymarket/clob_client.py's own `_parse_order_response`
+    docstring). Only 429 (rate limit, request never reached the matching
+    engine) is retried. Any other HTTP error still reads and returns
+    OANDA's JSON body (usually an orderRejectTransaction with a real
+    rejectReason) instead of discarding it like `_get` does."""
+    url = f"{_base_url()}{path}"
+    payload = json.dumps(body).encode()
+    for attempt in range(retries):
+        req = urllib.request.Request(
+            url, data=payload, method="POST",
+            headers={**_headers(), "Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                time.sleep(2 ** attempt * 2)
+                continue
+            try:
+                return json.loads(e.read())
+            except (ValueError, OSError):
+                return None
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+            return None
+    return None
+
+
 @dataclass
 class InstrumentInfo:
     name: str  # e.g. "EUR_USD"
     display_name: str
     pip_location: int
     margin_rate: Decimal
+    trade_units_precision: int  # decimal places allowed for order units, typically 0 for FX
+    minimum_trade_size: Decimal
 
 
 def fetch_currency_instruments() -> list[InstrumentInfo]:
@@ -79,6 +114,8 @@ def fetch_currency_instruments() -> list[InstrumentInfo]:
         InstrumentInfo(
             name=i["name"], display_name=i["displayName"],
             pip_location=int(i["pipLocation"]), margin_rate=Decimal(i["marginRate"]),
+            trade_units_precision=int(i["tradeUnitsPrecision"]),
+            minimum_trade_size=Decimal(i["minimumTradeSize"]),
         )
         for i in data["instruments"]
         if i["type"] == "CURRENCY"
@@ -132,3 +169,94 @@ def fetch_current_price(instrument: str) -> str | None:
     complete = [c for c in candles if c.get("complete")]
     latest = complete[-1] if complete else candles[-1]
     return latest["mid"]["c"]
+
+
+@dataclass(frozen=True)
+class OrderResult:
+    success: bool
+    filled_units: Decimal | None  # signed, actual units OANDA filled
+    fill_price: Decimal | None
+    reject_reason: str | None
+    raw_response: dict | None
+    error: str | None
+
+
+def round_units(units: Decimal, precision: int, minimum_trade_size: Decimal) -> Decimal:
+    """Rounds a theoretical unit quantity to what OANDA will actually
+    accept. A nonzero quantity is never allowed to round down to literal
+    zero (that would make real orders silently impossible on any pair
+    priced above usd_per_level, e.g. JPY-quoted pairs) - it's floored up
+    to `minimum_trade_size` instead, sign preserved. Zero stays zero -
+    this never invents a trade."""
+    if units == 0:
+        return Decimal(0)
+    quantum = Decimal(1).scaleb(-precision) if precision > 0 else Decimal(1)
+    rounded = units.quantize(quantum)
+    sign = Decimal(1) if units > 0 else Decimal(-1)
+    if abs(rounded) < minimum_trade_size:
+        return sign * minimum_trade_size
+    return rounded
+
+
+def _parse_order_response(data: dict | None) -> OrderResult:
+    """Never raises, and never returns success=True on ambiguous or
+    malformed input - an unclear result must read as a failure, not be
+    guessed into a success (same principle as the Polymarket client's
+    own _parse_order_response)."""
+    if not isinstance(data, dict):
+        return OrderResult(False, None, None, None, None, error="respuesta_invalida")
+    fill = data.get("orderFillTransaction")
+    if isinstance(fill, dict) and "price" in fill and "units" in fill:
+        try:
+            return OrderResult(
+                True, filled_units=Decimal(fill["units"]), fill_price=Decimal(fill["price"]),
+                reject_reason=None, raw_response=data, error=None,
+            )
+        except (ArithmeticError, ValueError, TypeError):
+            return OrderResult(False, None, None, None, data, error="fill_no_parseable")
+    reject = data.get("orderRejectTransaction") or data.get("orderCancelTransaction")
+    if isinstance(reject, dict):
+        reason = reject.get("rejectReason") or reject.get("reason") or "desconocido"
+        return OrderResult(False, None, None, reject_reason=reason, raw_response=data, error=None)
+    return OrderResult(False, None, None, None, data, error="sin_fill_ni_reject_en_la_respuesta")
+
+
+def place_market_order(instrument: str, units: Decimal) -> OrderResult:
+    """Submits a REAL market order - practice (demo) account only, never
+    live. `units` must already be rounded by the caller via round_units
+    using that instrument's real precision/minimum; this function stays
+    mechanical, like fetch_candles."""
+    env = os.getenv("OANDA_ENV", "practice")
+    if env != "practice":
+        return OrderResult(False, None, None, None, None, error=f"bloqueado: OANDA_ENV={env}, solo 'practice' permitido")
+    account_id = os.getenv("OANDA_ACCOUNT_ID")
+    if not account_id:
+        raise RuntimeError("OANDA_ACCOUNT_ID no esta seteado - falta source .env.forex")
+    body = {
+        "order": {
+            "type": "MARKET", "instrument": instrument, "units": str(units),
+            "timeInForce": "FOK", "positionFill": "DEFAULT",
+        }
+    }
+    data = _post(f"/v3/accounts/{account_id}/orders", body)
+    return _parse_order_response(data)
+
+
+def fetch_open_position(instrument: str) -> Decimal | None:
+    """Net units currently held for `instrument` per OANDA itself - the
+    broker's own number, not local bookkeeping. Returns None (never 0)
+    if the fetch/parse fails so callers can tell "confirmed flat" apart
+    from "couldn't confirm"."""
+    account_id = os.getenv("OANDA_ACCOUNT_ID")
+    if not account_id:
+        raise RuntimeError("OANDA_ACCOUNT_ID no esta seteado - falta source .env.forex")
+    data = _get(f"/v3/accounts/{account_id}/positions/{instrument}")
+    if not data or "position" not in data:
+        return None
+    pos = data["position"]
+    try:
+        long_units = Decimal(pos["long"]["units"])
+        short_units = Decimal(pos["short"]["units"])
+    except (KeyError, ArithmeticError, ValueError, TypeError):
+        return None
+    return long_units + short_units  # short units are already negative in OANDA's own convention

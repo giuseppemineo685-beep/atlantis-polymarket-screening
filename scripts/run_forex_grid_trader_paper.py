@@ -1,5 +1,5 @@
-"""Forex grid trader - paper trading only, via an OANDA practice
-account (free demo, no real capital). Same engine as the Binance bot
+"""Forex grid trader - paper capital, via an OANDA practice account
+(free demo, no real capital at risk). Same engine as the Binance bot
 (atlantis/grid_trader/grid_math.py, position_store.py, logger.py
 reused UNCHANGED), classification via atlantis/forex/screener.py's own
 snapshot. Two things the crypto bot never needed:
@@ -10,8 +10,17 @@ snapshot. Two things the crypto bot never needed:
    - both were crypto-specific findings, not validated for forex (see
    atlantis/forex/screener.py's docstring).
 
-No credentials submit real orders - paper only, reads OANDA purely as
-a market-data source.
+When config.execute_real_orders is true (the default - see
+atlantis/forex/config.yaml), every fill process_bar detects also
+submits a REAL market order to the OANDA PRACTICE account (never live -
+place_market_order refuses to run unless OANDA_ENV=="practice"), so the
+owner can verify trades independently in their own OANDA app instead of
+just trusting this repo's dashboard. On order failure, that fill (and
+any later fill in the same batch) is rolled back locally via
+atlantis.grid_trader.grid_math.undo_fill, so local bookkeeping never
+claims a fill that didn't really happen on the broker. Setting
+execute_real_orders to false falls back to pure local simulation with
+zero other behavior changes.
 """
 
 from __future__ import annotations
@@ -28,9 +37,12 @@ sys.path.insert(0, str(ROOT))
 
 from atlantis.forex.config import ForexTraderConfig, load_config  # noqa: E402
 from atlantis.forex.market_hours import market_is_open, ok_to_open_new_position  # noqa: E402
-from atlantis.forex.oanda_client import candles_to_klines, fetch_candles, fetch_current_price  # noqa: E402
+from atlantis.forex.oanda_client import (  # noqa: E402
+    InstrumentInfo, OrderResult, candles_to_klines, fetch_candles, fetch_currency_instruments,
+    fetch_current_price, fetch_open_position, place_market_order, round_units,
+)
 from atlantis.grid_trader.flat import compute_flat_grid_bounds  # noqa: E402
-from atlantis.grid_trader.grid_math import build_levels, process_bar  # noqa: E402
+from atlantis.grid_trader.grid_math import build_levels, process_bar, undo_fill  # noqa: E402
 from atlantis.grid_trader.logger import log_event  # noqa: E402
 from atlantis.grid_trader.position_store import Position, load_positions, save_positions  # noqa: E402
 from atlantis.grid_trader.trend import compute_trend_grid_bounds  # noqa: E402
@@ -55,23 +67,55 @@ def read_screener_snapshot(path: Path) -> list[dict]:
         return list(csv.DictReader(f))
 
 
-def manage_position(pos: Position, config: ForexTraderConfig) -> bool:
-    """Same fill/exit logic as the crypto bot's manage_position - no
-    daily reanchor here yet (trend.py's daily-reanchor concept assumes
-    a 24/7 market that always has "today"; forex's weekend gap makes
-    that trickier and it's not built for forex yet, v1 scope). Returns
-    False if the position should be dropped (closed)."""
-    price_str = fetch_current_price(pos.symbol)
-    if price_str is None:
-        return True
-    price = Decimal(price_str)
+def _execute_fills_real(
+    pos: Position, state, fills: list, config: ForexTraderConfig, instruments: dict[str, InstrumentInfo],
+) -> None:
+    """Attempts a REAL market order for each fill process_bar already
+    applied to `state`. On the first failure, rolls back that fill and
+    every fill after it in the batch (see grid_math.undo_fill's
+    docstring for why trailing fills must also be undone), logs one
+    WARN, and stops - no further fills this cycle get a real order
+    attempt once one has failed."""
+    info = instruments.get(pos.symbol)
+    for k, fill in enumerate(fills):
+        theoretical_units = fill.qty if fill.side == "buy" else -fill.qty
+        if info is None:
+            result = OrderResult(False, None, None, "sin_info_de_instrumento", None, error="instrumento_desconocido")
+        else:
+            real_units = round_units(theoretical_units, info.trade_units_precision, info.minimum_trade_size)
+            result = place_market_order(pos.symbol, real_units)
 
-    state = pos.state()
-    low, high = min(pos.last_price, price), max(pos.last_price, price)
-    fills = process_bar(state, low, high, config.usd_per_level, config.fee_rate)
-    pos.apply_state(state)
-    pos.last_price = price
+        if not result.success:
+            for later_fill in fills[k:]:
+                undo_fill(state, later_fill)
+            log_event(
+                config.log_path, timestamp=_now_str(), symbol=pos.symbol, strategy=pos.strategy,
+                action="WARN_ORDEN_FALLIDA",
+                reason=f"nivel #{fill.level_index} {fill.side}: {result.reject_reason or result.error}",
+                price=str(fill.price), realized_profit="",
+            )
+            return
 
+        if fill.side == "buy":
+            # Real filled quantity can differ from the theoretical qty
+            # (round_units floors tiny/zero quantities up to the
+            # instrument's real minimum) - local bookkeeping must match
+            # what actually happened on the broker, not the theoretical
+            # target, or this defeats the whole point of the feature.
+            state.open_qty[fill.level_index] = abs(result.filled_units)
+        action = "FILL_BUY_REAL" if fill.side == "buy" else "FILL_SELL_REAL"
+        reason = (
+            f"nivel #{fill.level_index} teorico @ {fill.price:.6f} qty={fill.qty:.4f} | "
+            f"real @ {result.fill_price} qty={result.filled_units}"
+        )
+        log_event(
+            config.log_path, timestamp=_now_str(), symbol=pos.symbol, strategy=pos.strategy,
+            action=action, reason=reason, price=str(fill.price),
+            realized_profit=str(fill.profit) if fill.profit is not None else "",
+        )
+
+
+def _log_fills_paper(pos: Position, fills: list, config: ForexTraderConfig) -> None:
     for fill in fills:
         action = "FILL_BUY" if fill.side == "buy" else "FILL_SELL"
         reason = f"nivel #{fill.level_index} @ {fill.price:.6f} qty={fill.qty:.4f}"
@@ -81,12 +125,78 @@ def manage_position(pos: Position, config: ForexTraderConfig) -> bool:
             realized_profit=str(fill.profit) if fill.profit is not None else "",
         )
 
-    total = state.total(price)
-    if total >= pos.take_profit_usd or total <= -pos.stop_loss_usd:
-        reason = "take_profit" if total >= pos.take_profit_usd else "stop_loss"
+
+def _close_real(pos: Position, config: ForexTraderConfig, total: Decimal, close_reason: str) -> bool:
+    """Confirms with OANDA itself (not local bookkeeping) that the
+    broker-side position is flat before dropping local tracking - a
+    still-real position must never be silently forgotten. Returns True
+    to keep retrying next cycle, False once safe to drop."""
+    broker_units = fetch_open_position(pos.symbol)
+    if broker_units is None:
         log_event(
             config.log_path, timestamp=_now_str(), symbol=pos.symbol, strategy=pos.strategy,
-            action="CLOSE", reason=reason, price=str(price), realized_profit=str(total), trades=str(pos.trades),
+            action="WARN_CIERRE_SIN_CONFIRMAR",
+            reason="no se pudo confirmar la posicion real en OANDA, reintentando", price="", realized_profit="",
+        )
+        return True
+
+    if broker_units != 0:
+        flatten = place_market_order(pos.symbol, -broker_units)
+        if not flatten.success:
+            log_event(
+                config.log_path, timestamp=_now_str(), symbol=pos.symbol, strategy=pos.strategy,
+                action="WARN_CIERRE_SIN_CONFIRMAR",
+                reason=f"orden de cierre fallo: {flatten.reject_reason or flatten.error}, reintentando",
+                price="", realized_profit="",
+            )
+            return True
+        log_event(
+            config.log_path, timestamp=_now_str(), symbol=pos.symbol, strategy=pos.strategy,
+            action="CLOSE_REAL", reason=f"aplano posicion real: {broker_units} unidades",
+            price=str(flatten.fill_price or ""), realized_profit=str(total),
+        )
+
+    log_event(
+        config.log_path, timestamp=_now_str(), symbol=pos.symbol, strategy=pos.strategy,
+        action="CLOSE", reason=close_reason, price=str(pos.last_price), realized_profit=str(total), trades=str(pos.trades),
+    )
+    return False
+
+
+def manage_position(pos: Position, config: ForexTraderConfig, instruments: dict[str, InstrumentInfo]) -> bool:
+    """Same fill/exit logic as the crypto bot's manage_position, plus (
+    when config.execute_real_orders) a real OANDA market order per
+    detected fill - see the module docstring for the rollback/close-
+    flatten rules. No daily reanchor here yet (trend.py's daily-
+    reanchor concept assumes a 24/7 market that always has "today";
+    forex's weekend gap makes that trickier and it's not built for
+    forex yet, v1 scope). Returns False if the position should be
+    dropped (closed)."""
+    price_str = fetch_current_price(pos.symbol)
+    if price_str is None:
+        return True
+    price = Decimal(price_str)
+
+    state = pos.state()
+    low, high = min(pos.last_price, price), max(pos.last_price, price)
+    fills = process_bar(state, low, high, config.usd_per_level, config.fee_rate)
+
+    if config.execute_real_orders:
+        _execute_fills_real(pos, state, fills, config, instruments)
+    else:
+        _log_fills_paper(pos, fills, config)
+
+    pos.apply_state(state)
+    pos.last_price = price
+
+    total = state.total(price)
+    if total >= pos.take_profit_usd or total <= -pos.stop_loss_usd:
+        close_reason = "take_profit" if total >= pos.take_profit_usd else "stop_loss"
+        if config.execute_real_orders:
+            return _close_real(pos, config, total, close_reason)
+        log_event(
+            config.log_path, timestamp=_now_str(), symbol=pos.symbol, strategy=pos.strategy,
+            action="CLOSE", reason=close_reason, price=str(price), realized_profit=str(total), trades=str(pos.trades),
         )
         return False
 
@@ -190,11 +300,19 @@ def scan_for_new_entries(positions: list[Position], config: ForexTraderConfig) -
 
 def main() -> None:
     config = load_config()
-    _log("forex-trader-paper: arrancando (paper trading, sin dinero real, cuenta practice de OANDA)")
+    _log("forex-trader-paper: arrancando (capital de paper, cuenta practice de OANDA)")
     _log(
         f"config: usd_per_level=${config.usd_per_level} niveles={config.num_levels} "
         f"take_profit=${config.take_profit_usd:.2f} stop_loss=${config.stop_loss_usd:.2f}"
     )
+
+    instruments: dict[str, InstrumentInfo] = {}
+    if config.execute_real_orders:
+        _log("forex-trader: MODO ORDENES REALES activo - cada fill manda una orden real a la cuenta practice de OANDA")
+        instruments = {i.name: i for i in fetch_currency_instruments()}
+        _log(f"forex-trader: {len(instruments)} instrumentos con info de precision/minimo cargados")
+    else:
+        _log("forex-trader: modo simulacion local (execute_real_orders=false), sin ordenes reales")
 
     last_scan = 0.0
     while True:
@@ -204,9 +322,17 @@ def main() -> None:
         if is_open:
             remaining = []
             for pos in positions:
-                keep = manage_position(pos, config)
+                keep = manage_position(pos, config, instruments)
                 if keep:
                     remaining.append(pos)
+                # Saved after EACH position, not batched to end-of-loop:
+                # once a fill can trigger a real order, a crash before
+                # persisting would mean forgetting a real fill exists -
+                # on restart that could double-buy for real, or leave a
+                # real position permanently orphaned. See plan for why
+                # this changed from the crypto bot's pure-batch save.
+                save_positions(config.positions_path, remaining)
+
             positions = remaining
 
             if time.time() - last_scan >= config.scan_interval_seconds:

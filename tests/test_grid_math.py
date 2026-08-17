@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from atlantis.grid_trader.grid_math import Fill, GridState, build_levels, process_bar, simulate_grid
+from atlantis.grid_trader.grid_math import Fill, GridState, build_levels, process_bar, simulate_grid, undo_fill
 
 
 def test_build_levels_evenly_spaced():
@@ -129,3 +129,53 @@ def test_process_bar_returns_a_fill_for_sell_with_profit():
     assert sells[0].level_index == 1
     assert sells[0].price == Decimal(101)
     assert sells[0].profit == Decimal(1)
+
+
+def test_undo_fill_reverses_a_buy():
+    levels = build_levels(Decimal(100), Decimal(104), 5)
+    state = GridState(levels=levels)
+    fills = process_bar(state, Decimal(100), Decimal(100), usd_per_level=Decimal(100), fee_rate=Decimal("0.01"))
+    assert state.open_qty[0] > 0
+    assert state.fees > 0
+    assert state.trades == 1
+    undo_fill(state, fills[0])
+    assert state.open_qty[0] == Decimal(0)
+    assert state.fees == Decimal(0)
+    assert state.trades == 0
+
+
+def test_undo_fill_on_sell_restores_origin_level_not_destination():
+    """Regression test for the off-by-one bug found in design review:
+    Fill.level_index for a sell is the DESTINATION level (i+1) - undoing
+    at level_index itself would clobber the fresh rebuy that opens there
+    in the same bar, instead of restoring the ORIGIN level (i) that the
+    sell actually emptied."""
+    levels = build_levels(Decimal(100), Decimal(104), 5)
+    state = GridState(levels=levels)
+    process_bar(state, Decimal(100), Decimal(100), usd_per_level=Decimal(100), fee_rate=Decimal(0))
+    fills = process_bar(state, Decimal(101), Decimal(101), usd_per_level=Decimal(100), fee_rate=Decimal(0))
+    sell = next(f for f in fills if f.side == "sell")
+    rebuy_qty_at_level_1 = state.open_qty[1]
+    assert sell.level_index == 1  # destination, not origin
+    assert state.open_qty[0] == Decimal(0)  # origin, emptied by the sell
+
+    undo_fill(state, sell)
+
+    assert state.open_qty[0] == sell.qty  # origin restored
+    assert state.open_qty[1] == rebuy_qty_at_level_1  # the separate rebuy fill, untouched
+    assert state.realized == Decimal(0)
+
+
+def test_undo_fill_batch_reproduces_pre_call_state_for_sell_then_rebuy():
+    levels = build_levels(Decimal(100), Decimal(104), 5)
+    state = GridState(levels=levels)
+    process_bar(state, Decimal(100), Decimal(100), usd_per_level=Decimal(100), fee_rate=Decimal("0.01"))
+    snapshot = (list(state.open_qty), state.realized, state.fees, state.trades)
+
+    fills = process_bar(state, Decimal(101), Decimal(101), usd_per_level=Decimal(100), fee_rate=Decimal("0.01"))
+    assert len(fills) == 2  # one sell (level 0 -> 1), one rebuy at level 1
+
+    for fill in fills:
+        undo_fill(state, fill)
+
+    assert (list(state.open_qty), state.realized, state.fees, state.trades) == snapshot

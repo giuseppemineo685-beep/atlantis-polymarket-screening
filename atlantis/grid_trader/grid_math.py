@@ -108,6 +108,28 @@ def process_bar(state: GridState, low: Decimal, high: Decimal, usd_per_level: De
     return fills
 
 
+def undo_fill(state: GridState, fill: Fill) -> None:
+    """Reverses exactly the local mutation process_bar made for ONE
+    fill - only ever called by the forex live bot after a real broker
+    order for that fill fails; crypto's pure local simulation never
+    calls this, so process_bar's own behavior and every crypto backtest
+    stay unchanged.
+
+    Sell fills record level_index as the DESTINATION level (i+1, the
+    price sold INTO) - the ORIGIN level whose open_qty was actually
+    zeroed by process_bar is level_index - 1. Undoing at level_index
+    itself would clobber whatever is genuinely open one level up."""
+    if fill.side == "buy":
+        state.open_qty[fill.level_index] = Decimal(0)
+        state.fees -= fill.fee
+    else:
+        origin = fill.level_index - 1
+        state.open_qty[origin] = fill.qty
+        state.realized -= fill.profit
+        state.fees -= fill.fee
+    state.trades -= 1
+
+
 @dataclass
 class GridSimResult:
     realized_profit: Decimal
