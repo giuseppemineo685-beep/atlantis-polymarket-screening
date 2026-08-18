@@ -38,7 +38,7 @@ sys.path.insert(0, str(ROOT))
 from atlantis.forex.config import ForexTraderConfig, load_config  # noqa: E402
 from atlantis.forex.market_hours import market_is_open, ok_to_open_new_position  # noqa: E402
 from atlantis.forex.oanda_client import (  # noqa: E402
-    InstrumentInfo, OrderResult, candles_to_klines, fetch_candles, fetch_currency_instruments,
+    InstrumentInfo, OrderResult, candles_to_klines, close_trade, fetch_candles, fetch_currency_instruments,
     fetch_current_price, fetch_open_position, place_market_order, round_units,
 )
 from atlantis.grid_trader.flat import compute_flat_grid_bounds  # noqa: E402
@@ -67,25 +67,72 @@ def read_screener_snapshot(path: Path) -> list[dict]:
         return list(csv.DictReader(f))
 
 
+def _place_buy(pos: Position, fill, info: InstrumentInfo | None) -> OrderResult:
+    if info is None:
+        return OrderResult(False, None, None, "sin_info_de_instrumento", None, error="instrumento_desconocido")
+    real_units = round_units(fill.qty, info.trade_units_precision, info.minimum_trade_size)
+    return place_market_order(pos.symbol, real_units)
+
+
+def _place_sell(pos: Position, fill, config: ForexTraderConfig, info: InstrumentInfo | None) -> OrderResult:
+    """Closes the SPECIFIC OANDA trade this level's buy opened, when we
+    know its trade_id (deterministic - see close_trade's docstring for
+    why a generic sell isn't safe: OANDA matches a generic sell FIFO
+    against whichever trade on the instrument is oldest, not
+    necessarily this level's). Falls back to a generic sell, loudly
+    logged, only for positions that predate trade_id tracking."""
+    origin = fill.level_index - 1
+    trade_id = pos.trade_ids[origin] if 0 <= origin < len(pos.trade_ids) else None
+    if trade_id is not None:
+        return close_trade(trade_id)
+
+    log_event(
+        config.log_path, timestamp=_now_str(), symbol=pos.symbol, strategy=pos.strategy,
+        action="WARN_SIN_TRADE_ID",
+        reason=f"nivel #{origin}: sin trade_id registrado, usando venta generica (FIFO no determinista)",
+        price=str(fill.price), realized_profit="",
+    )
+    if info is None:
+        return OrderResult(False, None, None, "sin_info_de_instrumento", None, error="instrumento_desconocido")
+    real_units = round_units(-fill.qty, info.trade_units_precision, info.minimum_trade_size)
+    return place_market_order(pos.symbol, real_units)
+
+
 def _execute_fills_real(
     pos: Position, state, fills: list, config: ForexTraderConfig, instruments: dict[str, InstrumentInfo],
 ) -> None:
-    """Attempts a REAL market order for each fill process_bar already
-    applied to `state`. On the first failure, rolls back that fill and
-    every fill after it in the batch (see grid_math.undo_fill's
-    docstring for why trailing fills must also be undone), logs one
-    WARN, and stops - no further fills this cycle get a real order
-    attempt once one has failed."""
+    """Attempts a REAL broker action for each fill process_bar already
+    applied to `state` - buys via place_market_order (recording the
+    resulting trade_id per level), sells via close_trade against that
+    level's specific trade_id when known (see _place_sell). On the
+    first ORDINARY failure at fill index k, rolls back fills[k:] (see
+    grid_math.undo_fill's docstring for why trailing fills must also be
+    undone), logs one WARN, and stops.
+
+    TRADE_DOESNT_EXIST on a close is NOT an ordinary failure: it means
+    the broker believes that trade is already gone, so rolling back
+    would make local bookkeeping claim an open position that provably
+    isn't there - the exact failure mode this whole mechanism exists to
+    prevent. That fill is left as-is (process_bar already zeroed it)
+    and the batch continues to the next fill instead of aborting."""
     info = instruments.get(pos.symbol)
+
     for k, fill in enumerate(fills):
-        theoretical_units = fill.qty if fill.side == "buy" else -fill.qty
-        if info is None:
-            result = OrderResult(False, None, None, "sin_info_de_instrumento", None, error="instrumento_desconocido")
-        else:
-            real_units = round_units(theoretical_units, info.trade_units_precision, info.minimum_trade_size)
-            result = place_market_order(pos.symbol, real_units)
+        result = _place_buy(pos, fill, info) if fill.side == "buy" else _place_sell(pos, fill, config, info)
 
         if not result.success:
+            if fill.side == "sell" and result.reject_reason == "TRADE_DOESNT_EXIST":
+                origin = fill.level_index - 1
+                if 0 <= origin < len(pos.trade_ids):
+                    pos.trade_ids[origin] = None
+                log_event(
+                    config.log_path, timestamp=_now_str(), symbol=pos.symbol, strategy=pos.strategy,
+                    action="WARN_TRADE_YA_CERRADO",
+                    reason=f"nivel #{origin}: OANDA reporta que el trade ya no existe, no se revierte localmente",
+                    price=str(fill.price), realized_profit="",
+                )
+                continue
+
             for later_fill in fills[k:]:
                 undo_fill(state, later_fill)
             log_event(
@@ -96,6 +143,7 @@ def _execute_fills_real(
             )
             return
 
+        logged_profit = fill.profit
         if fill.side == "buy":
             # Real filled quantity can differ from the theoretical qty
             # (round_units floors tiny/zero quantities up to the
@@ -103,6 +151,20 @@ def _execute_fills_real(
             # what actually happened on the broker, not the theoretical
             # target, or this defeats the whole point of the feature.
             state.open_qty[fill.level_index] = abs(result.filled_units)
+            pos.trade_ids[fill.level_index] = result.trade_id
+        else:
+            origin = fill.level_index - 1
+            if 0 <= origin < len(pos.trade_ids):
+                pos.trade_ids[origin] = None
+            if result.realized_pl is not None:
+                # Correct local realized (drives the TP/SL check in
+                # manage_position) to match what OANDA actually booked,
+                # not the theoretical per-level estimate - this is the
+                # actual fix for the original bug (our logged profit
+                # didn't match the real account's numbers).
+                state.realized += (result.realized_pl - fill.profit)
+                logged_profit = result.realized_pl
+
         action = "FILL_BUY_REAL" if fill.side == "buy" else "FILL_SELL_REAL"
         reason = (
             f"nivel #{fill.level_index} teorico @ {fill.price:.6f} qty={fill.qty:.4f} | "
@@ -111,7 +173,7 @@ def _execute_fills_real(
         log_event(
             config.log_path, timestamp=_now_str(), symbol=pos.symbol, strategy=pos.strategy,
             action=action, reason=reason, price=str(fill.price),
-            realized_profit=str(fill.profit) if fill.profit is not None else "",
+            realized_profit=str(logged_profit) if logged_profit is not None else "",
         )
 
 

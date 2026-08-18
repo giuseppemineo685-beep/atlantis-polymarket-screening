@@ -58,21 +58,22 @@ def _get(path: str, retries: int = 4):
     return None
 
 
-def _post(path: str, body: dict, retries: int = 4) -> dict | None:
+def _post(path: str, body: dict, retries: int = 4, method: str = "POST") -> dict | None:
     """NOT a mirror of `_get`'s retry behavior on purpose: an order POST
-    isn't safely retriable on a timeout/connection error - the order may
-    have already reached OANDA, and a blind retry risks a real duplicate
-    order (the same class of incident already documented in
-    atlantis/polymarket/clob_client.py's own `_parse_order_response`
-    docstring). Only 429 (rate limit, request never reached the matching
-    engine) is retried. Any other HTTP error still reads and returns
-    OANDA's JSON body (usually an orderRejectTransaction with a real
-    rejectReason) instead of discarding it like `_get` does."""
+    (or a trade-close PUT) isn't safely retriable on a timeout/
+    connection error - the request may have already reached OANDA, and
+    a blind retry risks a real duplicate order (the same class of
+    incident already documented in atlantis/polymarket/clob_client.py's
+    own `_parse_order_response` docstring). Only 429 (rate limit,
+    request never reached the matching engine) is retried. Any other
+    HTTP error still reads and returns OANDA's JSON body (usually an
+    orderRejectTransaction with a real rejectReason) instead of
+    discarding it like `_get` does."""
     url = f"{_base_url()}{path}"
     payload = json.dumps(body).encode()
     for attempt in range(retries):
         req = urllib.request.Request(
-            url, data=payload, method="POST",
+            url, data=payload, method=method,
             headers={**_headers(), "Content-Type": "application/json"},
         )
         try:
@@ -179,6 +180,11 @@ class OrderResult:
     reject_reason: str | None
     raw_response: dict | None
     error: str | None
+    # Both added LAST, with defaults - OrderResult is constructed
+    # positionally at several call sites; inserting a field anywhere
+    # else would silently shift those calls' arguments.
+    trade_id: str | None = None  # tradeOpened.tradeID, populated on a BUY that opens a new trade
+    realized_pl: Decimal | None = None  # orderFillTransaction.pl - OANDA's own real realized P&L for this fill
 
 
 def round_units(units: Decimal, precision: int, minimum_trade_size: Decimal) -> Decimal:
@@ -208,9 +214,13 @@ def _parse_order_response(data: dict | None) -> OrderResult:
     fill = data.get("orderFillTransaction")
     if isinstance(fill, dict) and "price" in fill and "units" in fill:
         try:
+            opened = fill.get("tradeOpened")
+            trade_id = opened.get("tradeID") if isinstance(opened, dict) else None
+            realized_pl = Decimal(fill["pl"]) if "pl" in fill else None
             return OrderResult(
                 True, filled_units=Decimal(fill["units"]), fill_price=Decimal(fill["price"]),
                 reject_reason=None, raw_response=data, error=None,
+                trade_id=trade_id, realized_pl=realized_pl,
             )
         except (ArithmeticError, ValueError, TypeError):
             return OrderResult(False, None, None, None, data, error="fill_no_parseable")
@@ -239,6 +249,27 @@ def place_market_order(instrument: str, units: Decimal) -> OrderResult:
         }
     }
     data = _post(f"/v3/accounts/{account_id}/orders", body)
+    return _parse_order_response(data)
+
+
+def close_trade(trade_id: str) -> OrderResult:
+    """Closes ONE specific broker Trade in full - the deterministic
+    counterpart to place_market_order's generic sell. A generic sell
+    lets OANDA match it FIFO against whichever trade on that instrument
+    is oldest, which is NOT necessarily the specific grid level our
+    local bookkeeping intends to close (confirmed with real data: this
+    is exactly what made our locally-logged realized_profit diverge
+    from what OANDA actually books). units:"ALL" closes whatever is
+    currently open on this trade_id - it cannot exceed that trade's own
+    size, so it never touches any OTHER open trade on the instrument.
+    Practice-only guard, same as place_market_order."""
+    env = os.getenv("OANDA_ENV", "practice")
+    if env != "practice":
+        return OrderResult(False, None, None, None, None, error=f"bloqueado: OANDA_ENV={env}, solo 'practice' permitido")
+    account_id = os.getenv("OANDA_ACCOUNT_ID")
+    if not account_id:
+        raise RuntimeError("OANDA_ACCOUNT_ID no esta seteado - falta source .env.forex")
+    data = _post(f"/v3/accounts/{account_id}/trades/{trade_id}/close", {"units": "ALL"}, method="PUT")
     return _parse_order_response(data)
 
 

@@ -92,6 +92,10 @@ def test_manage_position_rolls_back_trailing_fills_on_real_order_failure(tmp_pat
     assert "FILL_SELL_REAL" in log_text
     assert "WARN_ORDEN_FALLIDA" in log_text
     assert "FILL_BUY_REAL" not in log_text
+    # default _position() has no trade_ids override -> __post_init__
+    # defaults them to [None]*5, so this exercises the FIFO-fallback
+    # path, not close_trade - document that explicitly.
+    assert "WARN_SIN_TRADE_ID" in log_text
 
 
 def test_close_path_keeps_position_when_broker_position_unconfirmed(tmp_path, monkeypatch):
@@ -146,6 +150,94 @@ def test_close_path_flattens_and_drops_when_broker_confirms_position(tmp_path, m
     assert flatten_calls == [Decimal(-7)]  # flattened the opposite of the broker's reported 7
     log_text = config.log_path.read_text()
     assert "CLOSE_REAL" in log_text
+
+
+def test_sell_with_known_trade_id_closes_by_id_and_corrects_realized(tmp_path, monkeypatch):
+    """Same sell-then-rebuy scenario, but with a trade_id on record for
+    level 0: the sell must go through close_trade (not a generic sell),
+    and the real realized_pl (0.5) must REPLACE the theoretical value
+    (1, from grid_math) in pos.realized - the actual fix for the
+    original bug (our logged profit didn't match the real account)."""
+    monkeypatch.setattr(bot, "fetch_current_price", lambda symbol: "101")
+
+    close_calls = []
+
+    def fake_close_trade(trade_id):
+        close_calls.append(trade_id)
+        return OrderResult(True, filled_units=Decimal(-1), fill_price=Decimal(101),
+                            reject_reason=None, raw_response=None, error=None,
+                            trade_id=None, realized_pl=Decimal("0.5"))
+
+    buy_calls = []
+
+    def fake_place_market_order(instrument, units):
+        buy_calls.append(units)
+        return OrderResult(True, filled_units=Decimal(1), fill_price=Decimal(101),
+                            reject_reason=None, raw_response=None, error=None,
+                            trade_id="9999", realized_pl=Decimal(0))
+
+    monkeypatch.setattr(bot, "close_trade", fake_close_trade)
+    monkeypatch.setattr(bot, "place_market_order", fake_place_market_order)
+
+    pos = _position(trade_ids=["7001", None, None, None, None])
+    config = _config(tmp_path, execute_real_orders=True)
+    info = InstrumentInfo(
+        name="EUR_USD", display_name="EUR/USD", pip_location=-4, margin_rate=Decimal("0.02"),
+        trade_units_precision=0, minimum_trade_size=Decimal(1),
+    )
+    keep = bot.manage_position(pos, config, instruments={"EUR_USD": info})
+
+    assert keep is True
+    assert close_calls == ["7001"]  # closed the SPECIFIC trade, not a generic FIFO sell
+    assert len(buy_calls) == 1  # the rebuy at level 1 still goes through place_market_order
+    assert pos.trade_ids[0] is None  # cleared after the close
+    assert pos.trade_ids[1] == "9999"  # recorded from the rebuy
+    assert pos.realized == Decimal("0.5")  # real pl (0.5), not the theoretical value (1)
+
+    log_text = config.log_path.read_text()
+    assert "WARN_SIN_TRADE_ID" not in log_text  # trade_id was known - no fallback needed
+
+
+def test_trade_doesnt_exist_on_close_does_not_rollback_and_continues_batch(tmp_path, monkeypatch):
+    """The broker saying a trade is already gone must NOT be treated
+    like an ordinary order failure - rolling back would make local
+    bookkeeping claim an open position that provably isn't there. The
+    fill stays as process_bar already left it, and the batch continues
+    to the next fill instead of aborting."""
+    monkeypatch.setattr(bot, "fetch_current_price", lambda symbol: "101")
+    monkeypatch.setattr(
+        bot, "close_trade",
+        lambda trade_id: OrderResult(False, None, None, "TRADE_DOESNT_EXIST", None, error=None),
+    )
+
+    buy_calls = []
+
+    def fake_place_market_order(instrument, units):
+        buy_calls.append(units)
+        return OrderResult(True, filled_units=Decimal(1), fill_price=Decimal(101),
+                            reject_reason=None, raw_response=None, error=None,
+                            trade_id="9999", realized_pl=Decimal(0))
+
+    monkeypatch.setattr(bot, "place_market_order", fake_place_market_order)
+
+    pos = _position(trade_ids=["7001", None, None, None, None])
+    config = _config(tmp_path, execute_real_orders=True)
+    info = InstrumentInfo(
+        name="EUR_USD", display_name="EUR/USD", pip_location=-4, margin_rate=Decimal("0.02"),
+        trade_units_precision=0, minimum_trade_size=Decimal(1),
+    )
+    keep = bot.manage_position(pos, config, instruments={"EUR_USD": info})
+
+    assert keep is True
+    assert pos.open_qty[0] == Decimal(0)  # left as process_bar set it - NOT rolled back
+    assert pos.trade_ids[0] is None  # cleared even though the close itself failed
+    assert len(buy_calls) == 1  # batch continued past the failure - the rebuy still happened
+    assert pos.open_qty[1] > 0
+    assert pos.realized == Decimal(1)  # uncorrected (no real pl available) - theoretical value stands
+
+    log_text = config.log_path.read_text()
+    assert "WARN_TRADE_YA_CERRADO" in log_text
+    assert "WARN_ORDEN_FALLIDA" not in log_text
 
 
 def test_close_path_keeps_position_when_flatten_order_fails(tmp_path, monkeypatch):

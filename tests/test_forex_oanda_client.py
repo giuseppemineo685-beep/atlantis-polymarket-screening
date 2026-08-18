@@ -1,6 +1,7 @@
 from decimal import Decimal
 
-from atlantis.forex.oanda_client import OrderResult, _parse_order_response, candles_to_klines, round_units
+import atlantis.forex.oanda_client as oanda_client
+from atlantis.forex.oanda_client import OrderResult, _parse_order_response, candles_to_klines, close_trade, round_units
 
 
 def test_candles_to_klines_shape_matches_binance_convention():
@@ -55,7 +56,10 @@ def test_round_units_zero_stays_zero():
 
 def test_parse_order_response_success_fill():
     data = {
-        "orderFillTransaction": {"price": "1.13027", "units": "19", "tradeOpened": {"tradeID": "6368", "units": "19"}},
+        "orderFillTransaction": {
+            "price": "1.13027", "units": "19", "pl": "0.0000",
+            "tradeOpened": {"tradeID": "6368", "units": "19"},
+        },
         "lastTransactionID": "6368",
     }
     result = _parse_order_response(data)
@@ -63,6 +67,30 @@ def test_parse_order_response_success_fill():
     assert result.filled_units == Decimal(19)
     assert result.fill_price == Decimal("1.13027")
     assert result.reject_reason is None
+    assert result.trade_id == "6368"
+    assert result.realized_pl == Decimal("0.0000")
+
+
+def test_parse_order_response_close_fixture_extracts_realized_pl_no_trade_id():
+    # real close-trade response shape: no tradeOpened, a real pl, and a
+    # tradesClosed array instead
+    data = {
+        "orderFillTransaction": {
+            "price": "24.18050", "units": "-1", "pl": "-0.0007",
+            "tradesClosed": [{"tradeID": "2337", "units": "-1", "realizedPL": "-0.0007"}],
+        },
+    }
+    result = _parse_order_response(data)
+    assert result.success is True
+    assert result.realized_pl == Decimal("-0.0007")
+    assert result.trade_id is None
+
+
+def test_parse_order_response_missing_pl_leaves_realized_pl_none():
+    data = {"orderFillTransaction": {"price": "1.1", "units": "10"}}  # no "pl" key at all
+    result = _parse_order_response(data)
+    assert result.success is True
+    assert result.realized_pl is None
 
 
 def test_parse_order_response_reject():
@@ -78,3 +106,31 @@ def test_parse_order_response_malformed_input_never_succeeds():
     assert _parse_order_response({}).success is False
     assert _parse_order_response({"orderFillTransaction": {"units": "19"}}).success is False  # missing price
     assert _parse_order_response("not a dict").success is False
+
+
+def test_close_trade_uses_put_units_all_and_right_path(monkeypatch):
+    monkeypatch.setenv("OANDA_ENV", "practice")
+    monkeypatch.setenv("OANDA_ACCOUNT_ID", "101-000-000-001")
+    monkeypatch.setenv("OANDA_API_TOKEN", "fake-token")
+    captured = {}
+
+    def fake_post(path, body, retries=4, method="POST"):
+        captured["path"] = path
+        captured["body"] = body
+        captured["method"] = method
+        return {"orderFillTransaction": {"price": "1.1", "units": "-5", "pl": "0.01"}}
+
+    monkeypatch.setattr(oanda_client, "_post", fake_post)
+    result = close_trade("7001")
+
+    assert captured["method"] == "PUT"
+    assert captured["path"] == "/v3/accounts/101-000-000-001/trades/7001/close"
+    assert captured["body"] == {"units": "ALL"}
+    assert result.success is True
+
+
+def test_close_trade_blocked_outside_practice(monkeypatch):
+    monkeypatch.setenv("OANDA_ENV", "live")
+    result = close_trade("7001")
+    assert result.success is False
+    assert "practice" in result.error

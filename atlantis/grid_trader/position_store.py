@@ -29,6 +29,15 @@ class Position:
     trend_anchor_date: str | None = None  # only for strategy=="trend" - which day's grid is live
     trend_day_realized: Decimal = Decimal(0)  # cumulative pnl across days for THIS position's trend take-profit/stop-loss check
     events: list[str] = field(default_factory=list)  # short human-readable log, most recent last
+    # Which OANDA Trade ID corresponds to each level's real order, forex-
+    # only broker metadata - crypto (pure local simulation) never touches
+    # this. Deliberately outside GridState/state()/apply_state(): it's
+    # not part of the pure grid simulation crypto also uses.
+    trade_ids: list[str | None] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if not self.trade_ids:
+            self.trade_ids = [None] * len(self.levels)
 
     def state(self) -> GridState:
         return GridState(
@@ -72,6 +81,7 @@ def _from_jsonable(d: dict) -> Position:
         trend_anchor_date=d.get("trend_anchor_date"),
         trend_day_realized=Decimal(d.get("trend_day_realized", "0")),
         events=d.get("events", []),
+        trade_ids=d.get("trade_ids", [None] * len(d["levels"])),
     )
 
 
