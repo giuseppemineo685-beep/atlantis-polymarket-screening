@@ -174,6 +174,15 @@ def main() -> None:
     forex_trader_closed = [r for r in forex_trader_log_rows if r.get("action") == "CLOSE"]
     forex_trader_closed_wins = [r for r in forex_trader_closed if float(r.get("realized_profit") or 0) > 0]
     forex_trader_closed_pnl = sum(float(r.get("realized_profit") or 0) for r in forex_trader_closed)
+    # "Cerradas"/"PnL realizado (cerradas)" above only count a position's
+    # FULL close (overall take-profit/stop-loss) - with large thresholds,
+    # that can stay at 0/0 for a long time even while real profit is
+    # already accumulating from individual grid-level sells within still-
+    # open positions. This tracks that incremental profit separately so
+    # it isn't invisible while positions stay open.
+    forex_trader_fill_sells = [r for r in forex_trader_log_rows if r.get("action") == "FILL_SELL_REAL"]
+    forex_trader_fill_sell_wins = [r for r in forex_trader_fill_sells if float(r.get("realized_profit") or 0) > 0]
+    forex_trader_fill_sell_pnl = sum(float(r.get("realized_profit") or 0) for r in forex_trader_fill_sells)
     forex_trader_log_visible = forex_trader_log_sorted[:40]
     forex_trader_log_hidden = forex_trader_log_sorted[40:]
 
@@ -585,6 +594,10 @@ footer a:hover {{ text-decoration: underline; }}
     <div class="stat">
       <div class="stat-label">PnL realizado (cerradas)</div>
       <div class="stat-value {'pos' if forex_trader_closed_pnl >= 0 else 'neg'}">${forex_trader_closed_pnl:+,.2f}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">PnL realizado (ventas de nivel, aun sin cerrar la posicion)</div>
+      <div class="stat-value {'pos' if forex_trader_fill_sell_pnl >= 0 else 'neg'}">${forex_trader_fill_sell_pnl:+,.2f} <span class="dim" style="font-size:16px">({len(forex_trader_fill_sell_wins)}/{len(forex_trader_fill_sells)} ganadas)</span></div>
     </div>
   </div>
 
