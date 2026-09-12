@@ -216,8 +216,10 @@ def render_recent_table(recent):
         elapsed_s = f"{elapsed}s" if elapsed is not None else "—"
         rows.append(
             f"""<tr>
-            <td class="mono-sm">{esc(fmt_trade_time(r))}</td>
-            <td>{esc(market_label(r))}</td>
+            <td>
+              <div class="mkt-name">{esc(market_label(r))}</div>
+              <div class="mkt-time mono-sm">{esc(fmt_trade_time(r))}</div>
+            </td>
             <td>{esc(r.get('side_bought',''))}</td>
             <td class="num">{r.get('price_paid',0):.3f}</td>
             <td class="num">{r.get('size',0):.1f}</td>
@@ -355,6 +357,8 @@ td {{ padding: 7px 8px; border-bottom: 1px solid var(--line); }}
 td.num {{ font-family: 'IBM Plex Mono', monospace; text-align: right; font-variant-numeric: tabular-nums; }}
 .table-scroll {{ overflow-x: auto; }}
 td.pill {{ text-align: center; }}
+.mkt-name {{ font-weight: 500; }}
+.mkt-time {{ color: var(--ash); margin-top: 1px; }}
 
 .cal-row {{ display: grid; grid-template-columns: 46px 1fr 44px 56px; align-items: center; gap: 10px; padding: 5px 0; }}
 .cal-label {{ font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem; color: var(--ash); }}
@@ -480,7 +484,7 @@ footer a {{ color: var(--ash); }}
       <div class="sub">Últimos trades de la wallet vistos por el monitor, en orden descendente.</div>
       <div class="table-scroll">
       <table>
-        <tr><th>Hora</th><th>Mercado</th><th>Lado</th><th>Precio</th><th>Tamaño</th><th>Elapsed</th><th>Chainlink @ compra</th><th>Resultado</th></tr>
+        <tr><th>Mercado</th><th>Lado</th><th>Precio</th><th>Tamaño</th><th>Elapsed</th><th>Chainlink @ compra</th><th>Resultado</th></tr>
         {render_recent_table(stats['recent'])}
       </table>
       </div>
