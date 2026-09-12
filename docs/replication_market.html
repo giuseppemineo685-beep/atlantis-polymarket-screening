@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Replication Market</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --paper: #f6f3ec;
+  --ink: #1b1d22;
+  --ash: #6b6455;
+  --line: #e2ddd0;
+  --surface: #ffffff;
+  --accent: #c8912f;
+  --accent-soft: rgba(200,145,47,0.12);
+  --good: #2f8a5b;
+  --good-soft: rgba(47,138,91,0.12);
+  --bad: #b8404f;
+  --bad-soft: rgba(184,64,79,0.12);
+  --pending: #8a8272;
+  --pending-soft: rgba(138,130,114,0.14);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #15161a;
+    --ink: #ece7db;
+    --ash: #a39a86;
+    --line: #2c2d33;
+    --surface: #1d1e24;
+    --accent: #e0a83f;
+    --accent-soft: rgba(224,168,63,0.14);
+    --good: #4cb583;
+    --good-soft: rgba(76,181,131,0.14);
+    --bad: #e0687a;
+    --bad-soft: rgba(224,104,122,0.14);
+    --pending: #9a9282;
+    --pending-soft: rgba(154,146,130,0.16);
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #15161a;
+  --ink: #ece7db;
+  --ash: #a39a86;
+  --line: #2c2d33;
+  --surface: #1d1e24;
+  --accent: #e0a83f;
+  --accent-soft: rgba(224,168,63,0.14);
+  --good: #4cb583;
+  --good-soft: rgba(76,181,131,0.14);
+  --bad: #e0687a;
+  --bad-soft: rgba(224,104,122,0.14);
+  --pending: #9a9282;
+  --pending-soft: rgba(154,146,130,0.16);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-size: 15px; line-height: 1.5;
+}
+.mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.mono-sm { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: 0.85em; }
+h1, h2, h3 { font-family: 'Fraunces', Georgia, serif; text-wrap: balance; margin: 0; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 28px 20px 60px; }
+
+.masthead {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; padding-bottom: 20px; border-bottom: 1px solid var(--line);
+  margin-bottom: 24px;
+}
+.masthead-id { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.masthead h1 { font-size: 1.65rem; font-weight: 600; }
+.wallet-addr { color: var(--ash); font-size: 0.8rem; }
+.status-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
+  border-radius: 999px; font-size: 0.78rem; font-weight: 500; white-space: nowrap;
+}
+.pill.good { background: var(--good-soft); color: var(--good); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); }
+.pill.pending { background: var(--pending-soft); color: var(--pending); }
+.pill.accent { background: var(--accent-soft); color: var(--accent); }
+.pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.updated { color: var(--ash); font-size: 0.78rem; }
+
+.stat-strip {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1px; background: var(--line); border: 1px solid var(--line);
+  border-radius: 10px; overflow: hidden; margin-bottom: 28px;
+}
+.stat-tile { background: var(--surface); padding: 16px 18px; }
+.stat-tile .label { color: var(--ash); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.stat-tile .value { font-family: 'IBM Plex Mono', monospace; font-size: 1.5rem; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.stat-tile .value.good { color: var(--good); }
+.stat-tile .value.bad { color: var(--bad); }
+
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 24px; }
+.tab-btn {
+  font-family: inherit; font-size: 0.88rem; font-weight: 500; color: var(--ash);
+  background: none; border: none; border-bottom: 2px solid transparent;
+  padding: 10px 4px; margin-right: 20px; cursor: pointer;
+}
+.tab-btn.active { color: var(--ink); border-color: var(--accent); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; margin-bottom: 20px; }
+.card h2 { font-size: 1.05rem; font-weight: 600; margin-bottom: 4px; }
+.card .sub { color: var(--ash); font-size: 0.82rem; margin-bottom: 16px; }
+.muted { color: var(--ash); font-size: 0.85rem; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 720px) { .grid-2 { grid-template-columns: 1fr; } }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+th { text-align: left; color: var(--ash); font-weight: 500; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+td { padding: 7px 8px; border-bottom: 1px solid var(--line); }
+td.num { font-family: 'IBM Plex Mono', monospace; text-align: right; font-variant-numeric: tabular-nums; }
+.table-scroll { overflow-x: auto; }
+td.pill { text-align: center; }
+
+.cal-row { display: grid; grid-template-columns: 46px 1fr 44px 56px; align-items: center; gap: 10px; padding: 5px 0; }
+.cal-label { font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem; color: var(--ash); }
+.cal-track { position: relative; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+.cal-fill { position: absolute; top: 0; left: 0; height: 100%; border-radius: 4px; }
+.cal-fill.fair { background: var(--pending-soft); border-right: 2px dashed var(--ash); }
+.cal-fill.real { background: var(--accent); opacity: 0.75; height: 4px; top: 2px; }
+.cal-n { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--ash); text-align: right; }
+.cal-edge { font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem; text-align: right; font-weight: 600; }
+.cal-edge.good { color: var(--good); }
+.cal-edge.bad { color: var(--bad); }
+
+.tm-row { display: grid; grid-template-columns: 90px 1fr 34px; align-items: center; gap: 10px; padding: 4px 0; }
+.tm-label { font-size: 0.76rem; color: var(--ash); }
+.tm-track { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+.tm-fill { height: 100%; background: var(--accent); border-radius: 4px; }
+.tm-n { font-family: 'IBM Plex Mono', monospace; font-size: 0.76rem; text-align: right; color: var(--ash); }
+
+.banner {
+  display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px;
+  border-radius: 10px; background: var(--accent-soft); border: 1px solid var(--accent);
+  margin-bottom: 20px; font-size: 0.86rem;
+}
+.banner b { color: var(--accent); }
+
+.replica-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 14px; margin-bottom: 20px; }
+.replica-tile { border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; background: var(--surface); }
+.replica-tile .n { font-family: 'IBM Plex Mono', monospace; font-size: 1.9rem; font-weight: 600; }
+.replica-tile .l { color: var(--ash); font-size: 0.76rem; margin-top: 2px; }
+
+footer { margin-top: 32px; color: var(--ash); font-size: 0.78rem; border-top: 1px solid var(--line); padding-top: 16px; }
+footer a { color: var(--ash); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <div class="masthead-id">
+      <h1>The Replication Market</h1>
+      <span class="wallet-addr mono-sm">wallet 0xeebde7&hellip;6eba30 &middot; alias &ldquo;Bonereaper&rdquo;</span>
+    </div>
+    <div class="status-row">
+      <span class="pill accent"><span class="pill-dot"></span> tracking</span>
+      <span class="pill pending"><span class="pill-dot"></span> modo papel</span>
+      <span class="updated">actualizado 2026-09-12 10:59:33 UTC</span>
+    </div>
+  </div>
+
+  <div class="stat-strip">
+    <div class="stat-tile"><div class="label">Trades registrados</div><div class="value">123</div></div>
+    <div class="stat-tile"><div class="label">Resueltos</div><div class="value">87</div></div>
+    <div class="stat-tile"><div class="label">Win rate (real)</div><div class="value good">64.4%</div></div>
+    <div class="stat-tile"><div class="label">PnL de la muestra</div><div class="value good">$460.69</div></div>
+    <div class="stat-tile"><div class="label">Horas cubiertas</div><div class="value">0.6h</div></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="analytics">Analítica</button>
+    <button class="tab-btn" data-tab="replica">Réplica en vivo</button>
+  </div>
+
+  <div class="tab-panel active" data-tab-panel="analytics">
+
+    <div class="card">
+      <h2>Calibración: precio pagado vs. win rate real</h2>
+      <div class="sub">Barra tenue = probabilidad implícita por el precio pagado &middot; barra sólida = win rate real observado. Edge positivo = gana más de lo que el precio implicaba.</div>
+      
+        <div class="cal-row">
+          <div class="cal-label">0.0¢</div>
+          <div class="cal-track">
+            <div class="cal-fill fair" style="width:0.0%"></div>
+            <div class="cal-fill real" style="width:0.0%"></div>
+          </div>
+          <div class="cal-n">n=2</div>
+          <div class="cal-edge good">+0.0pp</div>
+        </div>
+
+        <div class="cal-row">
+          <div class="cal-label">0.1¢</div>
+          <div class="cal-track">
+            <div class="cal-fill fair" style="width:10.0%"></div>
+            <div class="cal-fill real" style="width:0.0%"></div>
+          </div>
+          <div class="cal-n">n=1</div>
+          <div class="cal-edge bad">-10.0pp</div>
+        </div>
+
+        <div class="cal-row">
+          <div class="cal-label">0.2¢</div>
+          <div class="cal-track">
+            <div class="cal-fill fair" style="width:20.0%"></div>
+            <div class="cal-fill real" style="width:0.0%"></div>
+          </div>
+          <div class="cal-n">n=1</div>
+          <div class="cal-edge bad">-20.0pp</div>
+        </div>
+
+        <div class="cal-row">
+          <div class="cal-label">0.3¢</div>
+          <div class="cal-track">
+            <div class="cal-fill fair" style="width:30.0%"></div>
+            <div class="cal-fill real" style="width:0.0%"></div>
+          </div>
+          <div class="cal-n">n=3</div>
+          <div class="cal-edge bad">-30.0pp</div>
+        </div>
+
+        <div class="cal-row">
+          <div class="cal-label">0.4¢</div>
+          <div class="cal-track">
+            <div class="cal-fill fair" style="width:40.0%"></div>
+            <div class="cal-fill real" style="width:20.0%"></div>
+          </div>
+          <div class="cal-n">n=10</div>
+          <div class="cal-edge bad">-20.0pp</div>
+        </div>
+
+        <div class="cal-row">
+          <div class="cal-label">0.5¢</div>
+          <div class="cal-track">
+            <div class="cal-fill fair" style="width:50.0%"></div>
+            <div class="cal-fill real" style="width:50.0%"></div>
+          </div>
+          <div class="cal-n">n=24</div>
+          <div class="cal-edge good">+0.0pp</div>
+        </div>
+
+        <div class="cal-row">
+          <div class="cal-label">0.6¢</div>
+          <div class="cal-track">
+            <div class="cal-fill fair" style="width:60.0%"></div>
+            <div class="cal-fill real" style="width:55.6%"></div>
+          </div>
+          <div class="cal-n">n=9</div>
+          <div class="cal-edge bad">-4.4pp</div>
+        </div>
+
+        <div class="cal-row">
+          <div class="cal-label">0.7¢</div>
+          <div class="cal-track">
+            <div class="cal-fill fair" style="width:70.0%"></div>
+            <div class="cal-fill real" style="width:100.0%"></div>
+          </div>
+          <div class="cal-n">n=10</div>
+          <div class="cal-edge good">+30.0pp</div>
+        </div>
+
+        <div class="cal-row">
+          <div class="cal-label">0.8¢</div>
+          <div class="cal-track">
+            <div class="cal-fill fair" style="width:80.0%"></div>
+            <div class="cal-fill real" style="width:100.0%"></div>
+          </div>
+          <div class="cal-n">n=8</div>
+          <div class="cal-edge good">+20.0pp</div>
+        </div>
+
+        <div class="cal-row">
+          <div class="cal-label">0.9¢</div>
+          <div class="cal-track">
+            <div class="cal-fill fair" style="width:90.0%"></div>
+            <div class="cal-fill real" style="width:100.0%"></div>
+          </div>
+          <div class="cal-n">n=13</div>
+          <div class="cal-edge good">+10.0pp</div>
+        </div>
+
+        <div class="cal-row">
+          <div class="cal-label">1.0¢</div>
+          <div class="cal-track">
+            <div class="cal-fill fair" style="width:100.0%"></div>
+            <div class="cal-fill real" style="width:100.0%"></div>
+          </div>
+          <div class="cal-n">n=6</div>
+          <div class="cal-edge good">+0.0pp</div>
+        </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>Momento de compra dentro de la ventana de 5 min</h2>
+        <div class="sub">Segundos transcurridos desde la apertura del mercado hasta la compra.</div>
+        
+        <div class="tm-row">
+          <div class="tm-label">0-50s</div>
+          <div class="tm-track"><div class="tm-fill" style="width:100.0%"></div></div>
+          <div class="tm-n">51</div>
+        </div>
+
+        <div class="tm-row">
+          <div class="tm-label">50-100s</div>
+          <div class="tm-track"><div class="tm-fill" style="width:39.2%"></div></div>
+          <div class="tm-n">20</div>
+        </div>
+
+        <div class="tm-row">
+          <div class="tm-label">100-150s</div>
+          <div class="tm-track"><div class="tm-fill" style="width:51.0%"></div></div>
+          <div class="tm-n">26</div>
+        </div>
+
+        <div class="tm-row">
+          <div class="tm-label">150-200s</div>
+          <div class="tm-track"><div class="tm-fill" style="width:49.0%"></div></div>
+          <div class="tm-n">25</div>
+        </div>
+
+        <div class="tm-row">
+          <div class="tm-label">200-250s</div>
+          <div class="tm-track"><div class="tm-fill" style="width:2.0%"></div></div>
+          <div class="tm-n">1</div>
+        </div>
+
+        <div class="tm-row">
+          <div class="tm-label">250-300s</div>
+          <div class="tm-track"><div class="tm-fill" style="width:0.0%"></div></div>
+          <div class="tm-n">0</div>
+        </div>
+
+        <div class="tm-row">
+          <div class="tm-label">300s+</div>
+          <div class="tm-track"><div class="tm-fill" style="width:0.0%"></div></div>
+          <div class="tm-n">0</div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Cobertura por moneda</h2>
+        <div class="sub">Mercados &ldquo;Up or Down&rdquo; de 5 min que opera esta wallet.</div>
+        <div class="table-scroll">
+        <table>
+          <tr><th>Moneda</th><th>Trades</th><th>Resueltos</th><th>Win%</th></tr>
+          <tr><td>Bitcoin</td><td class="num">54</td>
+            <td class="num">31</td><td class="num">64.5%</td></tr>
+<tr><td>Solana</td><td class="num">42</td>
+            <td class="num">35</td><td class="num">65.7%</td></tr>
+<tr><td>XRP</td><td class="num">20</td>
+            <td class="num">16</td><td class="num">68.8%</td></tr>
+<tr><td>Ethereum</td><td class="num">7</td>
+            <td class="num">5</td><td class="num">40.0%</td></tr>
+        </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Metodología</h2>
+      <div class="sub" style="margin-bottom:0">
+        Precio real: WebSocket público <code class="mono-sm">wss://ws-live-data.polymarket.com</code>,
+        topic <code class="mono-sm">crypto_prices_chainlink</code> &mdash; el mismo feed de Chainlink que
+        Polymarket usa para resolver estos mercados, capturado en el instante exacto de cada compra
+        (15 de 123 trades con precio capturado hasta ahora).
+        Resolución real por mercado vía <code class="mono-sm">clob.polymarket.com/markets/&#123;conditionId&#125;</code>.
+        Corriendo desde 0.6h &mdash; objetivo mínimo 24h antes de sacar conclusiones firmes.
+      </div>
+    </div>
+
+  </div>
+
+  <div class="tab-panel" data-tab-panel="replica">
+
+    <div class="banner">
+      <span>&#9888;</span>
+      <div><b>Modo papel solamente.</b> Todavía no se ejecuta ninguna orden real con dinero propio.
+      Este contador mide cuántos trades de la wallet fueron <i>detectados</i> a tiempo como para,
+      en teoría, haber sido replicados &mdash; no hay ejecución real hasta que se confirme
+      explícitamente pasar a dinero real (siguiendo la misma convención que el resto de ATLANTIS:
+      papel primero, Finland VPS después).</div>
+    </div>
+
+    <div class="replica-tiles">
+      <div class="replica-tile"><div class="n">123</div><div class="l">detectados</div></div>
+      <div class="replica-tile"><div class="n">0</div><div class="l">replicados en papel</div></div>
+      <div class="replica-tile"><div class="n">0</div><div class="l">replicados con dinero real</div></div>
+      <div class="replica-tile"><div class="n">&mdash;</div><div class="l">latencia media de detección</div></div>
+    </div>
+
+    <div class="card">
+      <h2>Detecciones recientes</h2>
+      <div class="sub">Últimos trades de la wallet vistos por el monitor, en orden descendente.</div>
+      <div class="table-scroll">
+      <table>
+        <tr><th>Moneda</th><th>Lado</th><th>Precio</th><th>Tamaño</th><th>Elapsed</th><th>Chainlink @ compra</th><th>Resultado</th></tr>
+        <tr>
+            <td>Bitcoin</td>
+            <td>Down</td>
+            <td class="num">0.500</td>
+            <td class="num">23.0</td>
+            <td class="num">-42s</td>
+            <td class="num mono-sm">77,311.27</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Ethereum</td>
+            <td>Down</td>
+            <td class="num">0.510</td>
+            <td class="num">13.0</td>
+            <td class="num">-38s</td>
+            <td class="num mono-sm">—</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Ethereum</td>
+            <td>Up</td>
+            <td class="num">0.460</td>
+            <td class="num">11.0</td>
+            <td class="num">-33s</td>
+            <td class="num mono-sm">—</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Bitcoin</td>
+            <td>Down</td>
+            <td class="num">0.600</td>
+            <td class="num">15.0</td>
+            <td class="num">-9s</td>
+            <td class="num mono-sm">77,298.31</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Bitcoin</td>
+            <td>Down</td>
+            <td class="num">0.716</td>
+            <td class="num">187.7</td>
+            <td class="num">1s</td>
+            <td class="num mono-sm">77,295.05</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Bitcoin</td>
+            <td>Up</td>
+            <td class="num">0.310</td>
+            <td class="num">267.0</td>
+            <td class="num">7s</td>
+            <td class="num mono-sm">77,316.78</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Bitcoin</td>
+            <td>Up</td>
+            <td class="num">0.490</td>
+            <td class="num">46.0</td>
+            <td class="num">9s</td>
+            <td class="num mono-sm">77,326.02</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Solana</td>
+            <td>Up</td>
+            <td class="num">0.898</td>
+            <td class="num">103.0</td>
+            <td class="num">9s</td>
+            <td class="num mono-sm">—</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>XRP</td>
+            <td>Up</td>
+            <td class="num">0.903</td>
+            <td class="num">63.0</td>
+            <td class="num">9s</td>
+            <td class="num mono-sm">—</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Bitcoin</td>
+            <td>Up</td>
+            <td class="num">0.540</td>
+            <td class="num">48.0</td>
+            <td class="num">9s</td>
+            <td class="num mono-sm">77,326.02</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>XRP</td>
+            <td>Up</td>
+            <td class="num">0.892</td>
+            <td class="num">53.0</td>
+            <td class="num">9s</td>
+            <td class="num mono-sm">—</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Bitcoin</td>
+            <td>Up</td>
+            <td class="num">0.600</td>
+            <td class="num">68.0</td>
+            <td class="num">9s</td>
+            <td class="num mono-sm">77,326.02</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Solana</td>
+            <td>Up</td>
+            <td class="num">0.908</td>
+            <td class="num">63.0</td>
+            <td class="num">9s</td>
+            <td class="num mono-sm">—</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Solana</td>
+            <td>Up</td>
+            <td class="num">0.881</td>
+            <td class="num">153.0</td>
+            <td class="num">9s</td>
+            <td class="num mono-sm">—</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>XRP</td>
+            <td>Up</td>
+            <td class="num">0.867</td>
+            <td class="num">41.0</td>
+            <td class="num">9s</td>
+            <td class="num mono-sm">—</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Bitcoin</td>
+            <td>Up</td>
+            <td class="num">0.752</td>
+            <td class="num">211.0</td>
+            <td class="num">10s</td>
+            <td class="num mono-sm">77,327.12</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Bitcoin</td>
+            <td>Up</td>
+            <td class="num">0.736</td>
+            <td class="num">88.0</td>
+            <td class="num">10s</td>
+            <td class="num mono-sm">77,327.12</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Bitcoin</td>
+            <td>Down</td>
+            <td class="num">0.202</td>
+            <td class="num">40.6</td>
+            <td class="num">46s</td>
+            <td class="num mono-sm">77,332.58</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Bitcoin</td>
+            <td>Down</td>
+            <td class="num">0.250</td>
+            <td class="num">50.0</td>
+            <td class="num">64s</td>
+            <td class="num mono-sm">77,329.29</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Bitcoin</td>
+            <td>Down</td>
+            <td class="num">0.600</td>
+            <td class="num">10.0</td>
+            <td class="num">88s</td>
+            <td class="num mono-sm">77,333.59</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Bitcoin</td>
+            <td>Up</td>
+            <td class="num">0.430</td>
+            <td class="num">40.0</td>
+            <td class="num">126s</td>
+            <td class="num mono-sm">77,332.62</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Bitcoin</td>
+            <td>Down</td>
+            <td class="num">0.653</td>
+            <td class="num">46.0</td>
+            <td class="num">154s</td>
+            <td class="num mono-sm">77,329.54</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Bitcoin</td>
+            <td>Down</td>
+            <td class="num">0.902</td>
+            <td class="num">55.6</td>
+            <td class="num">162s</td>
+            <td class="num mono-sm">77,320.81</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>Bitcoin</td>
+            <td>Down</td>
+            <td class="num">0.555</td>
+            <td class="num">250.0</td>
+            <td class="num">144s</td>
+            <td class="num mono-sm">—</td>
+            <td class="pill good">✓ correcto</td>
+            </tr>
+<tr>
+            <td>Solana</td>
+            <td>Down</td>
+            <td class="num">0.710</td>
+            <td class="num">19.0</td>
+            <td class="num">154s</td>
+            <td class="num mono-sm">—</td>
+            <td class="pill good">✓ correcto</td>
+            </tr>
+<tr>
+            <td>Solana</td>
+            <td>Up</td>
+            <td class="num">0.365</td>
+            <td class="num">13.0</td>
+            <td class="num">156s</td>
+            <td class="num mono-sm">—</td>
+            <td class="pill bad">✗ incorrecto</td>
+            </tr>
+<tr>
+            <td>Solana</td>
+            <td>Down</td>
+            <td class="num">0.690</td>
+            <td class="num">15.0</td>
+            <td class="num">159s</td>
+            <td class="num mono-sm">—</td>
+            <td class="pill good">✓ correcto</td>
+            </tr>
+<tr>
+            <td>Bitcoin</td>
+            <td>Down</td>
+            <td class="num">0.770</td>
+            <td class="num">58.0</td>
+            <td class="num">160s</td>
+            <td class="num mono-sm">—</td>
+            <td class="pill good">✓ correcto</td>
+            </tr>
+<tr>
+            <td>Bitcoin</td>
+            <td>Down</td>
+            <td class="num">0.899</td>
+            <td class="num">211.0</td>
+            <td class="num">160s</td>
+            <td class="num mono-sm">—</td>
+            <td class="pill good">✓ correcto</td>
+            </tr>
+<tr>
+            <td>Bitcoin</td>
+            <td>Down</td>
+            <td class="num">0.900</td>
+            <td class="num">344.0</td>
+            <td class="num">160s</td>
+            <td class="num mono-sm">—</td>
+            <td class="pill good">✓ correcto</td>
+            </tr>
+      </table>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    Dashboard interno de análisis &mdash; no confundir con
+    <a href="https://thereplicationmarket.com" target="_blank" rel="noopener">thereplicationmarket.com</a>
+    (el SaaS público de copy-trading). Generado por
+    <code class="mono-sm">scripts/generate_replication_market_dashboard.py</code> en
+    atlantis-polymarket-screening.
+  </footer>
+
+</div>
+<script>
+document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn[data-tab]').forEach(b => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.dataset.tabPanel === tab));
+  });
+});
+</script>
+</body>
+</html>

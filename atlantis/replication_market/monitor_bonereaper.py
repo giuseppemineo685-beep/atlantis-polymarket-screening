@@ -33,6 +33,30 @@ seen_trade_keys = set()
 resolution_cache = {}  # conditionId -> winner outcome string
 
 
+def load_seen_keys_from_disk():
+    """Seed seen_trade_keys from whatever is already logged, so a restart
+    (crash, VPS reboot, manual bounce) doesn't re-poll the last ~100 trades
+    and log them again as 'new' before enough time has passed for them to
+    have actually scrolled out of the API's window."""
+    if not os.path.exists(OUT_PATH):
+        return
+    n = 0
+    with open(OUT_PATH) as f:
+        for line in f:
+            try:
+                rec = json.loads(line)
+            except Exception:
+                continue
+            key = (
+                rec.get("transactionHash", "")
+                + str(rec.get("trade_timestamp"))
+                + str(rec.get("size"))
+            )
+            seen_trade_keys.add(key)
+            n += 1
+    log(f"seeded {n} already-logged trade keys from {OUT_PATH}")
+
+
 def log(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
@@ -221,6 +245,7 @@ async def price_ws_loop():
 
 
 def main():
+    load_seen_keys_from_disk()
     t1 = threading.Thread(target=poll_trades_loop, daemon=True)
     t2 = threading.Thread(target=resolve_backfill_loop, daemon=True)
     t1.start()
