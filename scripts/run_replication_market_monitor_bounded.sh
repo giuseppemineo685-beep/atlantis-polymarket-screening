@@ -52,6 +52,10 @@ for line in open('atlantis/replication_market/bonereaper_monitor.jsonl'):
 for sym in c:
     print(f'{sym}: {c[sym]} trades, {with_price.get(sym,0)} con precio chainlink')
 "
+    echo "--- reconexiones del websocket de precio ---"
+    grep -c "price ws: connected" /tmp/monitor_bonereaper.log 2>/dev/null || echo 0
+    echo "--- errores del websocket de precio (ultimos 10) ---"
+    grep "price ws error" /tmp/monitor_bonereaper.log 2>/dev/null | tail -10
     echo "--- ultimas 15 lineas del monitor ---"
     tail -15 /tmp/monitor_bonereaper.log 2>/dev/null
   } > atlantis/replication_market/monitor_debug.log
