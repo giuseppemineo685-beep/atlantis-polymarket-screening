@@ -15,6 +15,7 @@ Pensado para correr en loop (igual que publish_dashboard_loop.sh) una vez
 el monitor este desplegado en el VPS de Alemania.
 """
 import json
+import re
 import time
 from pathlib import Path
 
@@ -57,6 +58,29 @@ def esc(v):
 
 def fmt_usd(v, decimals=2):
     return f"${v:,.{decimals}f}"
+
+
+def market_label(rec):
+    """Nombre del mercado. Los registros nuevos ya traen el titulo real de
+    Polymarket; para los mas viejos (loggeados antes de guardar ese campo)
+    lo reconstruimos a partir de la ventana de 5 min."""
+    title = rec.get("market_title")
+    if title:
+        # "Bitcoin Up or Down - September 12, 5:55AM-6:00AM ET" -> recortar el "Up or Down - "
+        return re.sub(r"\s+Up or Down\s*-\s*", " ", title)
+    ws = rec.get("window_start")
+    if ws:
+        start = time.strftime("%H:%M", time.gmtime(ws))
+        end = time.strftime("%H:%M", time.gmtime(ws + 300))
+        return f"{rec.get('coin','?')} {start}–{end} UTC"
+    return rec.get("coin", "?")
+
+
+def fmt_trade_time(rec):
+    ts = rec.get("trade_timestamp")
+    if not ts:
+        return "—"
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(ts)) + " UTC"
 
 
 def build_stats(recs):
@@ -192,7 +216,8 @@ def render_recent_table(recent):
         elapsed_s = f"{elapsed}s" if elapsed is not None else "—"
         rows.append(
             f"""<tr>
-            <td>{esc(r.get('coin',''))}</td>
+            <td class="mono-sm">{esc(fmt_trade_time(r))}</td>
+            <td>{esc(market_label(r))}</td>
             <td>{esc(r.get('side_bought',''))}</td>
             <td class="num">{r.get('price_paid',0):.3f}</td>
             <td class="num">{r.get('size',0):.1f}</td>
@@ -455,7 +480,7 @@ footer a {{ color: var(--ash); }}
       <div class="sub">Últimos trades de la wallet vistos por el monitor, en orden descendente.</div>
       <div class="table-scroll">
       <table>
-        <tr><th>Moneda</th><th>Lado</th><th>Precio</th><th>Tamaño</th><th>Elapsed</th><th>Chainlink @ compra</th><th>Resultado</th></tr>
+        <tr><th>Hora</th><th>Mercado</th><th>Lado</th><th>Precio</th><th>Tamaño</th><th>Elapsed</th><th>Chainlink @ compra</th><th>Resultado</th></tr>
         {render_recent_table(stats['recent'])}
       </table>
       </div>

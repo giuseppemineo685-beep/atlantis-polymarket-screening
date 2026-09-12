@@ -19,10 +19,12 @@ Fuentes:
 Salida: append-only JSONL en OUT_PATH. Pensado para correr 24h+ sin intervencion.
 """
 import asyncio, json, re, time, urllib.request, threading, collections, os, sys
+from pathlib import Path
 
 WALLET = "0xeebde7a0e019a63e6b476eb425505b7b3e6eba30"
 COINS = {"Bitcoin": "btc/usd", "Solana": "sol/usd", "XRP": "xrp/usd", "Ethereum": "eth/usd"}
-OUT_PATH = os.environ.get("MONITOR_OUT", "bonereaper_monitor.jsonl")
+DEFAULT_OUT = str(Path(__file__).resolve().parent / "bonereaper_monitor.jsonl")
+OUT_PATH = os.environ.get("MONITOR_OUT", DEFAULT_OUT)
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 # rolling price history per symbol: deque of (unix_ts, price)
@@ -141,6 +143,7 @@ def poll_trades_loop(poll_interval=8):
                 "logged_at": time.time(),
                 "coin": coin,
                 "symbol": symbol,
+                "market_title": t.get("title"),
                 "conditionId": t["conditionId"],
                 "eventSlug": t.get("eventSlug"),
                 "window_start": window_start,
