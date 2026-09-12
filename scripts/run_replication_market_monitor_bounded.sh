@@ -28,9 +28,34 @@ git_retry() {
 }
 
 publish_once() {
-  python3 -B scripts/generate_replication_market_dashboard.py > /tmp/replication_market_regen.log 2>&1
+  # Descartamos el HTML regenerado del ciclo anterior (es 100% derivado, se
+  # puede recrear) ANTES de pull - si no, "git pull" se niega a mergear
+  # porque hay cambios locales sin commitear y el loop queda trabado.
+  git checkout -- docs/replication_market.html 2>/dev/null
   git_retry git pull --no-rebase -q -X ours
-  git add docs/replication_market.html atlantis/replication_market/bonereaper_monitor.jsonl
+  # Recien ahora regeneramos, sobre el jsonl ya actualizado con lo que bajo
+  # el pull (por si otra corrida escribio de mas).
+  python3 -B scripts/generate_replication_market_dashboard.py > /tmp/replication_market_regen.log 2>&1
+  # Diagnostico: cuantos precios reales tenemos por simbolo, para poder ver
+  # esto sin esperar a que el job termine y sin logs que se descartan.
+  {
+    echo "=== $(date -u +'%Y-%m-%d %H:%M:%S UTC') ==="
+    python3 -B -c "
+import json, collections
+c = collections.Counter()
+with_price = collections.Counter()
+for line in open('atlantis/replication_market/bonereaper_monitor.jsonl'):
+    r = json.loads(line)
+    c[r.get('symbol')] += 1
+    if r.get('chainlink_price_at_trade') is not None:
+        with_price[r.get('symbol')] += 1
+for sym in c:
+    print(f'{sym}: {c[sym]} trades, {with_price.get(sym,0)} con precio chainlink')
+"
+    echo "--- ultimas 15 lineas del monitor ---"
+    tail -15 /tmp/monitor_bonereaper.log 2>/dev/null
+  } > atlantis/replication_market/monitor_debug.log
+  git add docs/replication_market.html atlantis/replication_market/bonereaper_monitor.jsonl atlantis/replication_market/monitor_debug.log
   git diff --cached --quiet || git commit -q -m "Replication Market dashboard (Actions): $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
   git_retry git push -q
 }
