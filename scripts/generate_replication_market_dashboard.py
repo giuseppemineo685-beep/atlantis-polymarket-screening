@@ -481,7 +481,7 @@ footer a {{ color: var(--ash); }}
 
     <div class="card">
       <h2>Detecciones recientes</h2>
-      <div class="sub">Últimos trades de la wallet vistos por el monitor, en orden descendente.</div>
+      <div class="sub">Mostrando los últimos {len(stats['recent'])} de {stats['total']} trades guardados en total (no se borra nada, esto es solo una ventana).</div>
       <div class="table-scroll">
       <table>
         <tr><th>Mercado</th><th>Lado</th><th>Precio</th><th>Tamaño</th><th>Elapsed</th><th>Chainlink @ compra</th><th>Resultado</th></tr>
