@@ -1,0 +1,36 @@
+name: Replication Market Monitor (Bonereaper)
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    # Cada 6h - el limite duro de un job de Actions es 6h, asi que corremos
+    # ~5h40m por vez y encadenamos la siguiente corrida por cron. GitHub's
+    # scheduler es best-effort y puede atrasarse, asi que puede haber huecos
+    # cortos de cobertura entre corridas bajo carga.
+    - cron: "0 */6 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: replication-market-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install websockets
+
+      - name: Run monitor + auto-publish for ~5h40m
+        run: bash scripts/run_replication_market_monitor_bounded.sh 20400
