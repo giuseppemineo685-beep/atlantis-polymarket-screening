@@ -1,13 +1,12 @@
-=== 2026-09-13 07:05:19 UTC ===
+=== 2026-09-13 07:06:22 UTC ===
 sol/usd: 783 trades, 0 con precio chainlink
 btc/usd: 1576 trades, 1377 con precio chainlink
 xrp/usd: 355 trades, 0 con precio chainlink
 eth/usd: 217 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
-1
+2
 --- errores del websocket de precio (ultimos 10) ---
 --- ultimas 15 lineas del monitor ---
-[06:56:55] NEW TRADE  Solana     Down  paid=0.854 size=25.0  elapsed=136s chainlink_now=None
 [06:56:55] NEW TRADE  Bitcoin    Up    paid=0.083 size=60.0  elapsed=124s chainlink_now=77197.03050771
 [06:59:11] resolution backfill: 2884/2922 records resolved
 [07:00:17] resolution backfill: 2888/2922 records resolved
@@ -22,3 +21,4 @@ eth/usd: 217 trades, 0 con precio chainlink
 [07:02:01] NEW TRADE  Bitcoin    Down  paid=0.450 size=16.0  elapsed=-45s chainlink_now=77066.90032236477
 [07:03:37] resolution backfill: 2891/2931 records resolved
 [07:04:44] resolution backfill: 2906/2931 records resolved
+[07:05:29] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
