@@ -1,17 +1,12 @@
-=== 2026-09-13 07:06:22 UTC ===
-sol/usd: 783 trades, 0 con precio chainlink
-btc/usd: 1576 trades, 1377 con precio chainlink
-xrp/usd: 355 trades, 0 con precio chainlink
+=== 2026-09-13 07:07:24 UTC ===
+sol/usd: 784 trades, 0 con precio chainlink
+btc/usd: 1579 trades, 1380 con precio chainlink
+xrp/usd: 356 trades, 0 con precio chainlink
 eth/usd: 217 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
 2
 --- errores del websocket de precio (ultimos 10) ---
 --- ultimas 15 lineas del monitor ---
-[06:56:55] NEW TRADE  Bitcoin    Up    paid=0.083 size=60.0  elapsed=124s chainlink_now=77197.03050771
-[06:59:11] resolution backfill: 2884/2922 records resolved
-[07:00:17] resolution backfill: 2888/2922 records resolved
-[07:02:01] NEW TRADE  XRP        Up    paid=0.740 size=5.0  elapsed=79s chainlink_now=None
-[07:02:01] NEW TRADE  Bitcoin    Up    paid=0.870 size=95.0  elapsed=48s chainlink_now=77116.81989033731
 [07:02:01] NEW TRADE  Bitcoin    Down  paid=0.497 size=40.0  elapsed=7s chainlink_now=77079.26018597839
 [07:02:01] NEW TRADE  Bitcoin    Down  paid=0.440 size=40.0  elapsed=6s chainlink_now=77079.81165517021
 [07:02:01] NEW TRADE  Bitcoin    Down  paid=0.382 size=41.0  elapsed=4s chainlink_now=77088.28800151
@@ -22,3 +17,8 @@ eth/usd: 217 trades, 0 con precio chainlink
 [07:03:37] resolution backfill: 2891/2931 records resolved
 [07:04:44] resolution backfill: 2906/2931 records resolved
 [07:05:29] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
+[07:06:57] NEW TRADE  Bitcoin    Down  paid=0.272 size=21.0  elapsed=96s chainlink_now=77143.64330494351
+[07:06:57] NEW TRADE  Solana     Up    paid=0.700 size=20.0  elapsed=82s chainlink_now=None
+[07:06:57] NEW TRADE  Bitcoin    Up    paid=0.740 size=52.0  elapsed=76s chainlink_now=77137.89839460739
+[07:06:57] NEW TRADE  XRP        Up    paid=0.580 size=14.0  elapsed=67s chainlink_now=None
+[07:06:57] NEW TRADE  Bitcoin    Down  paid=0.490 size=73.0  elapsed=-30s chainlink_now=77130.6233312285
