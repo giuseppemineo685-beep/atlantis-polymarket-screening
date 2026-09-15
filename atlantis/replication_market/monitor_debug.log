@@ -1,4 +1,4 @@
-=== 2026-09-15 11:33:47 UTC ===
+=== 2026-09-15 11:34:50 UTC ===
 sol/usd: 2620 trades, 0 con precio chainlink
 btc/usd: 9360 trades, 8445 con precio chainlink
 xrp/usd: 1219 trades, 0 con precio chainlink
@@ -8,7 +8,6 @@ eth/usd: 705 trades, 0 con precio chainlink
 --- errores del websocket de precio (ultimos 10) ---
 [11:30:20] price ws error, reconnecting in 5s: received 1012 (service restart) Service restarting; then sent 1012 (service restart) Service restarting
 --- ultimas 15 lineas del monitor ---
-[11:30:19] NEW TRADE  XRP        Down  paid=0.536 size=12.0  elapsed=15s chainlink_now=None
 [11:30:19] NEW TRADE  Bitcoin    Up    paid=0.518 size=19.6  elapsed=1s chainlink_now=76939.29386356361
 [11:30:19] NEW TRADE  Bitcoin    Down  paid=0.500 size=10.0  elapsed=-20s chainlink_now=76935.2919456446
 [11:30:19] NEW TRADE  Bitcoin    Down  paid=0.370 size=13.0  elapsed=12280s chainlink_now=76935.2919456446
@@ -23,3 +22,4 @@ eth/usd: 705 trades, 0 con precio chainlink
 [11:30:19] NEW TRADE  Bitcoin    Down  paid=0.320 size=50.0  elapsed=12126s chainlink_now=76963.86740546704
 [11:30:20] price ws error, reconnecting in 5s: received 1012 (service restart) Service restarting; then sent 1012 (service restart) Service restarting
 [11:30:26] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
+[11:34:27] resolution backfill: 13855/13904 records resolved
