@@ -1,15 +1,13 @@
-=== 2026-09-18 09:07:32 UTC ===
+=== 2026-09-18 09:08:35 UTC ===
 sol/usd: 4921 trades, 0 con precio chainlink
 btc/usd: 21892 trades, 20020 con precio chainlink
 xrp/usd: 2472 trades, 0 con precio chainlink
 eth/usd: 1201 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
-3
+4
 --- errores del websocket de precio (ultimos 10) ---
+[09:07:44] price ws error, reconnecting in 5s: sent 1011 (internal error) keepalive ping timeout; no close frame received
 --- ultimas 15 lineas del monitor ---
-[09:06:19] NEW TRADE  Solana     Down  paid=0.510 size=12.0  elapsed=15s chainlink_now=None
-[09:06:19] NEW TRADE  Solana     Down  paid=0.507 size=12.0  elapsed=15s chainlink_now=None
-[09:06:19] NEW TRADE  Solana     Down  paid=0.336 size=12.0  elapsed=10s chainlink_now=None
 [09:06:19] NEW TRADE  Bitcoin    Up    paid=0.660 size=46.0  elapsed=7s chainlink_now=78203.93164254594
 [09:06:19] NEW TRADE  Solana     Down  paid=0.500 size=10.0  elapsed=4s chainlink_now=None
 [09:06:19] NEW TRADE  Solana     Down  paid=0.440 size=20.0  elapsed=4s chainlink_now=None
@@ -22,3 +20,6 @@ eth/usd: 1201 trades, 0 con precio chainlink
 [09:06:19] NEW TRADE  Bitcoin    Up    paid=0.430 size=19.0  elapsed=-32s chainlink_now=78143.09456377594
 [09:06:19] NEW TRADE  Bitcoin    Up    paid=0.423 size=73.0  elapsed=-33s chainlink_now=78144.95715370901
 [09:06:19] NEW TRADE  Bitcoin    Up    paid=0.416 size=33.0  elapsed=-33s chainlink_now=78144.95715370901
+[09:07:44] price ws error, reconnecting in 5s: sent 1011 (internal error) keepalive ping timeout; no close frame received
+[09:07:49] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
+[09:08:24] resolution backfill: 30408/30486 records resolved
