@@ -1,18 +1,13 @@
-=== 2026-09-19 21:11:39 UTC ===
-sol/usd: 5903 trades, 0 con precio chainlink
-btc/usd: 26804 trades, 24411 con precio chainlink
+=== 2026-09-19 21:12:42 UTC ===
+sol/usd: 5904 trades, 0 con precio chainlink
+btc/usd: 26806 trades, 24413 con precio chainlink
 xrp/usd: 2927 trades, 0 con precio chainlink
-eth/usd: 1386 trades, 0 con precio chainlink
+eth/usd: 1387 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
 4
 --- errores del websocket de precio (ultimos 10) ---
 [21:08:56] price ws error, reconnecting in 5s: no close frame received or sent
 --- ultimas 15 lineas del monitor ---
-[21:06:44] NEW TRADE  Bitcoin    Down  paid=0.110 size=31.4  elapsed=168s chainlink_now=81156.384891993
-[21:06:44] NEW TRADE  Solana     Up    paid=0.890 size=10.0  elapsed=167s chainlink_now=None
-[21:06:44] NEW TRADE  XRP        Up    paid=0.721 size=16.0  elapsed=135s chainlink_now=None
-[21:06:44] NEW TRADE  Solana     Up    paid=0.700 size=5.0  elapsed=99s chainlink_now=None
-[21:06:44] NEW TRADE  XRP        Down  paid=0.530 size=5.0  elapsed=83s chainlink_now=None
 [21:06:44] NEW TRADE  Solana     Up    paid=0.500 size=5.0  elapsed=2s chainlink_now=None
 [21:06:44] NEW TRADE  Bitcoin    Down  paid=0.460 size=35.0  elapsed=-10s chainlink_now=81129.806948065
 [21:06:44] NEW TRADE  Bitcoin    Down  paid=0.450 size=33.0  elapsed=-18s chainlink_now=81129.98894520444
@@ -23,3 +18,8 @@ eth/usd: 1386 trades, 0 con precio chainlink
 [21:08:12] resolution backfill: 36994/37020 records resolved
 [21:08:56] price ws error, reconnecting in 5s: no close frame received or sent
 [21:09:01] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
+[21:11:42] NEW TRADE  Bitcoin    Up    paid=0.150 size=4.0  elapsed=153s chainlink_now=81134.73027139386
+[21:11:42] NEW TRADE  Solana     Up    paid=0.190 size=5.0  elapsed=57s chainlink_now=None
+[21:11:42] NEW TRADE  Bitcoin    Down  paid=0.692 size=24.0  elapsed=51s chainlink_now=81145.6059072522
+[21:11:42] NEW TRADE  Ethereum   Up    paid=0.370 size=14.0  elapsed=-24s chainlink_now=None
+[21:12:33] resolution backfill: 36995/37024 records resolved
