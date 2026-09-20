@@ -1,18 +1,12 @@
-=== 2026-09-20 02:10:59 UTC ===
-sol/usd: 6007 trades, 0 con precio chainlink
-btc/usd: 27104 trades, 24628 con precio chainlink
+=== 2026-09-20 02:12:21 UTC ===
+sol/usd: 6010 trades, 0 con precio chainlink
+btc/usd: 27107 trades, 24631 con precio chainlink
 xrp/usd: 2979 trades, 0 con precio chainlink
 eth/usd: 1404 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
 3
 --- errores del websocket de precio (ultimos 10) ---
 --- ultimas 15 lineas del monitor ---
-[02:02:10] NEW TRADE  XRP        Up    paid=0.540 size=5.0  elapsed=144s chainlink_now=None
-[02:02:10] NEW TRADE  Solana     Up    paid=0.750 size=20.0  elapsed=136s chainlink_now=None
-[02:02:10] NEW TRADE  Bitcoin    Up    paid=0.540 size=5.0  elapsed=40s chainlink_now=81047.64423511803
-[02:03:17] resolution backfill: 37460/37488 records resolved
-[02:04:22] resolution backfill: 37465/37488 records resolved
-[02:05:26] resolution backfill: 37466/37488 records resolved
 [02:07:07] NEW TRADE  Bitcoin    Up    paid=0.914 size=68.0  elapsed=127s chainlink_now=81092.30881852334
 [02:07:07] NEW TRADE  Solana     Up    paid=0.767 size=17.0  elapsed=67s chainlink_now=None
 [02:07:07] NEW TRADE  Solana     Up    paid=0.605 size=13.0  elapsed=66s chainlink_now=None
@@ -22,3 +16,9 @@ eth/usd: 1404 trades, 0 con precio chainlink
 [02:08:41] resolution backfill: 37469/37494 records resolved
 [02:09:45] resolution backfill: 37473/37494 records resolved
 [02:10:49] resolution backfill: 37474/37494 records resolved
+[02:12:16] NEW TRADE  Bitcoin    Down  paid=0.450 size=33.0  elapsed=172s chainlink_now=81081.5235241537
+[02:12:16] NEW TRADE  Bitcoin    Down  paid=0.471 size=20.0  elapsed=171s chainlink_now=81081.43143687646
+[02:12:16] NEW TRADE  Solana     Up    paid=0.703 size=15.0  elapsed=99s chainlink_now=None
+[02:12:16] NEW TRADE  Solana     Up    paid=0.640 size=14.0  elapsed=81s chainlink_now=None
+[02:12:16] NEW TRADE  Solana     Up    paid=0.487 size=12.0  elapsed=25s chainlink_now=None
+[02:12:16] NEW TRADE  Bitcoin    Down  paid=0.500 size=70.0  elapsed=-29s chainlink_now=81079.25446674705
