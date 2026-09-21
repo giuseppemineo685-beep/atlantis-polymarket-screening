@@ -1,15 +1,13 @@
-=== 2026-09-21 13:47:26 UTC ===
-sol/usd: 6439 trades, 0 con precio chainlink
-btc/usd: 29339 trades, 26479 con precio chainlink
-xrp/usd: 3196 trades, 0 con precio chainlink
-eth/usd: 1471 trades, 0 con precio chainlink
+=== 2026-09-21 13:48:32 UTC ===
+sol/usd: 6550 trades, 0 con precio chainlink
+btc/usd: 30203 trades, 27245 con precio chainlink
+xrp/usd: 3236 trades, 0 con precio chainlink
+eth/usd: 1498 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
 2
 --- errores del websocket de precio (ultimos 10) ---
 [12:12:56] price ws error, reconnecting in 5s: no close frame received or sent
 --- ultimas 15 lineas del monitor ---
-[13:42:16] NEW TRADE  Bitcoin    Up    paid=0.210 size=13.8  elapsed=152s chainlink_now=84941.71275169037
-[13:42:16] NEW TRADE  Bitcoin    Down  paid=0.700 size=4.0  elapsed=129s chainlink_now=84905.01975290886
 [13:42:16] NEW TRADE  Bitcoin    Down  paid=0.690 size=27.0  elapsed=123s chainlink_now=84979.53739688004
 [13:42:16] NEW TRADE  Bitcoin    Up    paid=0.525 size=51.0  elapsed=90s chainlink_now=85047.06122558388
 [13:42:16] NEW TRADE  Solana     Down  paid=0.410 size=12.0  elapsed=78s chainlink_now=None
@@ -23,3 +21,5 @@ eth/usd: 1471 trades, 0 con precio chainlink
 [13:47:14] NEW TRADE  Solana     Up    paid=0.362 size=13.0  elapsed=114s chainlink_now=None
 [13:47:14] NEW TRADE  XRP        Down  paid=0.306 size=13.0  elapsed=8s chainlink_now=None
 [13:47:14] NEW TRADE  Ethereum   Up    paid=0.563 size=16.0  elapsed=-7s chainlink_now=None
+[13:47:26] resolution backfill: 41461/41487 records resolved
+[13:48:30] resolution backfill: 41462/41487 records resolved
