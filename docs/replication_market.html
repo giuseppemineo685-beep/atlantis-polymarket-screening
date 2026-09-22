@@ -167,16 +167,16 @@ footer a { color: var(--ash); }
     <div class="status-row">
       <span class="pill accent"><span class="pill-dot"></span> tracking</span>
       <span class="pill pending"><span class="pill-dot"></span> modo papel</span>
-      <span class="updated">actualizado 2026-09-22 21:45:58 UTC</span>
+      <span class="updated">actualizado 2026-09-22 21:47:06 UTC</span>
     </div>
   </div>
 
   <div class="stat-strip">
-    <div class="stat-tile"><div class="label">Trades registrados</div><div class="value">46455</div></div>
+    <div class="stat-tile"><div class="label">Trades registrados</div><div class="value">46463</div></div>
     <div class="stat-tile"><div class="label">Resueltos</div><div class="value">46408</div></div>
     <div class="stat-tile"><div class="label">Win rate (real)</div><div class="value good">53.0%</div></div>
     <div class="stat-tile"><div class="label">PnL de la muestra</div><div class="value good">$20,142.48</div></div>
-    <div class="stat-tile"><div class="label">Horas cubiertas</div><div class="value">251.3h</div></div>
+    <div class="stat-tile"><div class="label">Horas cubiertas</div><div class="value">251.4h</div></div>
   </div>
 
   <div class="tabs">
@@ -320,14 +320,14 @@ footer a { color: var(--ash); }
 
         <div class="tm-row">
           <div class="tm-label">100-150s</div>
-          <div class="tm-track"><div class="tm-fill" style="width:41.8%"></div></div>
-          <div class="tm-n">6916</div>
+          <div class="tm-track"><div class="tm-fill" style="width:41.9%"></div></div>
+          <div class="tm-n">6918</div>
         </div>
 
         <div class="tm-row">
           <div class="tm-label">150-200s</div>
           <div class="tm-track"><div class="tm-fill" style="width:34.5%"></div></div>
-          <div class="tm-n">5703</div>
+          <div class="tm-n">5704</div>
         </div>
 
         <div class="tm-row">
@@ -354,11 +354,11 @@ footer a { color: var(--ash); }
         <div class="table-scroll">
         <table>
           <tr><th>Moneda</th><th>Trades</th><th>Resueltos</th><th>Win%</th></tr>
-          <tr><td>Bitcoin</td><td class="num">34356</td>
+          <tr><td>Bitcoin</td><td class="num">34363</td>
             <td class="num">34312</td><td class="num">51.1%</td></tr>
 <tr><td>Solana</td><td class="num">6995</td>
             <td class="num">6992</td><td class="num">58.8%</td></tr>
-<tr><td>XRP</td><td class="num">3464</td>
+<tr><td>XRP</td><td class="num">3465</td>
             <td class="num">3464</td><td class="num">59.4%</td></tr>
 <tr><td>Ethereum</td><td class="num">1640</td>
             <td class="num">1640</td><td class="num">54.3%</td></tr>
@@ -373,9 +373,9 @@ footer a { color: var(--ash); }
         Precio real: WebSocket público <code class="mono-sm">wss://ws-live-data.polymarket.com</code>,
         topic <code class="mono-sm">crypto_prices_chainlink</code> &mdash; el mismo feed de Chainlink que
         Polymarket usa para resolver estos mercados, capturado en el instante exacto de cada compra
-        (31056 de 46455 trades con precio capturado hasta ahora).
+        (31063 de 46463 trades con precio capturado hasta ahora).
         Resolución real por mercado vía <code class="mono-sm">clob.polymarket.com/markets/&#123;conditionId&#125;</code>.
-        Corriendo desde 251.3h &mdash; objetivo mínimo 24h antes de sacar conclusiones firmes.
+        Corriendo desde 251.4h &mdash; objetivo mínimo 24h antes de sacar conclusiones firmes.
       </div>
     </div>
 
@@ -393,7 +393,7 @@ footer a { color: var(--ash); }
     </div>
 
     <div class="replica-tiles">
-      <div class="replica-tile"><div class="n">46455</div><div class="l">detectados</div></div>
+      <div class="replica-tile"><div class="n">46463</div><div class="l">detectados</div></div>
       <div class="replica-tile"><div class="n">0</div><div class="l">replicados en papel</div></div>
       <div class="replica-tile"><div class="n">0</div><div class="l">replicados con dinero real</div></div>
       <div class="replica-tile"><div class="n">&mdash;</div><div class="l">latencia media de detección</div></div>
@@ -401,11 +401,107 @@ footer a { color: var(--ash); }
 
     <div class="card">
       <h2>Detecciones recientes</h2>
-      <div class="sub">Mostrando los últimos 30 de 46455 trades guardados en total (no se borra nada, esto es solo una ventana).</div>
+      <div class="sub">Mostrando los últimos 30 de 46463 trades guardados en total (no se borra nada, esto es solo una ventana).</div>
       <div class="table-scroll">
       <table>
         <tr><th>Mercado</th><th>Lado</th><th>Precio</th><th>Tamaño</th><th>Elapsed</th><th>Chainlink @ compra</th><th>Resultado</th></tr>
         <tr>
+            <td>
+              <div class="mkt-name">Bitcoin September 22, 5PM ET</div>
+              <div class="mkt-time mono-sm">2026-09-22 21:41:34 UTC</div>
+            </td>
+            <td>Down</td>
+            <td class="num">0.680</td>
+            <td class="num">50.0</td>
+            <td class="num">—</td>
+            <td class="num mono-sm">86,317.59</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>
+              <div class="mkt-name">Bitcoin September 22, 5PM ET</div>
+              <div class="mkt-time mono-sm">2026-09-22 21:41:40 UTC</div>
+            </td>
+            <td>Up</td>
+            <td class="num">0.330</td>
+            <td class="num">20.0</td>
+            <td class="num">—</td>
+            <td class="num mono-sm">86,317.59</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>
+              <div class="mkt-name">Bitcoin September 22, 5PM ET</div>
+              <div class="mkt-time mono-sm">2026-09-22 21:41:51 UTC</div>
+            </td>
+            <td>Down</td>
+            <td class="num">0.680</td>
+            <td class="num">50.0</td>
+            <td class="num">—</td>
+            <td class="num mono-sm">86,317.59</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>
+              <div class="mkt-name">XRP September 22, 5:40PM-5:45PM ET</div>
+              <div class="mkt-time mono-sm">2026-09-22 21:41:57 UTC</div>
+            </td>
+            <td>Down</td>
+            <td class="num">0.857</td>
+            <td class="num">33.0</td>
+            <td class="num">117s</td>
+            <td class="num mono-sm">—</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>
+              <div class="mkt-name">Bitcoin September 22, 5PM ET</div>
+              <div class="mkt-time mono-sm">2026-09-22 21:42:09 UTC</div>
+            </td>
+            <td>Down</td>
+            <td class="num">0.690</td>
+            <td class="num">50.0</td>
+            <td class="num">—</td>
+            <td class="num mono-sm">86,317.59</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>
+              <div class="mkt-name">Bitcoin September 22, 5:40PM-5:45PM ET</div>
+              <div class="mkt-time mono-sm">2026-09-22 21:42:27 UTC</div>
+            </td>
+            <td>Down</td>
+            <td class="num">0.902</td>
+            <td class="num">61.0</td>
+            <td class="num">147s</td>
+            <td class="num mono-sm">86,317.59</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>
+              <div class="mkt-name">Bitcoin September 22, 5:40PM-5:45PM ET</div>
+              <div class="mkt-time mono-sm">2026-09-22 21:42:45 UTC</div>
+            </td>
+            <td>Up</td>
+            <td class="num">0.099</td>
+            <td class="num">47.0</td>
+            <td class="num">165s</td>
+            <td class="num mono-sm">86,317.59</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
+            <td>
+              <div class="mkt-name">Bitcoin September 22, 5PM ET</div>
+              <div class="mkt-time mono-sm">2026-09-22 21:42:45 UTC</div>
+            </td>
+            <td>Up</td>
+            <td class="num">0.306</td>
+            <td class="num">50.0</td>
+            <td class="num">—</td>
+            <td class="num mono-sm">86,317.59</td>
+            <td class="pill pending">?</td>
+            </tr>
+<tr>
             <td>
               <div class="mkt-name">Bitcoin September 22, 5:30PM-5:35PM ET</div>
               <div class="mkt-time mono-sm">2026-09-22 21:33:48 UTC</div>
@@ -665,102 +761,6 @@ footer a { color: var(--ash); }
             <td>Down</td>
             <td class="num">0.430</td>
             <td class="num">11.0</td>
-            <td class="num">—</td>
-            <td class="num mono-sm">86,317.59</td>
-            <td class="pill pending">?</td>
-            </tr>
-<tr>
-            <td>
-              <div class="mkt-name">Bitcoin September 22, 5:25PM-5:30PM ET</div>
-              <div class="mkt-time mono-sm">2026-09-22 21:24:55 UTC</div>
-            </td>
-            <td>Down</td>
-            <td class="num">0.473</td>
-            <td class="num">15.0</td>
-            <td class="num">-5s</td>
-            <td class="num mono-sm">86,317.59</td>
-            <td class="pill bad">✗ incorrecto</td>
-            </tr>
-<tr>
-            <td>
-              <div class="mkt-name">Bitcoin September 22, 5:25PM-5:30PM ET</div>
-              <div class="mkt-time mono-sm">2026-09-22 21:26:42 UTC</div>
-            </td>
-            <td>Down</td>
-            <td class="num">0.630</td>
-            <td class="num">23.0</td>
-            <td class="num">102s</td>
-            <td class="num mono-sm">86,317.59</td>
-            <td class="pill bad">✗ incorrecto</td>
-            </tr>
-<tr>
-            <td>
-              <div class="mkt-name">Bitcoin September 22, 5PM ET</div>
-              <div class="mkt-time mono-sm">2026-09-22 21:26:45 UTC</div>
-            </td>
-            <td>Down</td>
-            <td class="num">0.620</td>
-            <td class="num">50.0</td>
-            <td class="num">—</td>
-            <td class="num mono-sm">86,317.59</td>
-            <td class="pill pending">?</td>
-            </tr>
-<tr>
-            <td>
-              <div class="mkt-name">Bitcoin September 22, 5:25PM-5:30PM ET</div>
-              <div class="mkt-time mono-sm">2026-09-22 21:26:49 UTC</div>
-            </td>
-            <td>Down</td>
-            <td class="num">0.690</td>
-            <td class="num">25.0</td>
-            <td class="num">109s</td>
-            <td class="num mono-sm">86,317.59</td>
-            <td class="pill bad">✗ incorrecto</td>
-            </tr>
-<tr>
-            <td>
-              <div class="mkt-name">XRP September 22, 5:25PM-5:30PM ET</div>
-              <div class="mkt-time mono-sm">2026-09-22 21:26:57 UTC</div>
-            </td>
-            <td>Up</td>
-            <td class="num">0.560</td>
-            <td class="num">12.0</td>
-            <td class="num">117s</td>
-            <td class="num mono-sm">—</td>
-            <td class="pill good">✓ correcto</td>
-            </tr>
-<tr>
-            <td>
-              <div class="mkt-name">Bitcoin September 22, 5:25PM-5:30PM ET</div>
-              <div class="mkt-time mono-sm">2026-09-22 21:27:09 UTC</div>
-            </td>
-            <td>Up</td>
-            <td class="num">0.319</td>
-            <td class="num">67.0</td>
-            <td class="num">129s</td>
-            <td class="num mono-sm">86,317.59</td>
-            <td class="pill good">✓ correcto</td>
-            </tr>
-<tr>
-            <td>
-              <div class="mkt-name">Bitcoin September 22, 5:25PM-5:30PM ET</div>
-              <div class="mkt-time mono-sm">2026-09-22 21:27:28 UTC</div>
-            </td>
-            <td>Up</td>
-            <td class="num">0.790</td>
-            <td class="num">30.0</td>
-            <td class="num">148s</td>
-            <td class="num mono-sm">86,317.59</td>
-            <td class="pill good">✓ correcto</td>
-            </tr>
-<tr>
-            <td>
-              <div class="mkt-name">Bitcoin September 22, 5PM ET</div>
-              <div class="mkt-time mono-sm">2026-09-22 21:28:15 UTC</div>
-            </td>
-            <td>Up</td>
-            <td class="num">0.470</td>
-            <td class="num">50.0</td>
             <td class="num">—</td>
             <td class="num mono-sm">86,317.59</td>
             <td class="pill pending">?</td>
