@@ -1,4 +1,4 @@
-=== 2026-09-26 03:53:52 UTC ===
+=== 2026-09-26 03:54:54 UTC ===
 sol/usd: 1117 trades, 0 con precio chainlink
 btc/usd: 4479 trades, 3968 con precio chainlink
 xrp/usd: 502 trades, 0 con precio chainlink
@@ -8,11 +8,6 @@ eth/usd: 416 trades, 0 con precio chainlink
 --- errores del websocket de precio (ultimos 10) ---
 [02:39:56] price ws error, reconnecting in 5s: no close frame received or sent
 --- ultimas 15 lineas del monitor ---
-[03:44:14] NEW TRADE  Bitcoin    Down  paid=0.620 size=23.8  elapsed=Nones chainlink_now=83968.69074080746
-[03:44:14] NEW TRADE  Bitcoin    Down  paid=0.610 size=13.0  elapsed=Nones chainlink_now=83976.94475687125
-[03:44:14] NEW TRADE  Bitcoin    Down  paid=0.517 size=52.1  elapsed=-1s chainlink_now=83993.28810769
-[03:44:14] NEW TRADE  Ethereum   Down  paid=0.500 size=11.0  elapsed=-21s chainlink_now=None
-[03:44:14] NEW TRADE  Bitcoin    Up    paid=0.510 size=88.0  elapsed=-54s chainlink_now=84013.54693172859
 [03:47:57] resolution backfill: 6424/6505 records resolved
 [03:49:20] NEW TRADE  Bitcoin    Up    paid=0.130 size=50.0  elapsed=Nones chainlink_now=83936.35373754663
 [03:49:20] NEW TRADE  Bitcoin    Up    paid=0.264 size=25.0  elapsed=134s chainlink_now=83936.78788951
@@ -23,3 +18,8 @@ eth/usd: 416 trades, 0 con precio chainlink
 [03:49:20] NEW TRADE  Bitcoin    Down  paid=0.869 size=50.0  elapsed=Nones chainlink_now=83940.1035818828
 [03:49:20] NEW TRADE  Bitcoin    Down  paid=0.580 size=167.0  elapsed=0s chainlink_now=83940.39731657527
 [03:49:20] NEW TRADE  Ethereum   Up    paid=0.501 size=11.0  elapsed=-36s chainlink_now=None
+[03:54:19] NEW TRADE  Bitcoin    Down  paid=0.500 size=20.0  elapsed=26s chainlink_now=83938.04221856498
+[03:54:19] NEW TRADE  Bitcoin    Down  paid=0.540 size=26.1  elapsed=-3s chainlink_now=83933.29655903907
+[03:54:19] NEW TRADE  Ethereum   Up    paid=0.520 size=13.0  elapsed=-16s chainlink_now=None
+[03:54:19] NEW TRADE  Bitcoin    Down  paid=0.500 size=78.0  elapsed=-25s chainlink_now=83935.85719617
+[03:54:21] resolution backfill: 6427/6514 records resolved
