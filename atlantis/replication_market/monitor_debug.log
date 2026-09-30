@@ -1,6 +1,6 @@
-=== 2026-09-30 06:53:53 UTC ===
+=== 2026-09-30 06:54:56 UTC ===
 sol/usd: 1117 trades, 0 con precio chainlink
-btc/usd: 14846 trades, 12907 con precio chainlink
+btc/usd: 14849 trades, 12910 con precio chainlink
 xrp/usd: 502 trades, 0 con precio chainlink
 eth/usd: 954 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
@@ -8,10 +8,6 @@ eth/usd: 954 trades, 0 con precio chainlink
 --- errores del websocket de precio (ultimos 10) ---
 [06:22:10] price ws error, reconnecting in 5s: no close frame received or sent
 --- ultimas 15 lineas del monitor ---
-[06:44:02] NEW TRADE  Bitcoin    Up    paid=0.210 size=26.0  elapsed=9536s chainlink_now=83074.177539745
-[06:44:02] NEW TRADE  Bitcoin    Down  paid=0.540 size=41.0  elapsed=209s chainlink_now=83065.4162247642
-[06:48:36] resolution backfill: 17334/17407 records resolved
-[06:48:59] NEW TRADE  Bitcoin    Up    paid=0.160 size=71.0  elapsed=60s chainlink_now=83003.62164111978
 [06:48:59] NEW TRADE  Bitcoin    Down  paid=0.902 size=136.0  elapsed=42s chainlink_now=82978.47406231723
 [06:48:59] NEW TRADE  Bitcoin    Down  paid=0.888 size=102.0  elapsed=36s chainlink_now=82984.79079934178
 [06:48:59] NEW TRADE  Bitcoin    Down  paid=0.853 size=88.0  elapsed=33s chainlink_now=82993.92344362648
@@ -23,3 +19,7 @@ eth/usd: 954 trades, 0 con precio chainlink
 [06:48:59] NEW TRADE  Bitcoin    Down  paid=0.430 size=12.0  elapsed=-27s chainlink_now=83072.6446320325
 [06:48:59] NEW TRADE  Bitcoin    Down  paid=0.470 size=120.0  elapsed=-57s chainlink_now=83059.42378674909
 [06:48:59] NEW TRADE  Bitcoin    Up    paid=0.209 size=11.0  elapsed=9779s chainlink_now=83085.62622397
+[06:54:04] NEW TRADE  Bitcoin    Down  paid=0.910 size=5.2  elapsed=10260s chainlink_now=82939.41375942995
+[06:54:04] NEW TRADE  Bitcoin    Up    paid=0.170 size=10.0  elapsed=317s chainlink_now=82970.235671665
+[06:54:04] NEW TRADE  Bitcoin    Down  paid=0.990 size=554.1  elapsed=183s chainlink_now=82967.6488756156
+[06:54:26] resolution backfill: 17350/17422 records resolved
