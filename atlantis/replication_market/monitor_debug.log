@@ -1,6 +1,6 @@
-=== 2026-10-09 12:55:40 UTC ===
-sol/usd: 1273 trades, 0 con precio chainlink
-btc/usd: 39043 trades, 34276 con precio chainlink
+=== 2026-10-09 12:56:46 UTC ===
+sol/usd: 1275 trades, 0 con precio chainlink
+btc/usd: 39045 trades, 34278 con precio chainlink
 xrp/usd: 617 trades, 0 con precio chainlink
 eth/usd: 2015 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
@@ -8,10 +8,6 @@ eth/usd: 2015 trades, 0 con precio chainlink
 --- errores del websocket de precio (ultimos 10) ---
 [12:41:19] price ws error, reconnecting in 5s: no close frame received or sent
 --- ultimas 15 lineas del monitor ---
-[12:50:54] NEW TRADE  Ethereum   Up    paid=0.591 size=13.0  elapsed=-26s chainlink_now=None
-[12:50:54] NEW TRADE  Bitcoin    Up    paid=0.150 size=10.0  elapsed=Nones chainlink_now=83033.4214078675
-[12:50:54] NEW TRADE  Bitcoin    Up    paid=0.100 size=34.0  elapsed=Nones chainlink_now=82988.71796418901
-[12:50:54] NEW TRADE  Bitcoin    Up    paid=0.170 size=32.0  elapsed=Nones chainlink_now=83038.0639093883
 [12:50:54] NEW TRADE  Solana     Down  paid=0.214 size=8.0  elapsed=156s chainlink_now=None
 [12:50:54] NEW TRADE  Bitcoin    Down  paid=0.840 size=20.0  elapsed=Nones chainlink_now=83033.04834264798
 [12:50:54] NEW TRADE  Bitcoin    Down  paid=0.770 size=10.0  elapsed=Nones chainlink_now=83057.50908161889
@@ -23,3 +19,7 @@ eth/usd: 2015 trades, 0 con precio chainlink
 [12:50:54] NEW TRADE  Bitcoin    Down  paid=0.280 size=48.0  elapsed=55s chainlink_now=83000.93826950289
 [12:53:28] resolution backfill: 42876/42948 records resolved
 [12:54:43] resolution backfill: 42878/42948 records resolved
+[12:55:53] NEW TRADE  Bitcoin    Up    paid=0.152 size=223.0  elapsed=112s chainlink_now=82941.74033128812
+[12:55:53] NEW TRADE  Bitcoin    Up    paid=0.440 size=5.0  elapsed=382s chainlink_now=82944.54113042743
+[12:55:53] NEW TRADE  Solana     Down  paid=0.580 size=6.0  elapsed=45s chainlink_now=None
+[12:55:53] NEW TRADE  Solana     Down  paid=0.560 size=6.0  elapsed=45s chainlink_now=None
