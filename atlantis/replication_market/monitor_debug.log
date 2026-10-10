@@ -1,4 +1,4 @@
-=== 2026-10-10 14:21:19 UTC ===
+=== 2026-10-10 14:22:39 UTC ===
 sol/usd: 1590 trades, 0 con precio chainlink
 btc/usd: 41063 trades, 36128 con precio chainlink
 xrp/usd: 866 trades, 0 con precio chainlink
@@ -8,18 +8,18 @@ eth/usd: 2076 trades, 0 con precio chainlink
 --- errores del websocket de precio (ultimos 10) ---
 [12:17:28] price ws error, reconnecting in 5s: no close frame received or sent
 --- ultimas 15 lineas del monitor ---
-[14:12:33] NEW TRADE  Bitcoin    Down  paid=0.700 size=50.0  elapsed=Nones chainlink_now=82706.4163621738
-[14:16:48] resolution backfill: 45541/45584 records resolved
-[14:17:34] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
-[14:17:35] NEW TRADE  Bitcoin    Down  paid=0.141 size=60.0  elapsed=175s chainlink_now=82722.73742888209
-[14:17:35] NEW TRADE  Bitcoin    Down  paid=0.620 size=45.0  elapsed=Nones chainlink_now=82728.79038150133
-[14:17:35] NEW TRADE  Bitcoin    Up    paid=0.368 size=50.0  elapsed=Nones chainlink_now=82728.37340786253
-[14:17:35] NEW TRADE  Bitcoin    Up    paid=0.340 size=50.0  elapsed=Nones chainlink_now=82722.13746712574
-[14:17:35] NEW TRADE  Bitcoin    Up    paid=0.860 size=95.0  elapsed=96s chainlink_now=82714.69518035195
-[14:17:35] NEW TRADE  Bitcoin    Up    paid=0.790 size=83.0  elapsed=96s chainlink_now=82714.69518035195
-[14:17:35] NEW TRADE  Bitcoin    Up    paid=0.739 size=55.0  elapsed=87s chainlink_now=82711.3475953422
-[14:17:35] NEW TRADE  Bitcoin    Up    paid=0.690 size=78.0  elapsed=76s chainlink_now=82709.98065368646
-[14:17:35] NEW TRADE  Bitcoin    Up    paid=0.650 size=95.0  elapsed=73s chainlink_now=82708.3295216697
 [14:17:35] NEW TRADE  Bitcoin    Down  paid=0.440 size=8.9  elapsed=-8s chainlink_now=82706.2573893477
 [14:17:35] NEW TRADE  Bitcoin    Up    paid=0.280 size=50.0  elapsed=Nones chainlink_now=82707.91096025772
 [14:18:01] resolution backfill: 45542/45595 records resolved
+[14:21:32] resolution backfill: 45570/45595 records resolved
+[14:22:36] NEW TRADE  Solana     Down  paid=0.120 size=12.0  elapsed=151s chainlink_now=None
+[14:22:36] NEW TRADE  XRP        Down  paid=0.910 size=18.0  elapsed=126s chainlink_now=None
+[14:22:36] NEW TRADE  Bitcoin    Down  paid=0.293 size=47.0  elapsed=123s chainlink_now=82720.365284115
+[14:22:36] NEW TRADE  XRP        Down  paid=0.570 size=6.0  elapsed=109s chainlink_now=None
+[14:22:36] NEW TRADE  Bitcoin    Down  paid=0.390 size=25.0  elapsed=105s chainlink_now=82722.32449421161
+[14:22:36] NEW TRADE  Solana     Down  paid=0.067 size=57.0  elapsed=94s chainlink_now=None
+[14:22:36] NEW TRADE  Bitcoin    Up    paid=0.740 size=81.0  elapsed=63s chainlink_now=82721.87254314219
+[14:22:36] NEW TRADE  Bitcoin    Up    paid=0.516 size=24.0  elapsed=6s chainlink_now=82718.08546350837
+[14:22:36] NEW TRADE  Ethereum   Up    paid=0.520 size=5.0  elapsed=-6s chainlink_now=None
+[14:22:36] NEW TRADE  Bitcoin    Down  paid=0.720 size=39.0  elapsed=Nones chainlink_now=82716.6759097326
+[14:22:37] resolution backfill: 45577/45595 records resolved
