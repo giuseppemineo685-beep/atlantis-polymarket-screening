@@ -1,20 +1,24 @@
-=== 2026-10-10 03:54:14 UTC ===
+=== 2026-10-10 03:55:20 UTC ===
 sol/usd: 1449 trades, 0 con precio chainlink
-btc/usd: 40337 trades, 35482 con precio chainlink
-xrp/usd: 756 trades, 0 con precio chainlink
+btc/usd: 40344 trades, 35482 con precio chainlink
+xrp/usd: 757 trades, 0 con precio chainlink
 eth/usd: 2048 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
 1
 --- errores del websocket de precio (ultimos 10) ---
 --- ultimas 15 lineas del monitor ---
-[03:52:07] seeded 44584 already-logged trade keys from /home/runner/work/atlantis-polymarket-screening/atlantis-polymarket-screening/atlantis/replication_market/bonereaper_monitor.jsonl
-[03:52:07] trade poller: starting
-[03:52:07] resolution backfill: starting
-[03:52:07] NEW TRADE  Bitcoin    Up    paid=0.780 size=33.2  elapsed=96s chainlink_now=None
-[03:52:07] NEW TRADE  Bitcoin    Down  paid=0.860 size=20.0  elapsed=Nones chainlink_now=None
 [03:52:07] NEW TRADE  Bitcoin    Up    paid=0.914 size=85.5  elapsed=75s chainlink_now=None
 [03:52:07] NEW TRADE  Bitcoin    Down  paid=0.305 size=11.0  elapsed=14s chainlink_now=None
 [03:52:07] NEW TRADE  Bitcoin    Up    paid=0.552 size=20.0  elapsed=8s chainlink_now=None
 [03:52:07] NEW TRADE  Bitcoin    Down  paid=0.370 size=167.0  elapsed=0s chainlink_now=None
 [03:52:08] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
 [03:53:16] resolution backfill: 44547/44590 records resolved
+[03:54:25] resolution backfill: 44551/44590 records resolved
+[03:54:40] NEW TRADE  Bitcoin    Down  paid=0.890 size=5.0  elapsed=115s chainlink_now=None
+[03:54:40] NEW TRADE  Bitcoin    Down  paid=0.270 size=29.0  elapsed=381s chainlink_now=None
+[03:54:40] NEW TRADE  Bitcoin    Down  paid=0.250 size=29.0  elapsed=286s chainlink_now=None
+[03:54:40] NEW TRADE  Bitcoin    Down  paid=0.847 size=30.0  elapsed=Nones chainlink_now=None
+[03:54:40] NEW TRADE  Bitcoin    Up    paid=0.167 size=30.0  elapsed=Nones chainlink_now=None
+[03:54:40] NEW TRADE  Bitcoin    Up    paid=0.150 size=50.0  elapsed=Nones chainlink_now=None
+[03:54:40] NEW TRADE  XRP        Down  paid=0.090 size=11.0  elapsed=169s chainlink_now=None
+[03:54:40] NEW TRADE  Bitcoin    Up    paid=0.220 size=50.0  elapsed=Nones chainlink_now=None
