@@ -1,26 +1,19 @@
-=== 2026-10-10 03:47:53 UTC ===
+=== 2026-10-10 03:53:08 UTC ===
 sol/usd: 1449 trades, 0 con precio chainlink
-btc/usd: 40331 trades, 35482 con precio chainlink
+btc/usd: 40337 trades, 35482 con precio chainlink
 xrp/usd: 756 trades, 0 con precio chainlink
 eth/usd: 2048 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
-4
+1
 --- errores del websocket de precio (ultimos 10) ---
-[01:06:00] price ws error, reconnecting in 5s: no close frame received or sent
-[02:54:30] price ws error, reconnecting in 5s: no close frame received or sent
 --- ultimas 15 lineas del monitor ---
-[03:39:33] NEW TRADE  Ethereum   Down  paid=0.720 size=20.0  elapsed=0s chainlink_now=None
-[03:39:33] NEW TRADE  Bitcoin    Down  paid=0.490 size=25.0  elapsed=144s chainlink_now=82514.14419907596
-[03:40:32] resolution backfill: 44522/44575 records resolved
-[03:41:41] resolution backfill: 44534/44575 records resolved
-[03:42:49] resolution backfill: 44536/44575 records resolved
-[03:44:40] NEW TRADE  Bitcoin    Up    paid=0.110 size=50.0  elapsed=Nones chainlink_now=82487.31598675917
-[03:44:40] NEW TRADE  Bitcoin    Up    paid=0.106 size=47.0  elapsed=684s chainlink_now=82486.59653955733
-[03:44:40] NEW TRADE  Bitcoin    Up    paid=0.130 size=50.0  elapsed=Nones chainlink_now=82491.84658614281
-[03:44:40] NEW TRADE  Bitcoin    Down  paid=0.300 size=47.0  elapsed=45s chainlink_now=82491.59629823547
-[03:44:40] NEW TRADE  Bitcoin    Up    paid=0.638 size=45.0  elapsed=36s chainlink_now=82487.90759785456
-[03:44:40] NEW TRADE  Bitcoin    Down  paid=0.480 size=40.0  elapsed=8s chainlink_now=82488.32294344659
-[03:44:40] NEW TRADE  Bitcoin    Down  paid=0.460 size=118.0  elapsed=-24s chainlink_now=82488.30791090504
-[03:44:40] NEW TRADE  Bitcoin    Down  paid=0.890 size=50.0  elapsed=Nones chainlink_now=82489.1980427667
-[03:44:40] NEW TRADE  Bitcoin    Up    paid=0.168 size=34.0  elapsed=551s chainlink_now=82488.1428464521
-[03:47:26] resolution backfill: 44539/44584 records resolved
+[03:52:07] seeded 44584 already-logged trade keys from /home/runner/work/atlantis-polymarket-screening/atlantis-polymarket-screening/atlantis/replication_market/bonereaper_monitor.jsonl
+[03:52:07] trade poller: starting
+[03:52:07] resolution backfill: starting
+[03:52:07] NEW TRADE  Bitcoin    Up    paid=0.780 size=33.2  elapsed=96s chainlink_now=None
+[03:52:07] NEW TRADE  Bitcoin    Down  paid=0.860 size=20.0  elapsed=Nones chainlink_now=None
+[03:52:07] NEW TRADE  Bitcoin    Up    paid=0.914 size=85.5  elapsed=75s chainlink_now=None
+[03:52:07] NEW TRADE  Bitcoin    Down  paid=0.305 size=11.0  elapsed=14s chainlink_now=None
+[03:52:07] NEW TRADE  Bitcoin    Up    paid=0.552 size=20.0  elapsed=8s chainlink_now=None
+[03:52:07] NEW TRADE  Bitcoin    Down  paid=0.370 size=167.0  elapsed=0s chainlink_now=None
+[03:52:08] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
