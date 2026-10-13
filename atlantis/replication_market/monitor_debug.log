@@ -1,6 +1,6 @@
-=== 2026-10-13 17:03:38 UTC ===
+=== 2026-10-13 17:05:04 UTC ===
 sol/usd: 2517 trades, 0 con precio chainlink
-btc/usd: 49072 trades, 43286 con precio chainlink
+btc/usd: 49075 trades, 43289 con precio chainlink
 xrp/usd: 1418 trades, 0 con precio chainlink
 eth/usd: 2277 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
@@ -8,10 +8,6 @@ eth/usd: 2277 trades, 0 con precio chainlink
 --- errores del websocket de precio (ultimos 10) ---
 [16:20:33] price ws error, reconnecting in 5s: received 1012 (service restart) Service restarting; then sent 1012 (service restart) Service restarting
 --- ultimas 15 lineas del monitor ---
-[16:53:53] NEW TRADE  Bitcoin    Down  paid=0.274 size=48.0  elapsed=93s chainlink_now=83377.50266600322
-[16:53:53] NEW TRADE  Bitcoin    Down  paid=0.280 size=5.0  elapsed=46s chainlink_now=83383.08081109554
-[16:53:53] NEW TRADE  Bitcoin    Down  paid=0.320 size=50.0  elapsed=Nones chainlink_now=83393.22421836862
-[16:53:53] NEW TRADE  Bitcoin    Up    paid=0.700 size=20.0  elapsed=25s chainlink_now=83383.9147215861
 [16:53:53] NEW TRADE  Bitcoin    Down  paid=0.442 size=50.0  elapsed=Nones chainlink_now=83362.93112366961
 [16:53:53] NEW TRADE  Ethereum   Down  paid=0.500 size=17.0  elapsed=-11s chainlink_now=None
 [16:53:53] NEW TRADE  Bitcoin    Up    paid=0.440 size=5.0  elapsed=-29s chainlink_now=83344.59825058535
@@ -23,3 +19,7 @@ eth/usd: 2277 trades, 0 con precio chainlink
 [16:58:51] NEW TRADE  Bitcoin    Up    paid=0.260 size=5.0  elapsed=106s chainlink_now=83389.16018049791
 [16:58:51] NEW TRADE  Bitcoin    Up    paid=0.720 size=36.0  elapsed=Nones chainlink_now=83394.73861366008
 [17:03:30] resolution backfill: 55220/55284 records resolved
+[17:03:58] NEW TRADE  Bitcoin    Down  paid=0.710 size=5.0  elapsed=159s chainlink_now=83320.96318413716
+[17:03:58] NEW TRADE  Bitcoin    Up    paid=0.250 size=32.0  elapsed=678s chainlink_now=83328.1854935573
+[17:03:58] NEW TRADE  Bitcoin    Down  paid=0.570 size=41.0  elapsed=7s chainlink_now=83333.35991555345
+[17:04:45] resolution backfill: 55221/55287 records resolved
