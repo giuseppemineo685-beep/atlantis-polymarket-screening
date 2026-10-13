@@ -1,6 +1,6 @@
-=== 2026-10-13 16:57:55 UTC ===
+=== 2026-10-13 16:59:03 UTC ===
 sol/usd: 2517 trades, 0 con precio chainlink
-btc/usd: 49069 trades, 43283 con precio chainlink
+btc/usd: 49072 trades, 43286 con precio chainlink
 xrp/usd: 1418 trades, 0 con precio chainlink
 eth/usd: 2277 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
@@ -8,10 +8,6 @@ eth/usd: 2277 trades, 0 con precio chainlink
 --- errores del websocket de precio (ultimos 10) ---
 [16:20:33] price ws error, reconnecting in 5s: received 1012 (service restart) Service restarting; then sent 1012 (service restart) Service restarting
 --- ultimas 15 lineas del monitor ---
-[16:53:53] NEW TRADE  Bitcoin    Up    paid=0.720 size=55.0  elapsed=138s chainlink_now=83377.05893037711
-[16:53:53] NEW TRADE  Bitcoin    Up    paid=0.727 size=152.0  elapsed=138s chainlink_now=83377.05893037711
-[16:53:53] NEW TRADE  Bitcoin    Down  paid=0.390 size=40.0  elapsed=Nones chainlink_now=83377.0625461821
-[16:53:53] NEW TRADE  Bitcoin    Down  paid=0.420 size=20.0  elapsed=124s chainlink_now=83376.3565865888
 [16:53:53] NEW TRADE  Bitcoin    Down  paid=0.368 size=41.0  elapsed=96s chainlink_now=83375.98022474041
 [16:53:53] NEW TRADE  Bitcoin    Down  paid=0.274 size=48.0  elapsed=93s chainlink_now=83377.50266600322
 [16:53:53] NEW TRADE  Bitcoin    Down  paid=0.280 size=5.0  elapsed=46s chainlink_now=83383.08081109554
@@ -23,3 +19,7 @@ eth/usd: 2277 trades, 0 con precio chainlink
 [16:53:53] NEW TRADE  Bitcoin    Down  paid=0.530 size=50.0  elapsed=Nones chainlink_now=83341.98473642224
 [16:53:53] NEW TRADE  Bitcoin    Down  paid=0.990 size=1263.0  elapsed=240s chainlink_now=83378.67205082702
 [16:57:14] resolution backfill: 55207/55281 records resolved
+[16:58:30] resolution backfill: 55208/55281 records resolved
+[16:58:51] NEW TRADE  Bitcoin    Down  paid=0.760 size=55.0  elapsed=150s chainlink_now=83365.75895188
+[16:58:51] NEW TRADE  Bitcoin    Up    paid=0.260 size=5.0  elapsed=106s chainlink_now=83389.16018049791
+[16:58:51] NEW TRADE  Bitcoin    Up    paid=0.720 size=36.0  elapsed=Nones chainlink_now=83394.73861366008
