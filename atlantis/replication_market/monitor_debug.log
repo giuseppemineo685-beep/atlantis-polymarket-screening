@@ -1,6 +1,6 @@
-=== 2026-10-15 00:37:24 UTC ===
+=== 2026-10-15 00:38:43 UTC ===
 sol/usd: 2517 trades, 0 con precio chainlink
-btc/usd: 54041 trades, 47681 con precio chainlink
+btc/usd: 54046 trades, 47686 con precio chainlink
 xrp/usd: 1418 trades, 0 con precio chainlink
 eth/usd: 2446 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
@@ -10,12 +10,6 @@ eth/usd: 2446 trades, 0 con precio chainlink
 [23:11:23] price ws error, reconnecting in 5s: received 1012 (service restart) Service restarting; then sent 1012 (service restart) Service restarting
 [00:01:57] price ws error, reconnecting in 5s: received 1012 (service restart) Service restarting; then sent 1012 (service restart) Service restarting
 --- ultimas 15 lineas del monitor ---
-[00:23:08] NEW TRADE  Bitcoin    Down  paid=0.540 size=10.0  elapsed=-20s chainlink_now=81601.07807615196
-[00:23:56] resolution backfill: 60393/60413 records resolved
-[00:28:14] resolution backfill: 60395/60413 records resolved
-[00:28:15] NEW TRADE  Bitcoin    Up    paid=0.335 size=10.8  elapsed=28s chainlink_now=81672.17145728364
-[00:29:18] resolution backfill: 60396/60414 records resolved
-[00:32:31] resolution backfill: 60397/60414 records resolved
 [00:33:13] NEW TRADE  Bitcoin    Up    paid=0.645 size=20.0  elapsed=67s chainlink_now=81727.24099192779
 [00:33:13] NEW TRADE  Bitcoin    Up    paid=0.663 size=28.0  elapsed=67s chainlink_now=81727.24099192779
 [00:33:13] NEW TRADE  Bitcoin    Up    paid=0.598 size=24.5  elapsed=64s chainlink_now=81705.28271819191
@@ -25,3 +19,9 @@ eth/usd: 2446 trades, 0 con precio chainlink
 [00:33:13] NEW TRADE  Ethereum   Up    paid=0.535 size=10.0  elapsed=-8s chainlink_now=None
 [00:33:13] NEW TRADE  Bitcoin    Up    paid=0.500 size=40.0  elapsed=-8s chainlink_now=81673.44356781279
 [00:33:36] resolution backfill: 60398/60422 records resolved
+[00:37:58] resolution backfill: 60399/60422 records resolved
+[00:38:12] NEW TRADE  Bitcoin    Down  paid=0.510 size=10.0  elapsed=418s chainlink_now=81658.84934480157
+[00:38:12] NEW TRADE  Bitcoin    Down  paid=0.360 size=5.0  elapsed=329s chainlink_now=81700.67120989741
+[00:38:12] NEW TRADE  Bitcoin    Up    paid=0.460 size=45.6  elapsed=260s chainlink_now=81676.182541065
+[00:38:12] NEW TRADE  Bitcoin    Down  paid=0.461 size=240.0  elapsed=229s chainlink_now=81666.88349542188
+[00:38:12] NEW TRADE  Bitcoin    Down  paid=0.650 size=10.0  elapsed=176s chainlink_now=81613.32598674665
