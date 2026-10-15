@@ -1,6 +1,6 @@
-=== 2026-10-15 00:27:41 UTC ===
+=== 2026-10-15 00:28:44 UTC ===
 sol/usd: 2517 trades, 0 con precio chainlink
-btc/usd: 54033 trades, 47673 con precio chainlink
+btc/usd: 54034 trades, 47674 con precio chainlink
 xrp/usd: 1418 trades, 0 con precio chainlink
 eth/usd: 2445 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
@@ -10,8 +10,6 @@ eth/usd: 2445 trades, 0 con precio chainlink
 [23:11:23] price ws error, reconnecting in 5s: received 1012 (service restart) Service restarting; then sent 1012 (service restart) Service restarting
 [00:01:57] price ws error, reconnecting in 5s: received 1012 (service restart) Service restarting; then sent 1012 (service restart) Service restarting
 --- ultimas 15 lineas del monitor ---
-[00:13:11] NEW TRADE  Bitcoin    Up    paid=0.387 size=27.0  elapsed=-8s chainlink_now=81635.56074938654
-[00:13:11] NEW TRADE  Bitcoin    Up    paid=0.640 size=50.0  elapsed=Nones chainlink_now=81663.20972204406
 [00:13:11] NEW TRADE  Bitcoin    Down  paid=0.520 size=1.7  elapsed=199s chainlink_now=81688.85813238028
 [00:13:11] NEW TRADE  Bitcoin    Up    paid=0.780 size=38.0  elapsed=467s chainlink_now=81680.989273295
 [00:13:11] NEW TRADE  Bitcoin    Up    paid=0.660 size=20.0  elapsed=Nones chainlink_now=81675.89672824681
@@ -25,3 +23,5 @@ eth/usd: 2445 trades, 0 con precio chainlink
 [00:23:08] NEW TRADE  Ethereum   Down  paid=0.540 size=5.0  elapsed=-16s chainlink_now=None
 [00:23:08] NEW TRADE  Bitcoin    Down  paid=0.540 size=10.0  elapsed=-20s chainlink_now=81601.07807615196
 [00:23:56] resolution backfill: 60393/60413 records resolved
+[00:28:14] resolution backfill: 60395/60413 records resolved
+[00:28:15] NEW TRADE  Bitcoin    Up    paid=0.335 size=10.8  elapsed=28s chainlink_now=81672.17145728364
