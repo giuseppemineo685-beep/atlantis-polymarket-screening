@@ -1,25 +1,13 @@
-=== 2026-10-19 17:30:31 UTC ===
+=== 2026-10-19 18:11:08 UTC ===
 sol/usd: 2517 trades, 0 con precio chainlink
 btc/usd: 73850 trades, 65566 con precio chainlink
 xrp/usd: 1418 trades, 0 con precio chainlink
 eth/usd: 3327 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
-4
+1
 --- errores del websocket de precio (ultimos 10) ---
-[13:03:27] price ws error, reconnecting in 5s: no close frame received or sent
 --- ultimas 15 lineas del monitor ---
-[13:40:57] NEW TRADE  Bitcoin    Up    paid=0.400 size=76.0  elapsed=86s chainlink_now=82306.7263690329
-[13:40:57] NEW TRADE  Bitcoin    Down  paid=0.580 size=124.0  elapsed=83s chainlink_now=82301.27530465442
-[13:40:57] NEW TRADE  Bitcoin    Up    paid=0.345 size=130.0  elapsed=77s chainlink_now=82284.75790644484
-[13:40:57] NEW TRADE  Bitcoin    Down  paid=0.760 size=50.0  elapsed=Nones chainlink_now=82281.76319194734
-[13:40:57] NEW TRADE  Bitcoin    Up    paid=0.240 size=50.0  elapsed=Nones chainlink_now=82320.11822468758
-[13:40:57] NEW TRADE  Bitcoin    Up    paid=0.264 size=152.0  elapsed=59s chainlink_now=82257.83076411736
-[13:40:57] NEW TRADE  Bitcoin    Up    paid=0.230 size=50.0  elapsed=Nones chainlink_now=82278.8591848685
-[13:40:57] NEW TRADE  Bitcoin    Up    paid=0.220 size=25.0  elapsed=Nones chainlink_now=82278.8591848685
-[13:42:45] resolution backfill: 80897/81112 records resolved
-[13:44:12] resolution backfill: 80907/81112 records resolved
-[13:48:32] resolution backfill: 80913/81112 records resolved
-[14:12:19] resolution backfill: 81111/81112 records resolved
-[15:03:33] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
-[16:04:43] resolution backfill: 81112/81112 records resolved
-[17:03:33] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
+[18:10:07] seeded 81112 already-logged trade keys from /home/runner/work/atlantis-polymarket-screening/atlantis-polymarket-screening/atlantis/replication_market/bonereaper_monitor.jsonl
+[18:10:07] trade poller: starting
+[18:10:07] resolution backfill: starting
+[18:10:07] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
