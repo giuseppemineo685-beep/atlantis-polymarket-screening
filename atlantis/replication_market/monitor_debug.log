@@ -1,21 +1,24 @@
-=== 2026-10-19 23:50:56 UTC ===
+=== 2026-10-20 03:01:30 UTC ===
 sol/usd: 2517 trades, 0 con precio chainlink
-btc/usd: 73850 trades, 65566 con precio chainlink
+btc/usd: 73949 trades, 65566 con precio chainlink
 xrp/usd: 1418 trades, 0 con precio chainlink
-eth/usd: 3327 trades, 0 con precio chainlink
+eth/usd: 3328 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
-5
+1
 --- errores del websocket de precio (ultimos 10) ---
-[18:58:58] price ws error, reconnecting in 5s: no close frame received or sent
-[21:22:03] price ws error, reconnecting in 5s: no close frame received or sent
 --- ultimas 15 lineas del monitor ---
-[18:10:07] seeded 81112 already-logged trade keys from /home/runner/work/atlantis-polymarket-screening/atlantis-polymarket-screening/atlantis/replication_market/bonereaper_monitor.jsonl
-[18:10:07] trade poller: starting
-[18:10:07] resolution backfill: starting
-[18:10:07] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
-[18:58:58] price ws error, reconnecting in 5s: no close frame received or sent
-[18:59:03] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
-[20:59:04] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
-[21:22:03] price ws error, reconnecting in 5s: no close frame received or sent
-[21:22:08] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
-[23:22:09] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
+[03:00:28] NEW TRADE  Bitcoin    Down  paid=0.340 size=44.0  elapsed=69s chainlink_now=None
+[03:00:28] NEW TRADE  Bitcoin    Down  paid=0.605 size=14.0  elapsed=10266s chainlink_now=None
+[03:00:28] NEW TRADE  Bitcoin    Down  paid=0.310 size=5.0  elapsed=66s chainlink_now=None
+[03:00:28] NEW TRADE  Bitcoin    Down  paid=0.290 size=48.0  elapsed=65s chainlink_now=None
+[03:00:28] NEW TRADE  Bitcoin    Down  paid=0.279 size=50.0  elapsed=65s chainlink_now=None
+[03:00:28] NEW TRADE  Bitcoin    Down  paid=0.250 size=78.0  elapsed=65s chainlink_now=None
+[03:00:28] NEW TRADE  Bitcoin    Down  paid=0.280 size=48.0  elapsed=62s chainlink_now=None
+[03:00:28] NEW TRADE  Bitcoin    Down  paid=0.230 size=5.0  elapsed=62s chainlink_now=None
+[03:00:28] NEW TRADE  Bitcoin    Down  paid=0.570 size=12.0  elapsed=10260s chainlink_now=None
+[03:00:28] NEW TRADE  Bitcoin    Down  paid=0.214 size=53.0  elapsed=59s chainlink_now=None
+[03:00:28] NEW TRADE  Bitcoin    Down  paid=0.146 size=74.0  elapsed=56s chainlink_now=None
+[03:00:28] NEW TRADE  Bitcoin    Down  paid=0.176 size=56.0  elapsed=56s chainlink_now=None
+[03:00:28] NEW TRADE  Bitcoin    Down  paid=0.550 size=15.0  elapsed=10256s chainlink_now=None
+[03:00:28] NEW TRADE  Bitcoin    Down  paid=0.510 size=5.0  elapsed=10253s chainlink_now=None
+[03:00:29] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
