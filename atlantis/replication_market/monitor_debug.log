@@ -1,10 +1,10 @@
-=== 2026-10-22 18:38:44 UTC ===
+=== 2026-10-22 18:40:04 UTC ===
 sol/usd: 4952 trades, 0 con precio chainlink
 btc/usd: 93915 trades, 84870 con precio chainlink
 xrp/usd: 2923 trades, 0 con precio chainlink
 eth/usd: 4124 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
-1
+2
 --- errores del websocket de precio (ultimos 10) ---
 --- ultimas 15 lineas del monitor ---
 [16:39:18] seeded 105914 already-logged trade keys from /home/runner/work/atlantis-polymarket-screening/atlantis-polymarket-screening/atlantis/replication_market/bonereaper_monitor.jsonl
@@ -14,3 +14,4 @@ eth/usd: 4124 trades, 0 con precio chainlink
 [16:40:32] resolution backfill: 105853/105914 records resolved
 [17:12:17] resolution backfill: 105913/105914 records resolved
 [17:13:21] resolution backfill: 105914/105914 records resolved
+[18:39:19] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
