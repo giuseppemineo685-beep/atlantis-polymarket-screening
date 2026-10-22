@@ -1,14 +1,13 @@
-=== 2026-10-22 00:49:46 UTC ===
+=== 2026-10-22 00:50:56 UTC ===
 sol/usd: 4142 trades, 0 con precio chainlink
 btc/usd: 90760 trades, 81849 con precio chainlink
 xrp/usd: 2500 trades, 0 con precio chainlink
 eth/usd: 3944 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
-2
+3
 --- errores del websocket de precio (ultimos 10) ---
+[00:49:49] price ws error, reconnecting in 5s: sent 1011 (internal error) keepalive ping timeout; no close frame received
 --- ultimas 15 lineas del monitor ---
-[00:48:40] NEW TRADE  Bitcoin    Up    paid=0.406 size=24.0  elapsed=173s chainlink_now=84252.59794687403
-[00:48:40] NEW TRADE  Bitcoin    Up    paid=0.330 size=10.0  elapsed=171s chainlink_now=84249.37284292124
 [00:48:40] NEW TRADE  Bitcoin    Up    paid=0.310 size=28.0  elapsed=171s chainlink_now=84249.37284292124
 [00:48:40] NEW TRADE  Bitcoin    Down  paid=0.690 size=30.0  elapsed=164s chainlink_now=84233.11138974057
 [00:48:40] NEW TRADE  Bitcoin    Down  paid=0.650 size=5.0  elapsed=158s chainlink_now=84246.25721625194
@@ -22,3 +21,5 @@ eth/usd: 3944 trades, 0 con precio chainlink
 [00:48:40] NEW TRADE  Bitcoin    Up    paid=0.550 size=24.0  elapsed=57s chainlink_now=84268.67608474487
 [00:48:40] NEW TRADE  Bitcoin    Up    paid=0.540 size=24.0  elapsed=42s chainlink_now=84275.73113132574
 [00:48:40] NEW TRADE  Bitcoin    Up    paid=0.510 size=12.0  elapsed=-16s chainlink_now=84271.18579923976
+[00:49:49] price ws error, reconnecting in 5s: sent 1011 (internal error) keepalive ping timeout; no close frame received
+[00:49:54] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
