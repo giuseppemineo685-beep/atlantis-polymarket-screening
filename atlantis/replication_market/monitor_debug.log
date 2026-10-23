@@ -1,7 +1,7 @@
-=== 2026-10-23 14:39:22 UTC ===
-sol/usd: 6878 trades, 0 con precio chainlink
+=== 2026-10-23 14:40:27 UTC ===
+sol/usd: 6879 trades, 0 con precio chainlink
 btc/usd: 94372 trades, 85269 con precio chainlink
-xrp/usd: 3376 trades, 0 con precio chainlink
+xrp/usd: 3378 trades, 0 con precio chainlink
 eth/usd: 4325 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
 3
@@ -9,10 +9,6 @@ eth/usd: 4325 trades, 0 con precio chainlink
 [12:44:02] price ws error, reconnecting in 5s: received 1012 (service restart) Service restarting; then sent 1012 (service restart) Service restarting
 [14:21:11] price ws error, reconnecting in 5s: received 1012 (service restart) Service restarting; then sent 1012 (service restart) Service restarting
 --- ultimas 15 lineas del monitor ---
-[14:29:07] resolution backfill: 108938/108938 records resolved
-[14:29:55] NEW TRADE  Solana     Down  paid=0.480 size=5.0  elapsed=107s chainlink_now=None
-[14:29:55] NEW TRADE  Solana     Down  paid=0.460 size=5.0  elapsed=62s chainlink_now=None
-[14:29:55] NEW TRADE  Solana     Down  paid=0.410 size=5.0  elapsed=32s chainlink_now=None
 [14:29:55] NEW TRADE  Solana     Down  paid=0.404 size=25.0  elapsed=27s chainlink_now=None
 [14:29:55] NEW TRADE  XRP        Down  paid=0.500 size=6.0  elapsed=8s chainlink_now=None
 [14:34:17] resolution backfill: 108943/108943 records resolved
@@ -24,3 +20,7 @@ eth/usd: 4325 trades, 0 con precio chainlink
 [14:35:02] NEW TRADE  XRP        Down  paid=0.790 size=5.0  elapsed=45s chainlink_now=None
 [14:35:02] NEW TRADE  XRP        Down  paid=0.750 size=5.0  elapsed=41s chainlink_now=None
 [14:35:02] NEW TRADE  XRP        Down  paid=0.700 size=5.0  elapsed=38s chainlink_now=None
+[14:39:30] resolution backfill: 108948/108951 records resolved
+[14:40:01] NEW TRADE  XRP        Up    paid=0.880 size=8.3  elapsed=108s chainlink_now=None
+[14:40:01] NEW TRADE  XRP        Up    paid=0.840 size=6.3  elapsed=102s chainlink_now=None
+[14:40:01] NEW TRADE  Solana     Down  paid=0.340 size=7.0  elapsed=63s chainlink_now=None
