@@ -1,15 +1,10 @@
-=== 2026-10-23 16:03:23 UTC ===
-sol/usd: 7031 trades, 0 con precio chainlink
-btc/usd: 94372 trades, 85269 con precio chainlink
-xrp/usd: 3442 trades, 0 con precio chainlink
-eth/usd: 4335 trades, 0 con precio chainlink
+=== 2026-10-23 16:04:28 UTC ===
 --- reconexiones del websocket de precio ---
 3
 --- errores del websocket de precio (ultimos 10) ---
 [12:44:02] price ws error, reconnecting in 5s: received 1012 (service restart) Service restarting; then sent 1012 (service restart) Service restarting
 [14:21:11] price ws error, reconnecting in 5s: received 1012 (service restart) Service restarting; then sent 1012 (service restart) Service restarting
 --- ultimas 15 lineas del monitor ---
-[16:00:28] NEW TRADE  XRP        Down  paid=0.650 size=5.0  elapsed=Nones chainlink_now=None
 [16:00:28] NEW TRADE  XRP        Down  paid=0.600 size=5.0  elapsed=15s chainlink_now=None
 [16:00:28] NEW TRADE  XRP        Down  paid=0.573 size=6.0  elapsed=9s chainlink_now=None
 [16:00:28] NEW TRADE  Solana     Up    paid=0.480 size=6.0  elapsed=3s chainlink_now=None
@@ -24,3 +19,4 @@ eth/usd: 4335 trades, 0 con precio chainlink
 [16:00:28] NEW TRADE  XRP        Down  paid=0.500 size=6.0  elapsed=68s chainlink_now=None
 [16:00:28] NEW TRADE  Solana     Down  paid=0.400 size=5.0  elapsed=66s chainlink_now=None
 [16:00:28] NEW TRADE  Solana     Up    paid=0.510 size=6.0  elapsed=47s chainlink_now=None
+[16:03:27] resolution backfill: 109172/109180 records resolved
