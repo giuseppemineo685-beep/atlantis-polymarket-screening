@@ -1,18 +1,13 @@
-=== 2026-10-23 14:14:25 UTC ===
-sol/usd: 6840 trades, 0 con precio chainlink
+=== 2026-10-23 14:15:48 UTC ===
+sol/usd: 6842 trades, 0 con precio chainlink
 btc/usd: 94372 trades, 85269 con precio chainlink
-xrp/usd: 3364 trades, 0 con precio chainlink
+xrp/usd: 3367 trades, 0 con precio chainlink
 eth/usd: 4323 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
 2
 --- errores del websocket de precio (ultimos 10) ---
 [12:44:02] price ws error, reconnecting in 5s: received 1012 (service restart) Service restarting; then sent 1012 (service restart) Service restarting
 --- ultimas 15 lineas del monitor ---
-[14:08:14] resolution backfill: 108886/108887 records resolved
-[14:09:16] resolution backfill: 108887/108887 records resolved
-[14:09:53] NEW TRADE  Solana     Up    paid=0.550 size=6.0  elapsed=179s chainlink_now=None
-[14:09:53] NEW TRADE  Solana     Up    paid=0.330 size=7.0  elapsed=152s chainlink_now=None
-[14:09:53] NEW TRADE  Solana     Up    paid=0.260 size=15.0  elapsed=149s chainlink_now=None
 [14:09:53] NEW TRADE  Solana     Up    paid=0.330 size=7.0  elapsed=140s chainlink_now=None
 [14:09:53] NEW TRADE  Solana     Up    paid=0.290 size=5.0  elapsed=138s chainlink_now=None
 [14:09:53] NEW TRADE  Solana     Up    paid=0.260 size=8.0  elapsed=128s chainlink_now=None
@@ -23,3 +18,8 @@ eth/usd: 4323 trades, 0 con precio chainlink
 [14:09:53] NEW TRADE  Solana     Up    paid=0.380 size=5.0  elapsed=50s chainlink_now=None
 [14:09:53] NEW TRADE  Solana     Up    paid=0.410 size=6.0  elapsed=26s chainlink_now=None
 [14:13:28] resolution backfill: 108899/108899 records resolved
+[14:14:52] NEW TRADE  XRP        Up    paid=0.047 size=32.0  elapsed=134s chainlink_now=None
+[14:14:52] NEW TRADE  XRP        Down  paid=0.820 size=7.0  elapsed=77s chainlink_now=None
+[14:14:52] NEW TRADE  Solana     Up    paid=0.200 size=29.0  elapsed=48s chainlink_now=None
+[14:14:52] NEW TRADE  Solana     Up    paid=0.300 size=15.0  elapsed=36s chainlink_now=None
+[14:14:52] NEW TRADE  XRP        Up    paid=0.370 size=5.4  elapsed=33s chainlink_now=None
