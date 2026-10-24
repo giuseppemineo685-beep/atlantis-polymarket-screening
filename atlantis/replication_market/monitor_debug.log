@@ -1,6 +1,6 @@
-=== 2026-10-24 07:15:01 UTC ===
-sol/usd: 8269 trades, 0 con precio chainlink
-btc/usd: 94636 trades, 85493 con precio chainlink
+=== 2026-10-24 07:16:08 UTC ===
+sol/usd: 8274 trades, 0 con precio chainlink
+btc/usd: 94637 trades, 85494 con precio chainlink
 xrp/usd: 3929 trades, 0 con precio chainlink
 eth/usd: 4431 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
@@ -8,12 +8,6 @@ eth/usd: 4431 trades, 0 con precio chainlink
 --- errores del websocket de precio (ultimos 10) ---
 [06:48:10] price ws error, reconnecting in 5s: no close frame received or sent
 --- ultimas 15 lineas del monitor ---
-[07:10:17] NEW TRADE  Solana     Up    paid=0.342 size=6.0  elapsed=3s chainlink_now=None
-[07:10:17] NEW TRADE  Solana     Up    paid=0.190 size=9.0  elapsed=176s chainlink_now=None
-[07:10:17] NEW TRADE  Solana     Up    paid=0.206 size=31.0  elapsed=167s chainlink_now=None
-[07:10:17] NEW TRADE  Solana     Up    paid=0.224 size=8.0  elapsed=146s chainlink_now=None
-[07:10:17] NEW TRADE  Solana     Up    paid=0.240 size=8.0  elapsed=86s chainlink_now=None
-[07:10:17] NEW TRADE  Solana     Up    paid=0.330 size=5.0  elapsed=62s chainlink_now=None
 [07:10:17] NEW TRADE  Solana     Up    paid=0.310 size=7.0  elapsed=60s chainlink_now=None
 [07:10:17] NEW TRADE  Solana     Up    paid=0.310 size=7.0  elapsed=57s chainlink_now=None
 [07:10:17] NEW TRADE  Solana     Up    paid=0.243 size=19.0  elapsed=51s chainlink_now=None
@@ -23,3 +17,9 @@ eth/usd: 4431 trades, 0 con precio chainlink
 [07:10:17] NEW TRADE  Solana     Up    paid=0.452 size=6.0  elapsed=11s chainlink_now=None
 [07:13:00] resolution backfill: 111256/111265 records resolved
 [07:14:02] resolution backfill: 111264/111265 records resolved
+[07:15:15] NEW TRADE  Solana     Up    paid=0.520 size=24.0  elapsed=6s chainlink_now=None
+[07:15:15] NEW TRADE  Bitcoin    Up    paid=0.483 size=160.0  elapsed=2s chainlink_now=80812.00487718324
+[07:15:15] NEW TRADE  Solana     Down  paid=0.210 size=9.0  elapsed=165s chainlink_now=None
+[07:15:15] NEW TRADE  Solana     Down  paid=0.300 size=26.0  elapsed=132s chainlink_now=None
+[07:15:15] NEW TRADE  Solana     Up    paid=0.560 size=6.0  elapsed=42s chainlink_now=None
+[07:15:15] NEW TRADE  Solana     Up    paid=0.385 size=10.0  elapsed=11s chainlink_now=None
