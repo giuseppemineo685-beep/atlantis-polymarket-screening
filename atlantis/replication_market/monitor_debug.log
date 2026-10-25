@@ -1,17 +1,12 @@
-=== 2026-10-25 18:26:03 UTC ===
+=== 2026-10-25 18:27:11 UTC ===
 sol/usd: 11097 trades, 0 con precio chainlink
-btc/usd: 95854 trades, 86546 con precio chainlink
+btc/usd: 95858 trades, 86550 con precio chainlink
 xrp/usd: 4864 trades, 0 con precio chainlink
-eth/usd: 4955 trades, 0 con precio chainlink
+eth/usd: 4956 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
 2
 --- errores del websocket de precio (ultimos 10) ---
 --- ultimas 15 lineas del monitor ---
-[18:11:04] NEW TRADE  Bitcoin    Down  paid=0.360 size=27.0  elapsed=-30s chainlink_now=80652.26875969661
-[18:11:04] NEW TRADE  Bitcoin    Down  paid=0.360 size=124.0  elapsed=-33s chainlink_now=80664.27441939995
-[18:12:58] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
-[18:13:32] resolution backfill: 116750/116762 records resolved
-[18:16:10] NEW TRADE  Bitcoin    Down  paid=0.460 size=120.0  elapsed=-16s chainlink_now=80600.02013467444
 [18:18:46] resolution backfill: 116760/116763 records resolved
 [18:19:48] resolution backfill: 116762/116763 records resolved
 [18:21:09] NEW TRADE  Ethereum   Down  paid=0.526 size=11.0  elapsed=-18s chainlink_now=None
@@ -22,3 +17,8 @@ eth/usd: 4955 trades, 0 con precio chainlink
 [18:21:09] NEW TRADE  Bitcoin    Up    paid=0.500 size=11.0  elapsed=-39s chainlink_now=80638.07124367505
 [18:21:09] NEW TRADE  Bitcoin    Up    paid=0.491 size=51.0  elapsed=-40s chainlink_now=80637.46908756
 [18:23:56] resolution backfill: 116763/116770 records resolved
+[18:26:16] NEW TRADE  Bitcoin    Up    paid=0.340 size=50.0  elapsed=-3s chainlink_now=80595.041023684
+[18:26:16] NEW TRADE  Bitcoin    Up    paid=0.360 size=25.0  elapsed=-7s chainlink_now=80596.26600424151
+[18:26:16] NEW TRADE  Bitcoin    Down  paid=0.600 size=4.0  elapsed=-13s chainlink_now=80597.71187225242
+[18:26:16] NEW TRADE  Ethereum   Up    paid=0.500 size=10.0  elapsed=-27s chainlink_now=None
+[18:26:16] NEW TRADE  Bitcoin    Down  paid=0.510 size=5.0  elapsed=-31s chainlink_now=80606.04978078353
