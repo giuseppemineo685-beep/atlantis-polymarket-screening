@@ -1,6 +1,6 @@
-=== 2026-10-27 06:17:41 UTC ===
+=== 2026-10-27 06:18:45 UTC ===
 sol/usd: 11097 trades, 0 con precio chainlink
-btc/usd: 96909 trades, 87342 con precio chainlink
+btc/usd: 96912 trades, 87345 con precio chainlink
 xrp/usd: 4864 trades, 0 con precio chainlink
 eth/usd: 5314 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
@@ -8,9 +8,6 @@ eth/usd: 5314 trades, 0 con precio chainlink
 --- errores del websocket de precio (ultimos 10) ---
 [06:14:34] price ws error, reconnecting in 5s: no close frame received or sent
 --- ultimas 15 lineas del monitor ---
-[06:03:34] NEW TRADE  Bitcoin    Down  paid=0.640 size=128.0  elapsed=-6s chainlink_now=79844.6390078018
-[06:03:34] NEW TRADE  Bitcoin    Down  paid=0.530 size=121.0  elapsed=-6s chainlink_now=79844.6390078018
-[06:03:48] resolution backfill: 118173/118177 records resolved
 [06:07:54] resolution backfill: 118177/118177 records resolved
 [06:08:39] NEW TRADE  Bitcoin    Down  paid=0.456 size=102.0  elapsed=-9s chainlink_now=79789.62805644036
 [06:08:39] NEW TRADE  Bitcoin    Down  paid=0.442 size=60.0  elapsed=-9s chainlink_now=79789.62805644036
@@ -23,3 +20,6 @@ eth/usd: 5314 trades, 0 con precio chainlink
 [06:14:34] price ws error, reconnecting in 5s: no close frame received or sent
 [06:14:39] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
 [06:15:06] resolution backfill: 118181/118184 records resolved
+[06:18:34] NEW TRADE  Bitcoin    Up    paid=0.511 size=45.0  elapsed=-16s chainlink_now=79798.87937541599
+[06:18:34] NEW TRADE  Bitcoin    Up    paid=0.480 size=5.0  elapsed=-21s chainlink_now=79793.69196454085
+[06:18:34] NEW TRADE  Bitcoin    Up    paid=0.470 size=120.0  elapsed=-28s chainlink_now=79793.69196454085
