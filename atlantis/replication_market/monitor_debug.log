@@ -1,17 +1,14 @@
-=== 2026-10-27 16:47:33 UTC ===
+=== 2026-10-27 16:48:37 UTC ===
 sol/usd: 11097 trades, 0 con precio chainlink
 btc/usd: 97078 trades, 87454 con precio chainlink
 xrp/usd: 4864 trades, 0 con precio chainlink
-eth/usd: 5491 trades, 0 con precio chainlink
+eth/usd: 5494 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
 4
 --- errores del websocket de precio (ultimos 10) ---
 [14:11:23] price ws error, reconnecting in 5s: received 1012 (service restart) Service restarting; then sent 1012 (service restart) Service restarting
 [15:45:33] price ws error, reconnecting in 5s: received 1012 (service restart) Service restarting; then sent 1012 (service restart) Service restarting
 --- ultimas 15 lineas del monitor ---
-[15:58:55] resolution backfill: 118520/118522 records resolved
-[16:04:02] resolution backfill: 118522/118522 records resolved
-[16:12:28] NEW TRADE  Ethereum   Up    paid=0.510 size=5.0  elapsed=-9s chainlink_now=None
 [16:17:25] NEW TRADE  Ethereum   Up    paid=0.470 size=11.0  elapsed=-3s chainlink_now=None
 [16:17:25] NEW TRADE  Ethereum   Down  paid=0.520 size=5.2  elapsed=-13s chainlink_now=None
 [16:19:16] resolution backfill: 118523/118525 records resolved
@@ -24,3 +21,6 @@ eth/usd: 5491 trades, 0 con precio chainlink
 [16:39:38] resolution backfill: 118526/118529 records resolved
 [16:42:37] NEW TRADE  Ethereum   Up    paid=0.520 size=10.2  elapsed=-19s chainlink_now=None
 [16:42:43] resolution backfill: 118529/118530 records resolved
+[16:47:35] NEW TRADE  Ethereum   Up    paid=0.580 size=12.0  elapsed=-3s chainlink_now=None
+[16:47:35] NEW TRADE  Ethereum   Down  paid=0.430 size=12.0  elapsed=-13s chainlink_now=None
+[16:47:35] NEW TRADE  Ethereum   Up    paid=0.490 size=16.0  elapsed=-16s chainlink_now=None
