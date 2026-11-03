@@ -1,25 +1,21 @@
-=== 2026-11-02 20:11:23 UTC ===
+=== 2026-11-03 00:21:10 UTC ===
 sol/usd: 649 trades, 0 con precio chainlink
 btc/usd: 9011 trades, 8531 con precio chainlink
 xrp/usd: 277 trades, 0 con precio chainlink
 eth/usd: 180 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
-4
+1
 --- errores del websocket de precio (ultimos 10) ---
-[15:25:38] price ws error, reconnecting in 5s: received 1012 (service restart) Service restarting; then sent 1012 (service restart) Service restarting
 --- ultimas 15 lineas del monitor ---
-[20:11:01] NEW TRADE  Bitcoin    Up    paid=0.110 size=5.0  elapsed=237s chainlink_now=76874.64501113846
-[20:11:01] NEW TRADE  Bitcoin    Up    paid=0.105 size=34.3  elapsed=232s chainlink_now=76864.23438407182
-[20:11:01] NEW TRADE  Bitcoin    Up    paid=0.070 size=155.4  elapsed=231s chainlink_now=76866.55143902
-[20:11:01] NEW TRADE  Bitcoin    Up    paid=0.280 size=5.0  elapsed=528s chainlink_now=76857.01695140082
-[20:11:01] NEW TRADE  Bitcoin    Down  paid=0.949 size=211.2  elapsed=205s chainlink_now=76839.61031340231
-[20:11:01] NEW TRADE  Bitcoin    Down  paid=0.820 size=67.7  elapsed=166s chainlink_now=76847.77961031592
-[20:11:01] NEW TRADE  Bitcoin    Down  paid=0.770 size=10.0  elapsed=157s chainlink_now=76844.85310949034
-[20:11:01] NEW TRADE  Bitcoin    Down  paid=0.716 size=55.5  elapsed=156s chainlink_now=76844.85310949034
-[20:11:01] NEW TRADE  Bitcoin    Up    paid=0.140 size=84.6  elapsed=147s chainlink_now=76843.1765791441
-[20:11:01] NEW TRADE  Bitcoin    Up    paid=0.130 size=5.6  elapsed=136s chainlink_now=76849.9451237719
-[20:11:01] NEW TRADE  Bitcoin    Up    paid=0.287 size=29.0  elapsed=405s chainlink_now=76813.6627982071
-[20:11:01] NEW TRADE  Bitcoin    Up    paid=0.125 size=65.8  elapsed=105s chainlink_now=76813.6627982071
-[20:11:01] NEW TRADE  Bitcoin    Up    paid=0.180 size=12.7  elapsed=90s chainlink_now=76818.56669606906
-[20:11:01] NEW TRADE  Bitcoin    Down  paid=0.736 size=56.8  elapsed=76s chainlink_now=76841.52809337855
-[20:11:01] NEW TRADE  Bitcoin    Up    paid=0.310 size=25.0  elapsed=55s chainlink_now=76862.03731209094
+[00:20:10] seeded 10117 already-logged trade keys from /home/runner/work/atlantis-polymarket-screening/atlantis-polymarket-screening/atlantis/replication_market/bonereaper_monitor.jsonl
+[00:20:10] trade poller: starting
+[00:20:10] resolution backfill: starting
+[00:20:10] trade poll error: HTTP Error 410: Gone
+[00:20:10] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
+[00:20:18] trade poll error: HTTP Error 410: Gone
+[00:20:26] trade poll error: HTTP Error 410: Gone
+[00:20:34] trade poll error: HTTP Error 410: Gone
+[00:20:42] trade poll error: HTTP Error 410: Gone
+[00:20:50] trade poll error: HTTP Error 410: Gone
+[00:20:58] trade poll error: HTTP Error 410: Gone
+[00:21:06] trade poll error: HTTP Error 410: Gone
