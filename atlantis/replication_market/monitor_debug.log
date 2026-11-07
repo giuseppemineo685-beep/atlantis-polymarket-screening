@@ -1,26 +1,21 @@
-=== 2026-11-07 09:59:05 UTC ===
+=== 2026-11-07 12:17:37 UTC ===
 sol/usd: 649 trades, 0 con precio chainlink
 btc/usd: 9011 trades, 8531 con precio chainlink
 xrp/usd: 277 trades, 0 con precio chainlink
 eth/usd: 180 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
-5
+1
 --- errores del websocket de precio (ultimos 10) ---
-[07:44:20] price ws error, reconnecting in 5s: no close frame received or sent
-[08:59:18] price ws error, reconnecting in 5s: no close frame received or sent
 --- ultimas 15 lineas del monitor ---
-[09:57:08] trade poll error: HTTP Error 410: Gone
-[09:57:16] trade poll error: HTTP Error 410: Gone
-[09:57:24] trade poll error: HTTP Error 410: Gone
-[09:57:32] trade poll error: HTTP Error 410: Gone
-[09:57:40] trade poll error: HTTP Error 410: Gone
-[09:57:48] trade poll error: HTTP Error 410: Gone
-[09:57:56] trade poll error: HTTP Error 410: Gone
-[09:58:04] trade poll error: HTTP Error 410: Gone
-[09:58:12] trade poll error: HTTP Error 410: Gone
-[09:58:20] trade poll error: HTTP Error 410: Gone
-[09:58:28] trade poll error: HTTP Error 410: Gone
-[09:58:36] trade poll error: HTTP Error 410: Gone
-[09:58:44] trade poll error: HTTP Error 410: Gone
-[09:58:52] trade poll error: HTTP Error 410: Gone
-[09:59:00] trade poll error: HTTP Error 410: Gone
+[12:16:37] seeded 10117 already-logged trade keys from /home/runner/work/atlantis-polymarket-screening/atlantis-polymarket-screening/atlantis/replication_market/bonereaper_monitor.jsonl
+[12:16:37] trade poller: starting
+[12:16:37] resolution backfill: starting
+[12:16:37] trade poll error: HTTP Error 410: Gone
+[12:16:37] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
+[12:16:45] trade poll error: HTTP Error 410: Gone
+[12:16:53] trade poll error: HTTP Error 410: Gone
+[12:17:01] trade poll error: HTTP Error 410: Gone
+[12:17:09] trade poll error: HTTP Error 410: Gone
+[12:17:17] trade poll error: HTTP Error 410: Gone
+[12:17:25] trade poll error: HTTP Error 410: Gone
+[12:17:33] trade poll error: HTTP Error 410: Gone
