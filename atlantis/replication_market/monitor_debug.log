@@ -1,25 +1,21 @@
-=== 2026-11-14 10:30:11 UTC ===
+=== 2026-11-14 12:51:25 UTC ===
 sol/usd: 649 trades, 0 con precio chainlink
 btc/usd: 9011 trades, 8531 con precio chainlink
 xrp/usd: 277 trades, 0 con precio chainlink
 eth/usd: 180 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
-4
+1
 --- errores del websocket de precio (ultimos 10) ---
-[05:00:36] price ws error, reconnecting in 5s: sent 1011 (internal error) keepalive ping timeout; no close frame received
 --- ultimas 15 lineas del monitor ---
-[10:28:09] trade poll error: HTTP Error 410: Gone
-[10:28:17] trade poll error: HTTP Error 410: Gone
-[10:28:25] trade poll error: HTTP Error 410: Gone
-[10:28:33] trade poll error: HTTP Error 410: Gone
-[10:28:41] trade poll error: HTTP Error 410: Gone
-[10:28:49] trade poll error: HTTP Error 410: Gone
-[10:28:57] trade poll error: HTTP Error 410: Gone
-[10:29:05] trade poll error: HTTP Error 410: Gone
-[10:29:13] trade poll error: HTTP Error 410: Gone
-[10:29:21] trade poll error: HTTP Error 410: Gone
-[10:29:29] trade poll error: HTTP Error 410: Gone
-[10:29:37] trade poll error: HTTP Error 410: Gone
-[10:29:45] trade poll error: HTTP Error 410: Gone
-[10:29:53] trade poll error: HTTP Error 410: Gone
-[10:30:01] trade poll error: HTTP Error 410: Gone
+[12:50:24] seeded 10117 already-logged trade keys from /home/runner/work/atlantis-polymarket-screening/atlantis-polymarket-screening/atlantis/replication_market/bonereaper_monitor.jsonl
+[12:50:24] trade poller: starting
+[12:50:24] resolution backfill: starting
+[12:50:24] trade poll error: HTTP Error 410: Gone
+[12:50:25] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
+[12:50:32] trade poll error: HTTP Error 410: Gone
+[12:50:40] trade poll error: HTTP Error 410: Gone
+[12:50:48] trade poll error: HTTP Error 410: Gone
+[12:50:56] trade poll error: HTTP Error 410: Gone
+[12:51:04] trade poll error: HTTP Error 410: Gone
+[12:51:12] trade poll error: HTTP Error 410: Gone
+[12:51:20] trade poll error: HTTP Error 410: Gone
