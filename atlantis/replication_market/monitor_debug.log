@@ -1,25 +1,21 @@
-=== 2026-11-17 21:02:24 UTC ===
+=== 2026-11-18 00:23:01 UTC ===
 sol/usd: 649 trades, 0 con precio chainlink
 btc/usd: 9011 trades, 8531 con precio chainlink
 xrp/usd: 277 trades, 0 con precio chainlink
 eth/usd: 180 trades, 0 con precio chainlink
 --- reconexiones del websocket de precio ---
-4
+1
 --- errores del websocket de precio (ultimos 10) ---
-[16:54:11] price ws error, reconnecting in 5s: no close frame received or sent
 --- ultimas 15 lineas del monitor ---
-[21:00:24] trade poll error: HTTP Error 410: Gone
-[21:00:33] trade poll error: HTTP Error 410: Gone
-[21:00:41] trade poll error: HTTP Error 410: Gone
-[21:00:49] trade poll error: HTTP Error 410: Gone
-[21:00:57] trade poll error: HTTP Error 410: Gone
-[21:01:05] trade poll error: HTTP Error 410: Gone
-[21:01:13] trade poll error: HTTP Error 410: Gone
-[21:01:21] trade poll error: HTTP Error 410: Gone
-[21:01:29] trade poll error: HTTP Error 410: Gone
-[21:01:37] trade poll error: HTTP Error 410: Gone
-[21:01:45] trade poll error: HTTP Error 410: Gone
-[21:01:53] trade poll error: HTTP Error 410: Gone
-[21:02:01] trade poll error: HTTP Error 410: Gone
-[21:02:09] trade poll error: HTTP Error 410: Gone
-[21:02:17] trade poll error: HTTP Error 410: Gone
+[00:22:01] seeded 10117 already-logged trade keys from /home/runner/work/atlantis-polymarket-screening/atlantis-polymarket-screening/atlantis/replication_market/bonereaper_monitor.jsonl
+[00:22:01] trade poller: starting[00:22:01] resolution backfill: starting
+
+[00:22:01] trade poll error: HTTP Error 410: Gone
+[00:22:02] price ws: connected & subscribed to ['btc/usd', 'sol/usd', 'xrp/usd', 'eth/usd']
+[00:22:09] trade poll error: HTTP Error 410: Gone
+[00:22:18] trade poll error: HTTP Error 410: Gone
+[00:22:26] trade poll error: HTTP Error 410: Gone
+[00:22:34] trade poll error: HTTP Error 410: Gone
+[00:22:42] trade poll error: HTTP Error 410: Gone
+[00:22:50] trade poll error: HTTP Error 410: Gone
+[00:22:58] trade poll error: HTTP Error 410: Gone
